@@ -1,0 +1,96 @@
+﻿@page "/bricks"
+@using System.Text.Json.Nodes
+@using LEGO_Inventory.Database
+@rendermode InteractiveServer
+
+<PageTitle>Bricks</PageTitle>
+
+<h1>Bricks</h1>
+
+<MudGrid>
+    @* <MudItem xs="12"> *@
+    @*     <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId"></MudTextField> *@
+    @*     <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportSet())">Import Set</MudButton> *@
+    @* </MudItem> *@
+    <MudItem xs="12">
+        <MudTable Items="@_bricks.OrderBy(b => b.PartNum)" Hover="true" SortLabel="Sort By"
+                  Filter="new Func<Brick, bool>(BrickFilterFunc)">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Set List</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>
+                    <MudText>Image</MudText>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.PartNum)">Part Number</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">Color</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Name)">Name
+                    </MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.IsTrans)">Translucent</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Count)"># Pieces</MudTableSortLabel>
+                </MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Image"><MudImage Src="@context.PartImg" Height="50"/></MudTd>
+                <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum</MudTd>
+                <MudTd DataLabel="Color" class="cursor-pointer">@context.ColorName - @context.ColorId (@context.RGB)</MudTd>
+                <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd>
+                <MudTd DataLabel="Translucent" class="cursor-pointer">@context.IsTrans</MudTd>
+                <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.Count</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new[] { 10, 15, 20, 25, 50, 75, 100, int.MaxValue }"/>
+            </PagerContent>
+        </MudTable>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string? _setId;
+    private List<Brick>? _bricks;
+    private string searchString;
+    MudForm form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var context = new InventoryContext())
+        {
+            var brickContext = context.Set<Brick>();
+
+            _bricks = brickContext.ToList();
+        }
+
+        StateHasChanged();
+    }
+    
+
+    private bool BrickFilterFunc(Brick brick) => BrickFilter(brick, searchString);
+
+    private bool BrickFilter(Brick brick, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(this.searchString))
+            return true;
+        if (brick.Name.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (brick.PartNum.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (brick.ColorId.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (brick.ColorName.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
+}

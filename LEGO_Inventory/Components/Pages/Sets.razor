@@ -23,6 +23,9 @@
             </ToolBarContent>
             <HeaderContent>
                 <MudTh>
+                    <MudText>Image</MudText>
+                </MudTh>
+                <MudTh>
                     <MudTableSortLabel SortBy="new Func<Set, object>(x => x.SetId)">Set Id</MudTableSortLabel>
                 </MudTh>
                 <MudTh>
@@ -43,6 +46,7 @@
                 </MudTh>
             </HeaderContent>
             <RowTemplate>
+                <MudTd DataLabel="Image"><MudImage Src="@context.SetImg" Height="50"/></MudTd>
                 <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd>
                 <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd>
                 <MudTd DataLabel="Release Year" class="cursor-pointer">@context.ReleaseYear</MudTd>
