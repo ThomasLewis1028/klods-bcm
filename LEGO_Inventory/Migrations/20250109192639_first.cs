@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -17,11 +18,11 @@ namespace LEGO_Inventory.Migrations
                     PartNum = table.Column<string>(type: "TEXT", nullable: false),
                     ColorId = table.Column<string>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
-                    PartURL = table.Column<string>(type: "TEXT", nullable: false),
-                    PartImg = table.Column<string>(type: "TEXT", nullable: false),
+                    PartURL = table.Column<string>(type: "TEXT", nullable: true),
+                    PartImg = table.Column<string>(type: "TEXT", nullable: true),
                     Count = table.Column<int>(type: "INTEGER", nullable: false),
-                    ColorName = table.Column<string>(type: "TEXT", nullable: false),
-                    RGB = table.Column<string>(type: "TEXT", nullable: false),
+                    ColorName = table.Column<string>(type: "TEXT", nullable: true),
+                    RGB = table.Column<string>(type: "TEXT", nullable: true),
                     IsTrans = table.Column<bool>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
@@ -39,6 +40,7 @@ namespace LEGO_Inventory.Migrations
                     SetImg = table.Column<string>(type: "TEXT", nullable: false),
                     NumParts = table.Column<int>(type: "INTEGER", nullable: false),
                     ReleaseYear = table.Column<int>(type: "INTEGER", nullable: false),
+                    DateModified = table.Column<DateTime>(type: "TEXT", nullable: false),
                     OwnCount = table.Column<int>(type: "INTEGER", nullable: false),
                     BuildCount = table.Column<int>(type: "INTEGER", nullable: false),
                     ManualURL = table.Column<string>(type: "TEXT", nullable: false),

@@ -1,44 +1,106 @@
 ﻿@page "/sets"
 @using System.Text.Json.Nodes
+@using LEGO_Inventory.Database
 @rendermode InteractiveServer
-@inject IHttpClientFactory ClientFactory
 
 <PageTitle>Sets</PageTitle>
 
 <h1>Sets</h1>
 
-
-<form method="post" @onsubmit="ImportSet" @formname="setimport">
-    <AntiforgeryToken/>
-    <div>
-        <label>
-            <InputText @bind-Value="_setId"/>
-        </label>
-    </div>
-    <div>
-        <button type="submit">Import</button>
-    </div>
-</form>
+<MudGrid>
+    <MudItem xs="12">
+        <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId"></MudTextField>
+        <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportSet())">Import Set</MudButton>
+    </MudItem>
+    <MudItem xs="12">
+        <MudTable Items="@_sets.OrderBy(s => s.ReleaseYear)" Hover="true" SortLabel="Sort By"
+                  Filter="new Func<Set, bool>(SetFilterFunc)">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Set List</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>
+                    <MudText>Image</MudText>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Set, object>(x => x.SetId)">Set Id</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Set, object>(x => x.Name)">Name</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Set, object>(x => x.ReleaseYear)">Release Year
+                    </MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Set, object>(x => x.OwnCount)"># Owned</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Set, object>(x => x.BuildCount)"># Built</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Set, object>(x => x.NumParts)"># Pieces</MudTableSortLabel>
+                </MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Image"><MudImage Src="@context.SetImg" Height="50"/></MudTd>
+                <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd>
+                <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd>
+                <MudTd DataLabel="Release Year" class="cursor-pointer">@context.ReleaseYear</MudTd>
+                <MudTd DataLabel="Num Owned" class="cursor-pointer">@context.OwnCount</MudTd>
+                <MudTd DataLabel="Num Built" class="cursor-pointer">@context.BuildCount</MudTd>
+                <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.NumParts</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new[] { 10, 15, 20, 25, 50, 75, 100, int.MaxValue }"/>
+            </PagerContent>
+        </MudTable>
+    </MudItem>
+</MudGrid>
 
 @code {
     private string? _setId;
-    JsonObject? _set;
+    private List<Set>? _sets;
+    private string searchString;
+    MudForm form;
 
-    private async Task ImportSet()
+    protected override async Task OnInitializedAsync()
+    {
+        using (var context = new InventoryContext())
+        {
+            var setContext = context.Set<Set>();
+
+            _sets = setContext.ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private void ImportSet()
     {
         ImportData importData = new ImportData();
 
-        var temp = importData.ImportSetInfo(_setId);
+        importData.ImportSetInfo(_setId);
+        importData.ImportSetParts(_setId);
+        
 
-        if (!temp)
-        {
-            throw new Exception("No set found");
-        }
+        OnInitializedAsync();
+    }
 
-        if (!importData.ImportSetParts(_setId))
-        {
-            throw new Exception("No set found");
-        }
+    private bool SetFilterFunc(Set set) => SetFilter(set, searchString);
+
+    private bool SetFilter(Set set, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(this.searchString))
+            return true;
+        if (set.SetId.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (set.Name.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
     }
 
 }
