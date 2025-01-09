@@ -18,72 +18,97 @@
         @* <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportBrick())">Import Brick</MudButton> *@
 
     </MudItem>
+    @* <MudItem xs="12"> *@
+    @*     <MudTable Items="@_bricks.OrderBy(b => b.PartNum)" Hover="true" SortLabel="Sort By" *@
+    @*               Filter="new Func<Brick, bool>(BrickFilterFunc)"> *@
+    @*         <ToolBarContent> *@
+    @*             <MudText Typo="Typo.h6">Brick List</MudText> *@
+    @*             <MudSpacer/> *@
+    @*             <MudText Typo="Typo.body1">Total Bricks: @_bricks.Count</MudText> *@
+    @*             <MudSpacer/> *@
+    @*             <MudText Typo="Typo.body1">Unique Bricks: @_bricks.GroupBy(b => b.PartNum).Count()</MudText> *@
+    @*             <MudSpacer/> *@
+    @*             <MudText Typo="Typo.body1">Unique Colors: @_bricks.GroupBy(b => b.ColorId).Count()</MudText> *@
+    @*             <MudSpacer/> *@
+    @*             <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" *@
+    @*                           AdornmentIcon="Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/> *@
+    @*         </ToolBarContent> *@
+    @*         <HeaderContent> *@
+    @*             <MudTh> *@
+    @*                 <MudText>Image</MudText> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.PartNum)">Part Number</MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Name)">Name</MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">Color</MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">RGB</MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.IsTrans)">Translucent</MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Count)"># Pieces</MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<BrickInfo, object>(x => x.TotalCount)"># Needed *@
+    @*                 </MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*             <MudTh> *@
+    @*                 <MudTableSortLabel SortBy="new Func<BrickInfo, object>(x => x.SetCount)"># Sets</MudTableSortLabel> *@
+    @*             </MudTh> *@
+    @*         </HeaderContent> *@
+    @*         <RowTemplate> *@
+    @*             <MudTd DataLabel="Image"> *@
+    @*                 <MudImage Src="@context.PartImg" Height="50"/> *@
+    @*             </MudTd> *@
+    @*             <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum</MudTd> *@
+    @*             <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd> *@
+    @*             <MudTd DataLabel="Color" class="cursor-pointer">@context.ColorName</MudTd> *@
+    @*             <MudTd DataLabel="Color" class="cursor-pointer"> *@
+    @*                 <MudItem> *@
+    @*                     <div class="mud-width-half rounded-circle pa-7" style="@($"background-color:{GetColor(context.RGB)};")"></div> *@
+    @*                 </MudItem> *@
+    @*             </MudTd> *@
+    @*             <MudTd DataLabel="Translucent" class="cursor-pointer">@context.IsTrans</MudTd> *@
+    @*             <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.Count</MudTd> *@
+    @*             <MudTd DataLabel="Num Needed" class="cursor-pointer">@GetBrickInfo(context).TotalCount</MudTd> *@
+    @*             <MudTd DataLabel="In Sets" class="cursor-pointer">@GetBrickInfo(context).SetCount</MudTd> *@
+    @*         </RowTemplate> *@
+    @*         <PagerContent> *@
+    @*             <MudTablePager PageSizeOptions="new[] { 10, 15, 20, 25, 50, 75, 100, int.MaxValue }"/> *@
+    @*         </PagerContent> *@
+    @*     </MudTable> *@
+    @* </MudItem> *@
+    
     <MudItem xs="12">
-        <MudTable Items="@_bricks.OrderBy(b => b.PartNum)" Hover="true" SortLabel="Sort By"
-                  Filter="new Func<Brick, bool>(BrickFilterFunc)">
-            <ToolBarContent>
-                <MudText Typo="Typo.h6">Brick List</MudText>
-                <MudSpacer/>
-                <MudText Typo="Typo.body1">Total Bricks: @_bricks.Count</MudText>
-                <MudSpacer/>
-                <MudText Typo="Typo.body1">Unique Bricks: @_bricks.GroupBy(b => b.PartNum).Count()</MudText>
-                <MudSpacer/>
-                <MudText Typo="Typo.body1">Unique Colors: @_bricks.GroupBy(b => b.ColorId).Count()</MudText>
-                <MudSpacer/>
-                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
-                              AdornmentIcon="Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/>
-            </ToolBarContent>
-            <HeaderContent>
-                <MudTh>
-                    <MudText>Image</MudText>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.PartNum)">Part Number</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Name)">Name</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">Color</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">RGB</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.IsTrans)">Translucent</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Count)"># Pieces</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<BrickInfo, object>(x => x.TotalCount)"># Needed
-                    </MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<BrickInfo, object>(x => x.SetCount)"># Sets</MudTableSortLabel>
-                </MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Image">
-                    <MudImage Src="@context.PartImg" Height="50"/>
-                </MudTd>
-                <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum</MudTd>
-                <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd>
-                <MudTd DataLabel="Color" class="cursor-pointer">@context.ColorName</MudTd>
-                <MudTd DataLabel="Color" class="cursor-pointer">
-                    <MudItem>
-                        <div class="mud-width-half rounded-circle pa-7" style="@($"background-color:{GetColor(context.RGB)};")"></div>
-                    </MudItem>
-                </MudTd>
-                <MudTd DataLabel="Translucent" class="cursor-pointer">@context.IsTrans</MudTd>
-                <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.Count</MudTd>
-                <MudTd DataLabel="Num Needed" class="cursor-pointer">@GetBrickInfo(context).TotalCount</MudTd>
-                <MudTd DataLabel="In Sets" class="cursor-pointer">@GetBrickInfo(context).SetCount</MudTd>
-            </RowTemplate>
-            <PagerContent>
-                <MudTablePager PageSizeOptions="new[] { 10, 15, 20, 25, 50, 75, 100, int.MaxValue }"/>
-            </PagerContent>
-        </MudTable>
+        <MudDataGrid Items="@_bricks.OrderBy(b => b.PartNum)" SortMode="@SortMode.Multiple">
+            <Columns>
+                <TemplateColumn Title="Image">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudImage Src="@context.Item.PartImg" Height="50"/>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.PartNum" Title="Part #"/>
+                <PropertyColumn Property="x => x.Name" Title="Name"/>
+                <TemplateColumn Title="Color">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudText>@context.Item.ColorName</MudText>
+                            <MudSpacer/>
+                            <div class="mud-width-half rounded-circle pa-7" style="@($"background-color:{GetColor(context.Item.RGB)};")"></div>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
     </MudItem>
 </MudGrid>
 
