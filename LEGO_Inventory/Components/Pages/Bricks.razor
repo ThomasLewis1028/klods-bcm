@@ -85,29 +85,57 @@
     @*         </PagerContent> *@
     @*     </MudTable> *@
     @* </MudItem> *@
-    
+
     <MudItem xs="12">
-        <MudDataGrid Items="@_bricks.OrderBy(b => b.PartNum)" SortMode="@SortMode.Multiple">
+        <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)" SortMode="@SortMode.Multiple">
             <Columns>
+                <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/>
                 <TemplateColumn Title="Image">
                     <CellTemplate>
                         <MudStack Row>
-                            <MudImage Src="@context.Item.PartImg" Height="50"/>
+                            <MudImage Src="@context.Item.Brick.PartImg" Height="50"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
-                <PropertyColumn Property="x => x.PartNum" Title="Part #"/>
-                <PropertyColumn Property="x => x.Name" Title="Name"/>
-                <TemplateColumn Title="Color">
+                <PropertyColumn Property="x => x.Brick.PartNum" Title="Part #"/>
+                <PropertyColumn Property="x => x.Brick.Name" Title="Name"/>
+                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true">
                     <CellTemplate>
                         <MudStack Row>
-                            <MudText>@context.Item.ColorName</MudText>
-                            <MudSpacer/>
-                            <div class="mud-width-half rounded-circle pa-7" style="@($"background-color:{GetColor(context.Item.RGB)};")"></div>
+                            <MudText>@context.Item.Brick.ColorName</MudText>
+                            @if (context.Item.Brick.RGB != null)
+                            {
+                                <MudSpacer/>
+                                <div class="mud-width-half rounded-circle pa-7"
+                                     style="@($"background-color:{GetColor(context.Item.Brick.RGB)};")"></div>
+                            }
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
+                <PropertyColumn Property="x => x.Brick.Count" Title="Stock"/>
+                <PropertyColumn Property="x => x.SetBricks.Sum(s => s.Count)" Title="Needed"/>
+                <PropertyColumn Property="x => x.Sets.Count" Title="In Sets"/>
             </Columns>
+            <ChildRowContent>
+                <MudCard>
+                    <MudGrid>
+                        @foreach (var set in context.Item.Sets)
+                        {
+                            <MudItem xs="3">
+                                <MudPaper Class="d-flex align-center justify-center mud-width-full py-8">
+                                    <MudItem>
+                                        <MudText Align="Align.Center">@set.Name</MudText>
+                                        <MudText Align="Align.Center">@set.SetId</MudText>
+                                    </MudItem>
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudCard>
+            </ChildRowContent>
+            <PagerContent>
+                <MudDataGridPager T="BrickInfo"/>
+            </PagerContent>
         </MudDataGrid>
     </MudItem>
 </MudGrid>
@@ -116,6 +144,7 @@
     private string? _brickId;
     private List<Brick>? _bricks;
     private List<SetBrick>? _setBricks;
+    private List<BrickInfo>? _brickInfos = [];
     private string searchString;
     MudForm form;
 
@@ -128,6 +157,16 @@
             var setBrickContext = context.Set<SetBrick>();
             _bricks = brickContext.ToList();
             _setBricks = setBrickContext.ToList();
+
+            foreach (Brick brick in _bricks)
+            {
+                _brickInfos?.Add(new BrickInfo
+                {
+                    Brick = brick,
+                    Sets = GetSets(_setBricks.Where(sb => sb.PartNum == brick.PartNum && sb.ColorId == brick.ColorId).Select(sb => sb.SetId).ToList()),
+                    SetBricks = GetSetBricks(brick)
+                });
+            }
         }
 
         StateHasChanged();
@@ -135,18 +174,42 @@
 
     private string GetColor(string rgb)
     {
-       return "#"+rgb;
+        return "#" + rgb;
     }
 
-    private BrickInfo GetBrickInfo(Brick brick)
+    private bool DeleteBrick(Brick brick)
     {
-        BrickInfo brickInfo = new BrickInfo
-        {
-            SetCount = _setBricks.Count(sb => sb.PartNum == brick.PartNum && sb.ColorId == brick.ColorId),
-            TotalCount = _setBricks.Where(sb => sb.PartNum == brick.PartNum && sb.ColorId == brick.ColorId).Sum(sb => sb.Count)
-        };
+        DeleteData deleteData = new DeleteData();
 
-        return brickInfo;
+        if (!deleteData.DeleteBricks(brick.PartNum, brick.ColorId))
+        {
+            throw new Exception("Brick not deleted");
+        }
+
+        return true;
+    }
+
+    private List<Set> GetSets(List<string> setIds)
+    {
+        using (var context = new InventoryContext())
+        {
+            var setContext = context.Set<Set>();
+
+            return setContext.Where(s => setIds.Contains(s.SetId)).ToList();
+        }
+    }
+
+    private List<SetBrick> GetSetBricks(Brick brick)
+    {
+        using (var context = new InventoryContext())
+        {
+            var setBrickContext = context.Set<SetBrick>();
+
+            return setBrickContext.Where(sb =>
+                    sb.PartNum == brick.PartNum &&
+                    sb.ColorId == brick.ColorId)
+                .ToList();
+        }
     }
 
 
@@ -169,9 +232,11 @@
 
     private class BrickInfo
     {
-        public int SetCount { get; set; }
+        public Brick Brick { get; set; }
 
-        public int TotalCount { get; set; }
+        public List<Set> Sets { get; set; }
+
+        public List<SetBrick> SetBricks { get; set; }
     }
 
 }

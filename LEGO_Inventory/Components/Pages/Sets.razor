@@ -10,7 +10,8 @@
 <MudGrid>
     <MudItem xs="12">
         <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId"></MudTextField>
-        <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportSet())">Import Set</MudButton>
+        <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportSet())">Import Set
+        </MudButton>
     </MudItem>
     <MudItem xs="12">
         <MudTable Items="@_sets.OrderBy(s => s.ReleaseYear)" Hover="true" SortLabel="Sort By"
@@ -46,7 +47,9 @@
                 </MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="Image"><MudImage Src="@context.SetImg" Height="50"/></MudTd>
+                <MudTd DataLabel="Image">
+                    <MudImage Src="@context.SetImg" Height="50"/>
+                </MudTd>
                 <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd>
                 <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd>
                 <MudTd DataLabel="Release Year" class="cursor-pointer">@context.ReleaseYear</MudTd>
@@ -85,7 +88,7 @@
 
         importData.ImportSetInfo(_setId);
         importData.ImportSetParts(_setId);
-        
+
 
         OnInitializedAsync();
     }
