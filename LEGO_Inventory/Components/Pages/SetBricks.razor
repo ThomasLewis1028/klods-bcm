@@ -1,0 +1,111 @@
+﻿@page "/setbricks"
+@using System.Text.Json.Nodes
+@using LEGO_Inventory.Database
+@rendermode InteractiveServer
+
+<PageTitle>Bricks</PageTitle>
+
+<h1>Bricks</h1>
+
+<MudGrid>
+    <MudItem xs="12">
+        @* <MudTextField xs="6" T="String" Label="Brick ID" Required="true" @bind-Value="_brickId"></MudTextField> *@
+        @* <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportBrick())">Import Brick</MudButton> *@
+
+    </MudItem>
+    <MudItem xs="12">
+        <MudTable Items="@_setBricks.OrderBy(b => b.PartNum)" Hover="true" SortLabel="Sort By"
+                  Filter="new Func<SetBrick, bool>(BrickFilterFunc)">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Set List</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.body1">Total Bricks: @_setBricks.Sum(sb => sb.Count)</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.body1">Spare Bricks: @_setBricks.Sum(sb => sb.SpareCount)</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>
+                    <MudText>Image</MudText>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.SetId)">Set ID</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.PartNum)">Part</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.ColorId)">Color ID</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.Count)"># Pieces</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.SpareCount)"># Spare Pieces</MudTableSortLabel>
+                </MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Image">
+                    <MudImage Src="@GetBrick(context.PartNum, context.ColorId).PartImg" Height="50"/>
+                </MudTd>
+                <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd>
+                <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum (@GetBrick(context.PartNum, context.ColorId).Name)</MudTd>
+                <MudTd DataLabel="Color ID" class="cursor-pointer">@context.ColorId (@GetBrick(context.PartNum, context.ColorId).ColorName)</MudTd>
+                <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.Count</MudTd>
+                <MudTd DataLabel="Num Spare Parts" class="cursor-pointer">@context.SpareCount</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new[] { 10, 15, 20, 25, 50, 75, 100, int.MaxValue }"/>
+            </PagerContent>
+        </MudTable>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string? _brickId;
+    private List<SetBrick>? _setBricks;
+    private List<Brick>? _bricks;
+    private string searchString;
+    MudForm form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var context = new InventoryContext())
+        {
+            var setBrickContext = context.Set<SetBrick>();
+            var brickContext = context.Set<Brick>();
+
+            _setBricks = setBrickContext.ToList();
+            _bricks = brickContext.ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private Brick GetBrick(string partNum, string colorId)
+    {
+        return _bricks.Find(b => b.PartNum == partNum && b.ColorId == colorId);
+    }
+
+    private bool BrickFilterFunc(SetBrick brick) => BrickFilter(brick, searchString);
+
+    private bool BrickFilter(SetBrick brick, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(this.searchString))
+            return true;
+        // if (brick.Name.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        //     return true;
+        if (brick.SetId.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (brick.PartNum.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (brick.ColorId.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        // if (brick.ColorName.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        //     return true;
+        return false;
+    }
+
+}

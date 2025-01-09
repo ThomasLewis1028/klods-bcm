@@ -1,32 +1,9 @@
-﻿@* <div class="top-row ps-3 navbar navbar-dark"> *@
-@*     <div class="container-fluid"> *@
-@*         <a class="navbar-brand" href="">LEGO_Inventory</a> *@
-@*     </div> *@
-@* </div> *@
-@* *@
-@* <input type="checkbox" title="Navigation menu" class="navbar-toggler"/> *@
-@* *@
-@* <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()"> *@
-@*     <nav class="nav flex-column"> *@
-@*         <div class="nav-item px-3"> *@
-@*             <NavLink class="nav-link" href="" Match="NavLinkMatch.All"> *@
-@*                 <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home *@
-@*             </NavLink> *@
-@*         </div> *@
-@* *@
-@*         <div class="nav-item px-3"> *@
-@*             <NavLink class="nav-link" href="sets"> *@
-@*                 <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Sets *@
-@*             </NavLink> *@
-@*         </div> *@
-@*     </nav> *@
-@* </div> *@
-
-<MudDrawer Open="true" Anchor="Anchor.Start" Width="250px" Height="100%" Class="py-3" Elevation="0"
+﻿<MudDrawer Open="true" Anchor="Anchor.Start" Width="250px" Height="100%" Class="py-3" Elevation="0"
            Variant="DrawerVariant.Persistent">
     <MudNavMenu Bordered="true" Class="mud-width-full" Rounded="true" Color="Color.Success">
         <MudNavLink Href="/sets" Icon="@Icons.Material.Filled.House">Sets</MudNavLink>
         <MudNavLink Href="/bricks" Icon="@Icons.Material.Filled.Dashboard">Bricks</MudNavLink>
+        <MudNavLink Href="/setbricks" Icon="@Icons.Material.Filled.Token">Set Bricks</MudNavLink>
     </MudNavMenu>
 </MudDrawer>
 

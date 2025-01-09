@@ -83,15 +83,9 @@
     {
         ImportData importData = new ImportData();
 
-        if (!importData.ImportSetInfo(_setId))
-        {
-            throw new Exception("No set found");
-        }
-
-        if (!importData.ImportSetParts(_setId))
-        {
-            throw new Exception("No set found");
-        }
+        importData.ImportSetInfo(_setId);
+        importData.ImportSetParts(_setId);
+        
 
         OnInitializedAsync();
     }

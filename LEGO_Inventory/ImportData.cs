@@ -166,11 +166,11 @@ public class ImportData
             {
                 var partNum = part!["part"]!["part_num"]!.ToString();
                 var name = part!["part"]!["name"]!.ToString();
-                var partUrl = part!["part"]!["part_url"]!.ToString();
-                var partImg = part!["part"]!["part_img_url"]!.ToString();
-                var colorId = part!["color"]!["id"]!.ToString();
-                var colorName = part!["color"]!["name"]!.ToString();
-                var rgb = part!["color"]!["rgb"]!.ToString();
+                var partUrl = part["part"]?["part_url"]?.ToString() ?? null;
+                var partImg = part["part"]?["part_img_url"]?.ToString() ?? null;
+                var colorId = part["color"]?["id"]?.ToString() ?? null;
+                var colorName = part["color"]?["name"]?.ToString() ?? null;
+                var rgb = part["color"]?["rgb"]?.ToString() ?? null;
                 var isTrans = part!["color"]!["is_trans"]!.ToString().Equals("true");
                 var count = 0;
 
