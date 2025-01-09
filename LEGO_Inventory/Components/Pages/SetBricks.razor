@@ -3,9 +3,9 @@
 @using LEGO_Inventory.Database
 @rendermode InteractiveServer
 
-<PageTitle>Bricks</PageTitle>
+<PageTitle>Set Bricks</PageTitle>
 
-<h1>Bricks</h1>
+<h1>Set Bricks</h1>
 
 <MudGrid>
     <MudItem xs="12">
@@ -17,7 +17,7 @@
         <MudTable Items="@_setBricks.OrderBy(b => b.PartNum)" Hover="true" SortLabel="Sort By"
                   Filter="new Func<SetBrick, bool>(BrickFilterFunc)">
             <ToolBarContent>
-                <MudText Typo="Typo.h6">Set List</MudText>
+                <MudText Typo="Typo.h6">Set Brick List</MudText>
                 <MudSpacer/>
                 <MudText Typo="Typo.body1">Total Bricks: @_setBricks.Sum(sb => sb.Count)</MudText>
                 <MudSpacer/>
@@ -37,7 +37,10 @@
                     <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.PartNum)">Part</MudTableSortLabel>
                 </MudTh>
                 <MudTh>
-                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.ColorId)">Color ID</MudTableSortLabel>
+                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.ColorId)">Color</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">RGB</MudTableSortLabel>
                 </MudTh>
                 <MudTh>
                     <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.Count)"># Pieces</MudTableSortLabel>
@@ -52,7 +55,13 @@
                 </MudTd>
                 <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd>
                 <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum (@GetBrick(context.PartNum, context.ColorId).Name)</MudTd>
-                <MudTd DataLabel="Color ID" class="cursor-pointer">@context.ColorId (@GetBrick(context.PartNum, context.ColorId).ColorName)</MudTd>
+                <MudTd DataLabel="Color ID" class="cursor-pointer">@GetBrick(context.PartNum, context.ColorId).ColorName</MudTd>
+                <MudTd DataLabel="Color" class="cursor-pointer">
+                    <MudItem>
+
+                        <div class="mud-width-half rounded-circle pa-7" style="@($"background-color:{"#"+GetBrick(context.PartNum, context.ColorId).RGB};")"></div>
+                    </MudItem>
+                </MudTd>
                 <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.Count</MudTd>
                 <MudTd DataLabel="Num Spare Parts" class="cursor-pointer">@context.SpareCount</MudTd>
             </RowTemplate>

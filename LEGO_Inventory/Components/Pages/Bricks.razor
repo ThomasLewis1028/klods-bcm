@@ -22,7 +22,7 @@
         <MudTable Items="@_bricks.OrderBy(b => b.PartNum)" Hover="true" SortLabel="Sort By"
                   Filter="new Func<Brick, bool>(BrickFilterFunc)">
             <ToolBarContent>
-                <MudText Typo="Typo.h6">Set List</MudText>
+                <MudText Typo="Typo.h6">Brick List</MudText>
                 <MudSpacer/>
                 <MudText Typo="Typo.body1">Total Bricks: @_bricks.Count</MudText>
                 <MudSpacer/>
@@ -41,14 +41,13 @@
                     <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.PartNum)">Part Number</MudTableSortLabel>
                 </MudTh>
                 <MudTh>
+                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Name)">Name</MudTableSortLabel>
+                </MudTh>
+                <MudTh>
                     <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">Color</MudTableSortLabel>
                 </MudTh>
                 <MudTh>
                     <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.ColorId)">RGB</MudTableSortLabel>
-                </MudTh>
-                <MudTh>
-                    <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.Name)">Name
-                    </MudTableSortLabel>
                 </MudTh>
                 <MudTh>
                     <MudTableSortLabel SortBy="new Func<Brick, object>(x => x.IsTrans)">Translucent</MudTableSortLabel>
@@ -69,15 +68,13 @@
                     <MudImage Src="@context.PartImg" Height="50"/>
                 </MudTd>
                 <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum</MudTd>
+                <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd>
                 <MudTd DataLabel="Color" class="cursor-pointer">@context.ColorName</MudTd>
                 <MudTd DataLabel="Color" class="cursor-pointer">
-                    @* <MudColorPicker PickerVariant="PickerVariant.Static" ColorPickerView="ColorPickerView.Palette" Palette="GetColor(context.RGB)"/> *@
                     <MudItem>
-
                         <div class="mud-width-half rounded-circle pa-7" style="@($"background-color:{GetColor(context.RGB)};")"></div>
                     </MudItem>
                 </MudTd>
-                <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd>
                 <MudTd DataLabel="Translucent" class="cursor-pointer">@context.IsTrans</MudTd>
                 <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.Count</MudTd>
                 <MudTd DataLabel="Num Needed" class="cursor-pointer">@GetBrickInfo(context).TotalCount</MudTd>
