@@ -10,3 +10,7 @@ services:
     ports:
       - "8080:8080"
     network_mode: "host"
+    volumes:
+      - data-volume:/home/app/.local/share:rw
+volumes:
+  data-volume:
