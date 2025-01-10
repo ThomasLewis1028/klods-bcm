@@ -1,5 +1,7 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+﻿FROM mcr.microsoft.com/dotnet/sdk:9.0 AS base
 USER $APP_UID
+ENV PATH="${PATH}:/root/.dotnet/tools"
+RUN dotnet tool install --global dotnet-ef --create-manifest-if-needed
 WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
@@ -20,4 +22,6 @@ RUN dotnet publish "LEGO_Inventory.csproj" -c $BUILD_CONFIGURATION -o /app/publi
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY Migrations/ Migrations/.
+
 ENTRYPOINT ["dotnet", "LEGO_Inventory.dll"]
