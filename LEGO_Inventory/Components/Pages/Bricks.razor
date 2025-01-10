@@ -87,19 +87,22 @@
     @* </MudItem> *@
 
     <MudItem xs="12">
-        <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)" SortMode="@SortMode.Multiple">
+        <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)" 
+                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell" 
+                     CommittedItemChanges="@CommittedItemChanges"
+                     ReadOnly="false">
             <Columns>
                 <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/>
-                <TemplateColumn Title="Image">
+                <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
                             <MudImage Src="@context.Item.Brick.PartImg" Height="50"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
-                <PropertyColumn Property="x => x.Brick.PartNum" Title="Part #"/>
-                <PropertyColumn Property="x => x.Brick.Name" Title="Name"/>
-                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true">
+                <PropertyColumn Property="x => x.Brick.PartNum" Title="Part #" Editable="false"/>
+                <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
+                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
                             <MudText>@context.Item.Brick.ColorName</MudText>
@@ -113,8 +116,8 @@
                     </CellTemplate>
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Brick.Count" Title="Stock"/>
-                <PropertyColumn Property="x => x.SetBricks.Sum(s => s.Count)" Title="Needed"/>
-                <PropertyColumn Property="x => x.Sets.Count" Title="In Sets"/>
+                <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count * x.Sets.First(s => s.SetId == sb.SetId).OwnCount)" Title="Needed" Editable="false"/>
+                <PropertyColumn Property="x => x.Sets.Count" Title="In Sets" Editable="false"/>
             </Columns>
             <ChildRowContent>
                 <MudCard>
@@ -147,8 +150,7 @@
     private List<BrickInfo>? _brickInfos = [];
     private string searchString;
     MudForm form;
-
-
+    
     protected override async Task OnInitializedAsync()
     {
         using (var context = new InventoryContext())
@@ -229,6 +231,21 @@
             return true;
         return false;
     }
+    
+    // events
+   void CommittedItemChanges(BrickInfo item)
+   {
+       Console.WriteLine(item.Brick.Count);
+
+       using (var context = new InventoryContext())
+       {
+           var brickContext = context.Set<Brick>();
+
+           brickContext.First(b => b == item.Brick).Count = item.Brick.Count;
+
+           context.SaveChanges();
+       }
+   }
 
     private class BrickInfo
     {
