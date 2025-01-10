@@ -1,5 +1,8 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace LEGO_Inventory;
 
+[Table("SetBricks")]
 public class SetBrick
 {
     public string PartNum { get; set; }
