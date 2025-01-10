@@ -1,5 +1,8 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace LEGO_Inventory;
 
+[Table("Sets")]
 public class Set
 {
     public string SetId { get; set; }
@@ -19,11 +22,4 @@ public class Set
     public int OwnCount { get; set; }
     
     public int BuildCount { get; set; }
-    
-    public string ManualURL { get; set; }
-    
-    public string ManualPath { get; set; }
-    
-    
-    
 }

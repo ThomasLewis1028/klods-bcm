@@ -84,7 +84,7 @@
                 <PropertyColumn Property="x => x.ReleaseYear" Title="Release Year" Editable="false"/>
                 <PropertyColumn Property="x => x.OwnCount" Title="Owned"/>
                 <PropertyColumn Property="x => x.BuildCount" Title="Built"/>
-                <PropertyColumn Property="x => x.NumParts" Title="Pieces"/>
+                <PropertyColumn Property="x => x.NumParts" Title="Pieces" Editable="false"/>
             </Columns>
             @* <ChildRowContent> *@
             @*     <MudCard> *@
@@ -135,10 +135,14 @@
     {
         ImportData importData = new ImportData();
 
-        importData.ImportSetInfo(_setId);
-        importData.ImportSetParts(_setId);
+        List<string> setIds = _setId.Split(null).ToList();
 
-
+        foreach(string setId in setIds)
+        {
+            importData.ImportSetInfo(setId);
+            importData.ImportSetParts(setId);
+        }
+        
         OnInitializedAsync();
     }
 
