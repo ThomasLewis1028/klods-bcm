@@ -1,4 +1,5 @@
 ﻿@page "/sets"
+@inject ILoggerFactory LoggerFactory
 @using System.Text.Json.Nodes
 @using LEGO_Inventory.Database
 @rendermode InteractiveServer
@@ -117,14 +118,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var logger = LoggerFactory.CreateLogger<Sets>();
+        logger.LogTrace("Loading Sets");
         using (var context = new InventoryContext())
         {
             var setContext = context.Set<Set>();
 
             _sets = setContext.ToList();
         }
-
+        
         StateHasChanged();
+        logger.LogTrace("Loading Sets Complete");
     }
 
     private void ImportSet()

@@ -5,8 +5,10 @@ namespace LEGO_Inventory;
 
 public class ImportData
 {
+    private readonly ILogger<ImportData> _logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<ImportData>();
     public bool ImportSetInfo(string? setId)
     {
+        _logger.LogInformation($"Importing {setId}");
         RebrickableApi api = new RebrickableApi();
 
         JsonObject? setInfo = api.GetSetInfo(setId).Result;
@@ -40,6 +42,7 @@ public class ImportData
                     DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()),
                     NumParts = int.Parse(setInfo!["num_parts"]!.ToString()),
                     ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
+                    ManualUrl = "",
                     OwnCount = 0,
                     BuildCount = 0
                 };
@@ -47,6 +50,7 @@ public class ImportData
                 setContext.Add(set);
             }
 
+            _logger.LogInformation($"Importing {setId} Completed");
             return context.SaveChanges() > 0;
         }
 
@@ -55,6 +59,7 @@ public class ImportData
 
     public bool ImportSetParts(string setId)
     {
+        _logger.LogInformation($"Importing set parts for {setId}");
         RebrickableApi api = new RebrickableApi();
 
         JsonObject? setParts = api.GetSetParts(setId).Result;
@@ -145,6 +150,7 @@ public class ImportData
                 throw new Exception($"No set found with ID {setId} in database");
             }
 
+            _logger.LogInformation($"Importing  set parts for {setId} Completed");
             return saveCount > 0;
         }
 

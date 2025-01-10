@@ -55,4 +55,9 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+var logger = app.Services.GetRequiredService<ILoggerFactory>()
+    .CreateLogger<Program>();
+logger.LogInformation("Lego application starting.");
+
 app.Run();
+logger.LogInformation("Lego application running.");

@@ -1,4 +1,5 @@
 ﻿@page "/bricks"
+@inject ILoggerFactory LoggerFactory
 @using System.Drawing
 @using System.Text.Json.Nodes
 @using LEGO_Inventory.Database
@@ -153,6 +154,8 @@
     
     protected override async Task OnInitializedAsync()
     {
+        var logger = LoggerFactory.CreateLogger<Bricks>();
+        logger.LogTrace("Loading Bricks");
         using (var context = new InventoryContext())
         {
             var brickContext = context.Set<Brick>();
@@ -174,6 +177,7 @@
         }
 
         StateHasChanged();
+        logger.LogTrace("Loading Bricks Complete");
     }
 
     private string GetColor(string rgb)

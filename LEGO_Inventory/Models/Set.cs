@@ -22,4 +22,6 @@ public class Set
     public int OwnCount { get; set; }
     
     public int BuildCount { get; set; }
+    
+    public string ManualUrl { get; set; }
 }
