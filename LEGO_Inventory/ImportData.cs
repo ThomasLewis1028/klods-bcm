@@ -42,6 +42,7 @@ public class ImportData
                     DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()),
                     NumParts = int.Parse(setInfo!["num_parts"]!.ToString()),
                     ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
+                    ManualUrl = "",
                     OwnCount = 0,
                     BuildCount = 0
                 };
