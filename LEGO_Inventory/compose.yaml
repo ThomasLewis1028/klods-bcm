@@ -1,0 +1,12 @@
+﻿version: "3"
+services:
+  lego_inventory:
+    image: lego_inventory
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      LEGO_API_KEY: ${LEGO_API_KEY}
+    ports:
+      - "8080:8080"
+    network_mode: "host"
