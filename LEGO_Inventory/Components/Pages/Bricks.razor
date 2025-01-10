@@ -119,7 +119,7 @@
                 <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count * x.Sets.First(s => s.SetId == sb.SetId).OwnCount)" Title="Needed" Editable="false"/>
                 <PropertyColumn Property="x => x.Sets.Count" Title="In Sets" Editable="false"/>
             </Columns>
-            <ChildRowContent>
+            <ChildRowContent >
                 <MudCard>
                     <MudGrid>
                         @foreach (var set in context.Item.Sets)
@@ -162,11 +162,13 @@
 
             foreach (Brick brick in _bricks)
             {
+                var setBricks = GetSetBricks(brick);
+                
                 _brickInfos?.Add(new BrickInfo
                 {
                     Brick = brick,
-                    Sets = GetSets(_setBricks.Where(sb => sb.PartNum == brick.PartNum && sb.ColorId == brick.ColorId).Select(sb => sb.SetId).ToList()),
-                    SetBricks = GetSetBricks(brick)
+                    Sets = GetSets(setBricks.Select(sb => sb.SetId).ToList()),
+                    SetBricks = setBricks
                 });
             }
         }
