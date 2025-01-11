@@ -5,7 +5,9 @@ namespace LEGO_Inventory;
 
 public class ImportData
 {
-    private readonly ILogger<ImportData> _logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<ImportData>();
+    private readonly ILogger<ImportData> _logger =
+        LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<ImportData>();
+
     public bool ImportSetInfo(string? setId)
     {
         _logger.LogInformation($"Importing {setId}");
@@ -126,16 +128,16 @@ public class ImportData
                             Count = count,
                             SpareCount = spareCount,
                         };
-                        
+
                         setBrickContext.Add(setBrick);
                     }
                     else
                     {
                         SetBrick setBrick = setBrickContext.First(sb => sb.PartNum == partNum
-                                                               && sb.ColorId == colorId
-                                                               && sb.SetId == localSetId);
-                        
-                        if(isSpare)
+                                                                        && sb.ColorId == colorId
+                                                                        && sb.SetId == localSetId);
+
+                        if (isSpare)
                             setBrick.SpareCount = spareCount;
                         else
                             setBrick.Count = count;
@@ -159,10 +161,11 @@ public class ImportData
 
     public Brick ImportBrick(JsonNode part)
     {
+        _logger.LogInformation($"Importing set parts for {part!["part"]!["part_num"]}");
         using (var context = new InventoryContext())
         {
             var brickContext = context.Set<Brick>();
-    
+
             Brick brick;
 
             if (!brickContext.Any(b => b.PartNum == part!["part"]!["part_num"]!.ToString()
@@ -184,11 +187,11 @@ public class ImportData
                     Name = name,
                     PartURL = partUrl,
                     PartImg = partImg,
-                    ColorId = colorId,
+                    Count = count,
+                    ColorId = colorId ?? null,
                     ColorName = colorName,
-                    RGB = rgb,
                     IsTrans = isTrans,
-                    Count = count
+                    HexColor = rgb
                 };
 
                 brickContext.Add(brick);
@@ -197,7 +200,7 @@ public class ImportData
                 return brick;
             }
         }
-    
+
         return null;
     }
 }

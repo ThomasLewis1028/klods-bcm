@@ -23,7 +23,7 @@ public class InventoryContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         // BRICK
-        modelBuilder.Entity<Brick>().HasKey(e => new { e.PartNum, e.ColorId });
+        modelBuilder.Entity<Brick>().HasKey(e => new { e.PartNum, e.ColorId});
 
         // SET
         modelBuilder.Entity<Set>().HasKey(e => new { e.SetId});
@@ -34,7 +34,7 @@ public class InventoryContext : DbContext
         modelBuilder.Entity<SetBrick>()
             .HasOne<Brick>()
             .WithMany()
-            .HasForeignKey(s => new { s.PartNum, s.ColorId })
+            .HasForeignKey(s => new { s.PartNum, s.ColorId})
             .IsRequired();
         
         modelBuilder.Entity<SetBrick>()

@@ -62,9 +62,9 @@
                 <MudTd DataLabel="Color ID">@GetBrick(context.PartNum, context.ColorId).ColorName</MudTd>
                 <MudTd DataLabel="Color">
                     <MudItem>
-
+                
                         <div class="mud-width-half rounded-circle pa-7"
-                             style="@($"background-color:{"#" + GetBrick(context.PartNum, context.ColorId).RGB};")"></div>
+                             style="@($"background-color:{"#" + GetBrick(context.PartNum, context.ColorId).HexColor};")"></div>
                     </MudItem>
                 </MudTd>
                 <MudTd DataLabel="Num Parts">@context.Count</MudTd>

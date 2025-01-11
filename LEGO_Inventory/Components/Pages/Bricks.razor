@@ -1,12 +1,8 @@
 ﻿@page "/bricks"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
-@using System.Drawing
-@using System.Text.Json.Nodes
 @using LEGO_Inventory.Database
-@using MudBlazor.Extensions
-@using MudBlazor.Utilities
-@using Color = MudBlazor.Color
+@using Microsoft.IdentityModel.Tokens
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
 
@@ -48,11 +44,11 @@
                     <CellTemplate>
                         <MudStack Row>
                             <MudText>@context.Item.Brick.ColorName</MudText>
-                            @if (context.Item.Brick.RGB != null)
+                            @if (context.Item.Brick.HexColor != null)
                             {
                                 <MudSpacer/>
                                 <div class="mud-width-half rounded-circle pa-7"
-                                     style="@($"background-color:{GetColor(context.Item.Brick.RGB)};")"></div>
+                                     style="@($"background-color:{GetColor(context.Item.Brick.HexColor)};")"></div>
                             }
                         </MudStack>
                     </CellTemplate>
@@ -60,6 +56,19 @@
                 <PropertyColumn Property="x => x.Brick.Count" Title="Stock"/>
                 @* <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count * x.Sets.First(s => s.SetId == sb.SetId).OwnCount)" Title="Needed" Editable="false"/> *@
                 <PropertyColumn Property="x => x.Sets.Count" Title="In Sets" Editable="false"/>
+                <TemplateColumn Title="Delete" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudIconButton
+                                Icon="@Icons.Material.Filled.Delete"
+                                Variant="Variant.Filled"
+                                Color="Color.Error"
+                                Size="Size.Small"
+                                OnClick="() => DeleteBrick(context.Item.Brick)"
+                            />
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
             </Columns>
             <ChildRowContent>
                 <MudCard>
@@ -87,8 +96,6 @@
 
 @code {
     private string? _brickId;
-    private List<Brick>? _bricks;
-    private List<SetBrick>? _setBricks;
     private List<BrickInfo>? _brickInfos = [];
     private string searchString;
     MudForm form;
@@ -100,11 +107,8 @@
         using (var context = new InventoryContext())
         {
             var brickContext = context.Set<Brick>();
-            var setBrickContext = context.Set<SetBrick>();
-            _bricks = brickContext.ToList();
-            _setBricks = setBrickContext.ToList();
 
-            foreach (Brick brick in _bricks)
+            foreach (Brick brick in brickContext.ToList())
             {
                 var setBricks = GetSetBricks(brick);
 
@@ -112,7 +116,7 @@
                 {
                     Brick = brick,
                     Sets = setBricks.Select(sb => sb.SetId).ToList(),
-                    SetBricks = setBricks
+                    SetBricks = setBricks,
                 });
             }
         }
@@ -126,17 +130,6 @@
         return "#" + rgb;
     }
 
-    private bool DeleteBrick(Brick brick)
-    {
-        DeleteData deleteData = new DeleteData();
-
-        if (!deleteData.DeleteBricks(brick.PartNum, brick.ColorId))
-        {
-            throw new Exception("Brick not deleted");
-        }
-
-        return true;
-    }
 
     private List<Set> GetSets(List<string> setIds)
     {
@@ -147,7 +140,7 @@
             return setContext.Where(s => setIds.Contains(s.SetId)).ToList();
         }
     }
-
+    
     private List<SetBrick> GetSetBricks(Brick brick)
     {
         using (var context = new InventoryContext())
@@ -215,6 +208,15 @@
         public List<string> Sets { get; set; }
 
         public List<SetBrick> SetBricks { get; set; }
+    }
+
+    private void DeleteBrick(Brick brick)
+    {
+        DeleteData deleteData = new DeleteData();
+
+        deleteData.DeleteBricks(brick.PartNum, brick.ColorId);
+
+        OnInitializedAsync();
     }
 
 }

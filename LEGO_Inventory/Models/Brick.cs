@@ -19,7 +19,7 @@ public class Brick
     
     public string? ColorName { get; set; }
     
-    public string? RGB { get; set; }
+    public string? HexColor { get; set; }
     
     public bool IsTrans { get; set; }
 }

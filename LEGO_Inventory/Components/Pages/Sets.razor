@@ -43,6 +43,19 @@
                 <PropertyColumn Property="x => x.OwnCount" Title="Owned"/>
                 <PropertyColumn Property="x => x.BuildCount" Title="Built"/>
                 <PropertyColumn Property="x => x.NumParts" Title="Pieces" Editable="false"/>
+                <TemplateColumn Title="Delete" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudIconButton 
+                                Icon="@Icons.Material.Filled.Delete" 
+                                Variant="Variant.Filled"
+                                Color="Color.Error"
+                                Size="Size.Small"
+                                OnClick="() => DeleteSet(context.Item.SetId)"
+                                />
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
             </Columns>
             @* <ChildRowContent> *@
             @*     <MudCard> *@
@@ -147,4 +160,12 @@
         }
     }
 
+    private void DeleteSet(string setId)
+    {
+        DeleteData deleteData = new DeleteData();
+
+        deleteData.DeleteSetInfo(setId);
+
+        OnInitializedAsync();
+    }
 }
