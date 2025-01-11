@@ -15,8 +15,6 @@ public class Set
     
     public int NumBricks { get; set; }
     
-    public int MinifigCount { get; set; }
-    
     public int ReleaseYear { get; set; }
     
     public DateTime DateModified { get; set; }

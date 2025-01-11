@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LEGO_Inventory.Migrations
 {
     [DbContext(typeof(InventoryContext))]
-    [Migration("20250111042840_Initial")]
-    partial class Initial
+    [Migration("20250111183530_Pragma")]
+    partial class Pragma
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -55,6 +55,49 @@ namespace LEGO_Inventory.Migrations
                     b.ToTable("Bricks");
                 });
 
+            modelBuilder.Entity("LEGO_Inventory.Minifig", b =>
+                {
+                    b.Property<string>("MinifigId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MinifigImgUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MinifigName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MinifigUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("MinifigId");
+
+                    b.ToTable("Minifigs");
+                });
+
+            modelBuilder.Entity("LEGO_Inventory.MinifigBrick", b =>
+                {
+                    b.Property<string>("MinifigID")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BrickID")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MinifigID", "BrickID", "ColorId");
+
+                    b.HasIndex("BrickID", "ColorId");
+
+                    b.ToTable("MinifigBricks");
+                });
+
             modelBuilder.Entity("LEGO_Inventory.Set", b =>
                 {
                     b.Property<string>("SetId")
@@ -74,7 +117,7 @@ namespace LEGO_Inventory.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("NumParts")
+                    b.Property<int>("NumBricks")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("OwnCount")
@@ -120,6 +163,39 @@ namespace LEGO_Inventory.Migrations
                     b.ToTable("SetBricks");
                 });
 
+            modelBuilder.Entity("LEGO_Inventory.SetMinifig", b =>
+                {
+                    b.Property<string>("MinifigId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MinifigId", "SetId");
+
+                    b.HasIndex("SetId");
+
+                    b.ToTable("SetMinifig");
+                });
+
+            modelBuilder.Entity("LEGO_Inventory.MinifigBrick", b =>
+                {
+                    b.HasOne("LEGO_Inventory.Minifig", null)
+                        .WithMany()
+                        .HasForeignKey("MinifigID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LEGO_Inventory.Brick", null)
+                        .WithMany()
+                        .HasForeignKey("BrickID", "ColorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LEGO_Inventory.SetBrick", b =>
                 {
                     b.HasOne("LEGO_Inventory.Set", null)
@@ -131,6 +207,21 @@ namespace LEGO_Inventory.Migrations
                     b.HasOne("LEGO_Inventory.Brick", null)
                         .WithMany()
                         .HasForeignKey("PartNum", "ColorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LEGO_Inventory.SetMinifig", b =>
+                {
+                    b.HasOne("LEGO_Inventory.Minifig", null)
+                        .WithMany()
+                        .HasForeignKey("MinifigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LEGO_Inventory.Set", null)
+                        .WithMany()
+                        .HasForeignKey("SetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

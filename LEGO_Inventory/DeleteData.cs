@@ -11,11 +11,6 @@ public class DeleteData
         using (var context = new InventoryContext())
         {
             var setContext = context.Set<Set>();
-
-            if (!DeleteSetParts(setId))
-            {
-                return false;
-            }
             
             setContext
                 .Where(s => s.SetId == setId)

@@ -31,6 +31,20 @@ namespace LEGO_Inventory.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Minifigs",
+                columns: table => new
+                {
+                    MinifigId = table.Column<string>(type: "TEXT", nullable: false),
+                    MinifigName = table.Column<string>(type: "TEXT", nullable: false),
+                    MinifigImgUrl = table.Column<string>(type: "TEXT", nullable: false),
+                    MinifigUrl = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Minifigs", x => x.MinifigId);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Sets",
                 columns: table => new
                 {
@@ -38,7 +52,8 @@ namespace LEGO_Inventory.Migrations
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     SetURL = table.Column<string>(type: "TEXT", nullable: false),
                     SetImg = table.Column<string>(type: "TEXT", nullable: false),
-                    NumParts = table.Column<int>(type: "INTEGER", nullable: false),
+                    NumBricks = table.Column<int>(type: "INTEGER", nullable: false),
+                    MinifigCount = table.Column<int>(type: "INTEGER", nullable: false),
                     ReleaseYear = table.Column<int>(type: "INTEGER", nullable: false),
                     DateModified = table.Column<DateTime>(type: "TEXT", nullable: false),
                     OwnCount = table.Column<int>(type: "INTEGER", nullable: false),
@@ -77,9 +92,39 @@ namespace LEGO_Inventory.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "SetMinifig",
+                columns: table => new
+                {
+                    MinifigId = table.Column<string>(type: "TEXT", nullable: false),
+                    SetId = table.Column<string>(type: "TEXT", nullable: false),
+                    Count = table.Column<int>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SetMinifig", x => new { x.MinifigId, x.SetId });
+                    table.ForeignKey(
+                        name: "FK_SetMinifig_Minifigs_MinifigId",
+                        column: x => x.MinifigId,
+                        principalTable: "Minifigs",
+                        principalColumn: "MinifigId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_SetMinifig_Sets_SetId",
+                        column: x => x.SetId,
+                        principalTable: "Sets",
+                        principalColumn: "SetId",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_SetBricks_SetId",
                 table: "SetBricks",
+                column: "SetId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SetMinifig_SetId",
+                table: "SetMinifig",
                 column: "SetId");
         }
 
@@ -90,7 +135,13 @@ namespace LEGO_Inventory.Migrations
                 name: "SetBricks");
 
             migrationBuilder.DropTable(
+                name: "SetMinifig");
+
+            migrationBuilder.DropTable(
                 name: "Bricks");
+
+            migrationBuilder.DropTable(
+                name: "Minifigs");
 
             migrationBuilder.DropTable(
                 name: "Sets");
