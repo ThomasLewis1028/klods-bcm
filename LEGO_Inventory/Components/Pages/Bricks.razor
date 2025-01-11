@@ -47,7 +47,7 @@
                             {
                                 <MudSpacer/>
                                 <div class="mud-width-half rounded-circle pa-7"
-                                     style="@($"background-color:{GetColor(context.Item.Brick.HexColor)};")"></div>
+                                     style="@($"background-color:{"#" + context.Item.Brick.HexColor};")"></div>
                             }
                         </MudStack>
                     </CellTemplate>
@@ -124,12 +124,6 @@
         logger.LogTrace("Loading Bricks Complete");
     }
 
-    private string GetColor(string rgb)
-    {
-        return "#" + rgb;
-    }
-
-
     private List<Set> GetSets(List<string> setIds)
     {
         using (var context = new InventoryContext())
@@ -186,18 +180,10 @@
         return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
     }
 
-    void CommittedItemChanges(BrickInfo item)
+    void CommittedItemChanges(BrickInfo brick)
     {
-        Console.WriteLine(item.Brick.Count);
-
-        using (var context = new InventoryContext())
-        {
-            var brickContext = context.Set<Brick>();
-
-            brickContext.First(b => b == item.Brick).Count = item.Brick.Count;
-
-            context.SaveChanges();
-        }
+        UpdateData updateData = new UpdateData();
+        updateData.UpdateBrick(brick.Brick);
     }
 
     private class BrickInfo

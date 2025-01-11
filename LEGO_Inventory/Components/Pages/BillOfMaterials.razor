@@ -1,0 +1,255 @@
+﻿@page "/bom/{_setId?}"
+@page "/bom"
+@inject ILoggerFactory LoggerFactory
+@inject IDialogService DialogService
+@using LEGO_Inventory.Database
+@rendermode InteractiveServer
+
+<PageTitle>Bill of Materials</PageTitle>
+
+<h1>Bill of Materials</h1>
+
+<MudGrid>
+    <MudItem xs="12">
+        <MudSelect @bind-Value="_set"
+                   Variant="Variant.Outlined"
+                   Dense="true">
+            @foreach (var set in _sets)
+            {
+                <MudSelectItem Value="@set">@set.SetId - @set.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    
+    @if (_set != null)
+    {
+        <MudItem xs="12">
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                <MudTabPanel Text="Bricks">
+                    <MudDataGrid T="SetBrickInfo" Items="@_setBrickInfo.OrderBy(b => b.Brick.PartNum)"
+                                 SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
+                                 QuickFilter="SetBrickFilterFunc" CommittedItemChanges="@UpdateBrick"
+                                 ReadOnly="false">
+                        <ToolBarContent>
+                            <MudText Typo="Typo.h6">@_setId</MudText>
+                            <MudSpacer/>
+                            <MudText Typo="Typo.h6">@_set.Name</MudText>
+                            <MudSpacer/>
+                            <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                                          Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                                          Class="mt-0"></MudTextField>
+                        </ToolBarContent>
+                        <Columns>
+                            <TemplateColumn Title="Image" Editable="false">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        <MudImage class="cursor-pointer" Src="@context.Item.Brick.PartImg" Height="50"
+                                                  @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg))"/>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Property="x => x.Brick.PartNum" Title="Brick Id" Editable="false"/>
+                            <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
+                            <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        <MudText>@context.Item.Brick.ColorName</MudText>
+                                        @if (context.Item.Brick.HexColor != null)
+                                        {
+                                            <MudSpacer/>
+                                            <div class="mud-width-half rounded-circle pa-7"
+                                                 style="@($"background-color:{"#" + context.Item.Brick.HexColor};")"></div>
+                                        }
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn
+                                Property="x => x.SetBrick.Count"
+                                Title="Needed" Editable="false" SortBy="x => x.SetBrick.Count"/>
+                            <PropertyColumn Property="x => x.Brick.Count" Title="Stock" Editable="true"/>
+                        </Columns>
+                        <PagerContent>
+                            <MudDataGridPager T="SetBrickInfo"/>
+                        </PagerContent>
+                    </MudDataGrid>
+                </MudTabPanel>
+                <MudTabPanel Text="Minifigures" Disabled="@(_setMinifigInfo.Count == 0)">
+                    <MudDataGrid T="SetMinifigInfo" Items="@_setMinifigInfo.OrderBy(b => b.Minifig.MinifigId)"
+                                 SortMode="@SortMode.Multiple"
+                                 QuickFilter="SetMinifigFilterFunc">
+                        <ToolBarContent>
+                            <MudText Typo="Typo.h6">@_setId</MudText>
+                            <MudSpacer/>
+                            <MudText Typo="Typo.h6">@_set.Name</MudText>
+                            <MudSpacer/>
+                            <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                                          Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                                          Class="mt-0"></MudTextField>
+                        </ToolBarContent>
+                        <Columns>
+                            <TemplateColumn Title="Image">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        <MudImage class="cursor-pointer" Src="@context.Item.Minifig.MinifigImgUrl" Height="50"
+                                                  @onclick="((e) => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.MinifigName, context.Item.Minifig.MinifigImgUrl))"/>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Minifig Id"/>
+                            <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name"/>
+                            <PropertyColumn
+                                Property="x => x.SetMinifig.Count"
+                                Title="Needed" SortBy="x => x.SetMinifig.Count"/>
+                        </Columns>
+                        <PagerContent>
+                            <MudDataGridPager T="SetMinifigInfo"/>
+                        </PagerContent>
+                    </MudDataGrid>
+                </MudTabPanel>
+            </MudTabs>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter] public string? _setId { get; set; }
+
+    private List<SetBrickInfo>? _setBrickInfo = new List<SetBrickInfo>();
+    private List<SetMinifigInfo>? _setMinifigInfo = new List<SetMinifigInfo>();
+    private List<Set>? _sets = new List<Set>();
+    private Set? _set;
+    private string searchString;
+    private bool _showAllCount = false;
+
+    MudForm form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var logger = LoggerFactory.CreateLogger<Minifig>();
+        logger.LogTrace("Loading Bill of Materials");
+        using (var context = new InventoryContext())
+        {
+            var setBrickContext = context.Set<SetBrick>();
+            var brickContext = context.Set<Brick>();
+            var minifigContext = context.Set<Minifig>();
+            var setMinifigContext = context.Set<SetMinifig>();
+            var setContext = context.Set<Set>();
+
+            if (_setId != null)
+            {
+                foreach (var setBrick in setBrickContext.Where(sb => sb.SetId == _setId))
+                {
+                    _setBrickInfo.Add(new SetBrickInfo
+                    {
+                        Brick = brickContext.First(b => b.PartNum == setBrick.PartNum && b.ColorId == setBrick.ColorId),
+                        SetBrick = setBrick
+                    });
+                }
+
+                foreach (var setMinifig in setMinifigContext.Where(sm => sm.SetId == _setId))
+                {
+                    _setMinifigInfo.Add(new SetMinifigInfo
+                    {
+                        Minifig = minifigContext.First(m => m.MinifigId == setMinifig.MinifigId),
+                        SetMinifig = setMinifig
+                    });
+                }
+
+                _set = setContext.First(s => s.SetId == _setId);
+            }
+
+            _sets = setContext.ToList();
+        }
+
+        StateHasChanged();
+        logger.LogTrace("Loading Sets Complete");
+    }
+
+    private bool SetBrickFilterFunc(SetBrickInfo setBrickInfo) => SetBrickFilter(setBrickInfo);
+
+    private bool SetBrickFilter(SetBrickInfo setBrickInfo)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (setBrickInfo.Brick.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (setBrickInfo.Brick.PartNum.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (setBrickInfo.Brick.ColorName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    private bool SetMinifigFilterFunc(SetMinifigInfo setMinifigInfo) => SetMinifigFilter(setMinifigInfo);
+
+    private bool SetMinifigFilter(SetMinifigInfo setMinifigInfo)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (setMinifigInfo.Minifig.MinifigName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (setMinifigInfo.Minifig.MinifigId.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
+    private Task OpenImagePopup(string id, string name, string imgUrl)
+    {
+        var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ImagePopup>
+        {
+            { x => x._id, id },
+            { x => x._name, name },
+            { x => x._imgUrl, imgUrl }
+        };
+
+        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
+    }
+
+    void UpdateBrick(SetBrickInfo setBrickInfo)
+    {
+        UpdateData updateData = new UpdateData();
+        updateData.UpdateBrick(setBrickInfo.Brick);
+    }
+
+    public class SetBrickInfo
+    {
+        public SetBrick SetBrick { get; set; }
+
+        public Brick Brick { get; set; }
+    }
+
+    public class SetMinifigInfo
+    {
+        public Minifig Minifig { get; set; }
+
+        public SetMinifig SetMinifig { get; set; }
+    }
+
+    // // events
+    // void CommittedItemChanges(Set set)
+    // {
+    //     using (var context = new InventoryContext())
+    //     {
+    //         var sets = context.Set<Set>();
+    //
+    //         Set temp = sets.First(s => s == set);
+    //
+    //         temp.OwnCount = set.OwnCount;
+    //         temp.BuildCount = set.BuildCount;
+    //
+    //         context.SaveChanges();
+    //     }
+    // }
+
+    // private void DeleteSet(string setId)
+    // {
+    //     DeleteData deleteData = new DeleteData();
+    //
+    //     deleteData.DeleteSetInfo(setId);
+    //
+    //     OnInitializedAsync();
+    // }
+}

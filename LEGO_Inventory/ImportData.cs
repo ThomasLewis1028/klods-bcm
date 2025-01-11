@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using System.Text.Json.Nodes;
+using LEGO_Inventory.Components.Pages;
 using LEGO_Inventory.Database;
 
 namespace LEGO_Inventory;
@@ -8,6 +10,29 @@ public class ImportData
     private readonly ILogger<ImportData> _logger =
         LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<ImportData>();
 
+    public bool ImportAll(List<string> setIds)
+    {
+        foreach (string setId in setIds)
+        {
+            try
+            {
+                _logger.LogInformation($"Importing All Data for set {setId}");
+
+                ImportSetInfo(setId);
+                ImportSetParts(setId);
+                ImportSetMinifigs(setId);
+                
+            }
+            catch
+            {
+                _logger.LogError($"Failed to import All Data for set {setId}");
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
     public bool ImportSetInfo(string? setId)
     {
         _logger.LogInformation($"Importing {setId}");

@@ -15,6 +15,8 @@
         </MudButton>
     </MudItem>
 
+    @* <MudProgressLinear Value="@setData.Count" Max="@_importSize"/> *@
+
     <MudItem xs="12">
         <MudDataGrid T="Set" Items="@_sets.OrderBy(b => b.SetId)"
                      SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
@@ -28,7 +30,6 @@
                               Class="mt-0"></MudTextField>
             </ToolBarContent>
             <Columns>
-                @* <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/> *@
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
@@ -43,37 +44,28 @@
                 <PropertyColumn Property="x => x.OwnCount" Title="Owned"/>
                 <PropertyColumn Property="x => x.BuildCount" Title="Built"/>
                 <PropertyColumn Property="x => x.NumBricks" Title="Pieces" Editable="false"/>
+                <TemplateColumn Title="BoM" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudIconButton href=@($"/bom/{context.Item.SetId}") Icon="@Icons.Material.Filled.List"
+                                           Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" ></MudIconButton>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
                 <TemplateColumn Title="Delete" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
-                            <MudIconButton 
-                                Icon="@Icons.Material.Filled.Delete" 
+                            <MudIconButton
+                                Icon="@Icons.Material.Filled.Delete"
                                 Variant="Variant.Filled"
                                 Color="Color.Error"
                                 Size="Size.Small"
                                 OnClick="() => DeleteSet(context.Item.SetId)"
-                                />
+                            />
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>
-            @* <ChildRowContent> *@
-            @*     <MudCard> *@
-            @*         <MudGrid> *@
-            @*             @foreach (var set in context.Item.Sets) *@
-            @*             { *@
-            @*                 <MudItem xs="3"> *@
-            @*                     <MudPaper Class="d-flex align-center justify-center mud-width-full py-8"> *@
-            @*                         <MudItem> *@
-            @*                             <MudText Align="Align.Center">@set.Name</MudText> *@
-            @*                             <MudText Align="Align.Center">@set.SetId</MudText> *@
-            @*                         </MudItem> *@
-            @*                     </MudPaper> *@
-            @*                 </MudItem> *@
-            @*             } *@
-            @*         </MudGrid> *@
-            @*     </MudCard> *@
-            @* </ChildRowContent> *@
             <PagerContent>
                 <MudDataGridPager T="Set"/>
             </PagerContent>
@@ -85,12 +77,15 @@
     private string? _setId;
     private List<Set>? _sets;
     private string searchString;
+    private int _importSize = 0;
     MudForm form;
+    // private ObservableCollection<SetData> setData { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         var logger = LoggerFactory.CreateLogger<Sets>();
         logger.LogTrace("Loading Sets");
+        // setData = new ObservableCollection<SetData>();
         using (var context = new InventoryContext())
         {
             var setContext = context.Set<Set>();
@@ -106,14 +101,11 @@
     {
         ImportData importData = new ImportData();
 
-        List<string> setIds = _setId.Split(null).ToList();
+        List<string> setIdList = _setId.Split(null).ToList();
 
-        foreach (string setId in setIds)
-        {
-            importData.ImportSetInfo(setId);
-            importData.ImportSetParts(setId);
-            importData.ImportSetMinifigs(setId);
-        }
+        _importSize = setIdList.Count;
+
+        importData.ImportAll(setIdList);
 
         OnInitializedAsync();
     }
@@ -148,18 +140,40 @@
     // events
     void CommittedItemChanges(Set set)
     {
-        using (var context = new InventoryContext())
-        {
-            var sets = context.Set<Set>();
-
-            Set temp = sets.First(s => s == set);
-
-            temp.OwnCount = set.OwnCount;
-            temp.BuildCount = set.BuildCount;
-
-            context.SaveChanges();
-        }
+        UpdateData updateData = new UpdateData();
+        updateData.UpdateSet(set);
     }
+
+    // public class SetData : INotifyPropertyChanged
+    // {
+    //     private string setId { get; set; }
+    //
+    //     public string SetId
+    //     {
+    //         get => setId;
+    //         set
+    //         {
+    //             this.setId = value;
+    //             NotifyPropertyChanged("Set Id");
+    //         }
+    //     }
+    //     // public string currentSetId { get; set; }
+    //
+    //     public event PropertyChangedEventHandler PropertyChanged;
+    //
+    //     private void NotifyPropertyChanged(string propertyName)
+    //     {
+    //         if (PropertyChanged != null)
+    //         {
+    //             PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
+    //         }
+    //     }
+    // }
+    //
+    // public async Task ChangeProgressBar()
+    // {
+    //     StateHasChanged();
+    // }
 
     private void DeleteSet(string setId)
     {
@@ -169,4 +183,5 @@
 
         OnInitializedAsync();
     }
+
 }

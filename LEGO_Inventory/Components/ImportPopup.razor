@@ -1,0 +1,26 @@
+﻿@using System.Collections.ObjectModel
+<MudDialog>
+    <TitleContent>
+        (@_id) @_name
+    </TitleContent>
+    <DialogContent>
+        <MudImage Src="@_imgUrl" Fluid="true"></MudImage>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public string _id { get; set; }
+
+    [Parameter] public string _name { get; set; }
+
+    [Parameter] public string _imgUrl { get; set; }
+    
+    private ObservableCollection<string> setData { get; set; }
+
+    private void Cancel() => MudDialog.Cancel();
+}
