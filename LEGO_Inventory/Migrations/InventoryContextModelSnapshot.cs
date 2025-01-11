@@ -142,6 +142,24 @@ namespace LEGO_Inventory.Migrations
                     b.ToTable("SetBricks");
                 });
 
+            modelBuilder.Entity("LEGO_Inventory.SetMinifig", b =>
+                {
+                    b.Property<string>("MinifigId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MinifigId", "SetId");
+
+                    b.HasIndex("SetId");
+
+                    b.ToTable("SetMinifig");
+                });
+
             modelBuilder.Entity("LEGO_Inventory.SetBrick", b =>
                 {
                     b.HasOne("LEGO_Inventory.Set", null)
@@ -153,6 +171,21 @@ namespace LEGO_Inventory.Migrations
                     b.HasOne("LEGO_Inventory.Brick", null)
                         .WithMany()
                         .HasForeignKey("PartNum", "ColorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LEGO_Inventory.SetMinifig", b =>
+                {
+                    b.HasOne("LEGO_Inventory.Minifig", null)
+                        .WithMany()
+                        .HasForeignKey("MinifigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LEGO_Inventory.Set", null)
+                        .WithMany()
+                        .HasForeignKey("SetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

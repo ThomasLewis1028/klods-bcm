@@ -8,6 +8,7 @@ public class InventoryContext : DbContext
     public DbSet<SetBrick> SetBricks { get; set; }
     public DbSet<Set> Sets { get; set; }
     public DbSet<Minifig> Minifigs { get; set; }
+    public DbSet<SetMinifig> SetMinifigs { get; set; }
 
     public string DbPath { get; }
 
@@ -32,9 +33,6 @@ public class InventoryContext : DbContext
         // SET BRICK
         modelBuilder.Entity<SetBrick>().HasKey(e => new { e.PartNum, e.ColorId, e.SetId });
         
-        // MINIFIG
-        modelBuilder.Entity<Minifig>().HasKey(e => new { e.MinifigId});
-        
         modelBuilder.Entity<SetBrick>()
             .HasOne<Brick>()
             .WithMany()
@@ -42,6 +40,24 @@ public class InventoryContext : DbContext
             .IsRequired();
         
         modelBuilder.Entity<SetBrick>()
+            .HasOne<Set>()
+            .WithMany()
+            .HasForeignKey(s => s.SetId)
+            .IsRequired();
+        
+        // MINIFIG
+        modelBuilder.Entity<Minifig>().HasKey(e => new { e.MinifigId});
+        
+        // Set Minifig
+        modelBuilder.Entity<SetMinifig>().HasKey(e => new { e.MinifigId, e.SetId });
+        
+        modelBuilder.Entity<SetMinifig>()
+            .HasOne<Minifig>()
+            .WithMany()
+            .HasForeignKey(s => s.MinifigId)
+            .IsRequired();
+        
+        modelBuilder.Entity<SetMinifig>()
             .HasOne<Set>()
             .WithMany()
             .HasForeignKey(s => s.SetId)
