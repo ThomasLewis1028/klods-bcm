@@ -19,17 +19,17 @@
         @* <MudTextField xs="6" T="String" Label="Brick ID" Required="true" @bind-Value="_brickId"></MudTextField> *@
         @* <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportBrick())">Import Brick</MudButton> *@
     </MudItem>
-    
+
     <MudItem xs="12">
-        <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)" 
-                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell" 
+        <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
+                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
                      CommittedItemChanges="@CommittedItemChanges" QuickFilter="BrickFilterFunc"
                      ReadOnly="false">
             <ToolBarContent>
                 <MudText Typo="Typo.h6">Bricks</MudText>
                 <MudSpacer/>
-                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" 
-                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" 
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
                               Class="mt-0"></MudTextField>
             </ToolBarContent>
             <Columns>
@@ -37,10 +37,12 @@
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
-                            <MudImage Src="@context.Item.Brick.PartImg" Height="50" @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg))"/>
-                        </MudStack> 
+                            <MudImage class="cursor-pointer" Src="@context.Item.Brick.PartImg" Height="50"
+                                      @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg))"/>
+                        </MudStack>
                     </CellTemplate>
-                </TemplateColumn><PropertyColumn Property="x => x.Brick.PartNum" Title="Part #" Editable="false"/>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.Brick.PartNum" Title="Part #" Editable="false"/>
                 <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
                 <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
                     <CellTemplate>
@@ -59,7 +61,7 @@
                 @* <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count * x.Sets.First(s => s.SetId == sb.SetId).OwnCount)" Title="Needed" Editable="false"/> *@
                 <PropertyColumn Property="x => x.Sets.Count" Title="In Sets" Editable="false"/>
             </Columns>
-            <ChildRowContent >
+            <ChildRowContent>
                 <MudCard>
                     <MudGrid>
                         @foreach (var set in GetSets(context.Item.Sets))
@@ -90,7 +92,7 @@
     private List<BrickInfo>? _brickInfos = [];
     private string searchString;
     MudForm form;
-    
+
     protected override async Task OnInitializedAsync()
     {
         var logger = LoggerFactory.CreateLogger<Bricks>();
@@ -105,7 +107,7 @@
             foreach (Brick brick in _bricks)
             {
                 var setBricks = GetSetBricks(brick);
-                
+
                 _brickInfos?.Add(new BrickInfo
                 {
                     Brick = brick,
@@ -191,20 +193,20 @@
 
         return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
     }
-    
-   void CommittedItemChanges(BrickInfo item)
-   {
-       Console.WriteLine(item.Brick.Count);
 
-       using (var context = new InventoryContext())
-       {
-           var brickContext = context.Set<Brick>();
+    void CommittedItemChanges(BrickInfo item)
+    {
+        Console.WriteLine(item.Brick.Count);
 
-           brickContext.First(b => b == item.Brick).Count = item.Brick.Count;
+        using (var context = new InventoryContext())
+        {
+            var brickContext = context.Set<Brick>();
 
-           context.SaveChanges();
-       }
-   }
+            brickContext.First(b => b == item.Brick).Count = item.Brick.Count;
+
+            context.SaveChanges();
+        }
+    }
 
     private class BrickInfo
     {

@@ -47,24 +47,28 @@
                     <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.Count)"># Pieces</MudTableSortLabel>
                 </MudTh>
                 <MudTh>
-                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.SpareCount)"># Spare Pieces</MudTableSortLabel>
+                    <MudTableSortLabel SortBy="new Func<SetBrick, object>(x => x.SpareCount)"># Spare Pieces
+                    </MudTableSortLabel>
                 </MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Image">
-                    <MudImage Src="@GetBrick(context.PartNum, context.ColorId).PartImg" Height="50" @onclick="((e) => OpenImagePopup(context.PartNum, GetBrick(context.PartNum, context.ColorId).Name, GetBrick(context.PartNum, context.ColorId).PartImg))"/>
+                    <MudImage class="cursor-pointer" Src="@GetBrick(context.PartNum, context.ColorId).PartImg"
+                              Height="50"
+                              @onclick="((e) => OpenImagePopup(context.PartNum, GetBrick(context.PartNum, context.ColorId).Name, GetBrick(context.PartNum, context.ColorId).PartImg))"/>
                 </MudTd>
-                <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd>
-                <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum (@GetBrick(context.PartNum, context.ColorId).Name)</MudTd>
-                <MudTd DataLabel="Color ID" class="cursor-pointer">@GetBrick(context.PartNum, context.ColorId).ColorName</MudTd>
-                <MudTd DataLabel="Color" class="cursor-pointer">
+                <MudTd DataLabel="Set ID">@context.SetId</MudTd>
+                <MudTd DataLabel="Part Num">@context.PartNum (@GetBrick(context.PartNum, context.ColorId).Name)</MudTd>
+                <MudTd DataLabel="Color ID">@GetBrick(context.PartNum, context.ColorId).ColorName</MudTd>
+                <MudTd DataLabel="Color">
                     <MudItem>
 
-                        <div class="mud-width-half rounded-circle pa-7" style="@($"background-color:{"#"+GetBrick(context.PartNum, context.ColorId).RGB};")"></div>
+                        <div class="mud-width-half rounded-circle pa-7"
+                             style="@($"background-color:{"#" + GetBrick(context.PartNum, context.ColorId).RGB};")"></div>
                     </MudItem>
                 </MudTd>
-                <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.Count</MudTd>
-                <MudTd DataLabel="Num Spare Parts" class="cursor-pointer">@context.SpareCount</MudTd>
+                <MudTd DataLabel="Num Parts">@context.Count</MudTd>
+                <MudTd DataLabel="Num Spare Parts">@context.SpareCount</MudTd>
             </RowTemplate>
             <PagerContent>
                 <MudTablePager PageSizeOptions="new[] { 10, 15, 20, 25, 50, 75, 100, int.MaxValue }"/>
@@ -134,4 +138,5 @@
 
         return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
     }
+
 }

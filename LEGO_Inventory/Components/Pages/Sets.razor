@@ -32,7 +32,8 @@
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
-                            <MudImage Src="@context.Item.SetImg" Height="50" @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>
+                            <MudImage class="cursor-pointer" Src="@context.Item.SetImg" Height="50"
+                                      @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
@@ -83,7 +84,7 @@
 
             _sets = setContext.ToList();
         }
-        
+
         StateHasChanged();
         logger.LogTrace("Loading Sets Complete");
     }
@@ -94,12 +95,12 @@
 
         List<string> setIds = _setId.Split(null).ToList();
 
-        foreach(string setId in setIds)
+        foreach (string setId in setIds)
         {
             importData.ImportSetInfo(setId);
             importData.ImportSetParts(setId);
         }
-        
+
         OnInitializedAsync();
     }
 
@@ -115,7 +116,7 @@
             return true;
         return false;
     }
-    
+
     private Task OpenImagePopup(string setId, string setName, string setImgUrl)
     {
         var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
@@ -129,14 +130,14 @@
 
         return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
     }
-    
+
     // events
     void CommittedItemChanges(Set set)
     {
         using (var context = new InventoryContext())
         {
             var sets = context.Set<Set>();
-            
+
             Set temp = sets.First(s => s == set);
 
             temp.OwnCount = set.OwnCount;
