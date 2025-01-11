@@ -171,27 +171,29 @@ public class ImportData
             foreach (var minifig in jsonObject!["results"].AsArray())
             {
                 ImportMinifig(minifig!["set_num"]!.ToString());
+
+                LinkMinifigToSet(minifig!["set_num"]!.ToString(), setId, (int)minifig!["quantity"]!);
             }
         }
-        
+
         return false;
     }
 
-    public Minifig ImportMinifig(string minifigId)
+    public bool ImportMinifig(string minifigId)
     {
         _logger.LogInformation($"Importing minifig {minifigId}");
         RebrickableApi api = new RebrickableApi();
-        
+
         using (var context = new InventoryContext())
         {
             var minifigContext = context.Set<Minifig>();
-            
+
             Minifig minifig;
 
             if (!minifigContext.Any(m => m.MinifigId == minifigId))
             {
                 JsonObject? minifigJsonObject = api.GetMinifigInfo(minifigId).Result;
-                
+
                 var minifigName = minifigJsonObject!["name"].ToString();
                 var minifigImgUrl = minifigJsonObject!["set_img_url"].ToString();
                 var minifigUrl = minifigJsonObject!["set_url"].ToString();
@@ -205,15 +207,41 @@ public class ImportData
                     MinifigUrl = minifigUrl,
                     // MinifigBricks = minifigBricks,
                 };
-                
+
                 minifigContext.Add(minifig);
-                context.SaveChanges();
-                
-                return minifig;
+                _logger.LogInformation($"Imported minifig ({minifigId}) {minifigName}");
+
+                return context.SaveChanges() > 0;
             }
-            
-            return null;
+
+            return false;
         }
+    }
+
+    public bool LinkMinifigToSet(string minifigId, string setId, int quantity)
+    {
+        _logger.LogInformation($"Linking minifig {minifigId} to set {setId}");
+
+        using (var context = new InventoryContext())
+        {
+            var setMinifigContext = context.Set<SetMinifig>();
+
+            if (!setMinifigContext.Any(sm => sm.MinifigId == minifigId && sm.SetId == setId))
+            {
+                SetMinifig setMinifig = new SetMinifig
+                {
+                    MinifigId = minifigId,
+                    SetId = setId,
+                    Count = quantity,
+                };
+
+                setMinifigContext.Add(setMinifig);
+
+                return context.SaveChanges() > 0;
+            }
+        }
+
+        return false;
     }
 
     public List<Brick> LinkMinifigBricks(string minifigId)
@@ -224,9 +252,9 @@ public class ImportData
         using (var context = new InventoryContext())
         {
             var brickContext = context.Set<Brick>();
-            
+
             JsonObject? jsonObject = api.GetMinifigParts(minifigId).Result;
-            
+
             List<Brick> minifigBricks = new List<Brick>();
 
             foreach (var brick in jsonObject!["results"]!.AsArray())
@@ -242,7 +270,7 @@ public class ImportData
                     throw new Exception($"Failed to get minifig bricks for {minifigId}", ex);
                 }
             }
-            
+
             return minifigBricks;
         }
     }
