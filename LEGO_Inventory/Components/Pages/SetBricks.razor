@@ -1,6 +1,6 @@
 ﻿@page "/setbricks"
 @inject ILoggerFactory LoggerFactory
-@using System.Text.Json.Nodes
+@inject IDialogService DialogService
 @using LEGO_Inventory.Database
 @rendermode InteractiveServer
 
@@ -52,7 +52,7 @@
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Image">
-                    <MudImage Src="@GetBrick(context.PartNum, context.ColorId).PartImg" Height="50"/>
+                    <MudImage Src="@GetBrick(context.PartNum, context.ColorId).PartImg" Height="50" @onclick="((e) => OpenImagePopup(context.PartNum, GetBrick(context.PartNum, context.ColorId).Name, GetBrick(context.PartNum, context.ColorId).PartImg))"/>
                 </MudTd>
                 <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd>
                 <MudTd DataLabel="Part Num" class="cursor-pointer">@context.PartNum (@GetBrick(context.PartNum, context.ColorId).Name)</MudTd>
@@ -121,4 +121,17 @@
         return false;
     }
 
+    private Task OpenImagePopup(string brickId, string brickName, string brickImgUrl)
+    {
+        var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ImagePopup>
+        {
+            { x => x._id, brickId },
+            { x => x._name, brickName },
+            { x => x._imgUrl, brickImgUrl }
+        };
+
+        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
+    }
 }

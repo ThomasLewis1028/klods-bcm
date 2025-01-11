@@ -1,6 +1,6 @@
 ﻿@page "/sets"
 @inject ILoggerFactory LoggerFactory
-@using System.Text.Json.Nodes
+@inject IDialogService DialogService
 @using LEGO_Inventory.Database
 @rendermode InteractiveServer
 
@@ -14,68 +14,25 @@
         <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportSet())">Import Set
         </MudButton>
     </MudItem>
-    
-    @* <MudItem xs="12"> *@
-    @*     <MudTable Items="@_sets.OrderBy(s => s.ReleaseYear)" Hover="true" SortLabel="Sort By" *@
-    @*               Filter="new Func<Set, bool>(SetFilterFunc)"> *@
-    @*         <ToolBarContent> *@
-    @*             <MudText Typo="Typo.h6">Set List</MudText> *@
-    @*             <MudSpacer/> *@
-    @*             <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" *@
-    @*                           AdornmentIcon="Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/> *@
-    @*         </ToolBarContent> *@
-    @*         <HeaderContent> *@
-    @*             <MudTh> *@
-    @*                 <MudText>Image</MudText> *@
-    @*             </MudTh> *@
-    @*             <MudTh> *@
-    @*                 <MudTableSortLabel SortBy="new Func<Set, object>(x => x.SetId)">Set Id</MudTableSortLabel> *@
-    @*             </MudTh> *@
-    @*             <MudTh> *@
-    @*                 <MudTableSortLabel SortBy="new Func<Set, object>(x => x.Name)">Name</MudTableSortLabel> *@
-    @*             </MudTh> *@
-    @*             <MudTh> *@
-    @*                 <MudTableSortLabel SortBy="new Func<Set, object>(x => x.ReleaseYear)">Release Year *@
-    @*                 </MudTableSortLabel> *@
-    @*             </MudTh> *@
-    @*             <MudTh> *@
-    @*                 <MudTableSortLabel SortBy="new Func<Set, object>(x => x.OwnCount)"># Owned</MudTableSortLabel> *@
-    @*             </MudTh> *@
-    @*             <MudTh> *@
-    @*                 <MudTableSortLabel SortBy="new Func<Set, object>(x => x.BuildCount)"># Built</MudTableSortLabel> *@
-    @*             </MudTh> *@
-    @*             <MudTh> *@
-    @*                 <MudTableSortLabel SortBy="new Func<Set, object>(x => x.NumParts)"># Pieces</MudTableSortLabel> *@
-    @*             </MudTh> *@
-    @*         </HeaderContent> *@
-    @*         <RowTemplate> *@
-    @*             <MudTd DataLabel="Image"> *@
-    @*                 <MudImage Src="@context.SetImg" Height="50"/> *@
-    @*             </MudTd> *@
-    @*             <MudTd DataLabel="Set ID" class="cursor-pointer">@context.SetId</MudTd> *@
-    @*             <MudTd DataLabel="Name" class="cursor-pointer">@context.Name</MudTd> *@
-    @*             <MudTd DataLabel="Release Year" class="cursor-pointer">@context.ReleaseYear</MudTd> *@
-    @*             <MudTd DataLabel="Num Owned" class="cursor-pointer">@context.OwnCount</MudTd> *@
-    @*             <MudTd DataLabel="Num Built" class="cursor-pointer">@context.BuildCount</MudTd> *@
-    @*             <MudTd DataLabel="Num Parts" class="cursor-pointer">@context.NumParts</MudTd> *@
-    @*         </RowTemplate> *@
-    @*         <PagerContent> *@
-    @*             <MudTablePager PageSizeOptions="new[] { 10, 15, 20, 25, 50, 75, 100, int.MaxValue }"/> *@
-    @*         </PagerContent> *@
-    @*     </MudTable> *@
-    @* </MudItem> *@
 
     <MudItem xs="12">
         <MudDataGrid T="Set" Items="@_sets.OrderBy(b => b.SetId)"
                      SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
-                     CommittedItemChanges="@CommittedItemChanges"
+                     CommittedItemChanges="@CommittedItemChanges" QuickFilter="SetFilterFunc"
                      ReadOnly="false">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Sets</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                              Class="mt-0"></MudTextField>
+            </ToolBarContent>
             <Columns>
                 @* <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/> *@
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
-                            <MudImage Src="@context.Item.SetImg" Height="50"/>
+                            <MudImage Src="@context.Item.SetImg" Height="50" @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
@@ -146,17 +103,31 @@
         OnInitializedAsync();
     }
 
-    private bool SetFilterFunc(Set set) => SetFilter(set, searchString);
+    private bool SetFilterFunc(Set set) => SetFilter(set);
 
-    private bool SetFilter(Set set, string searchString)
+    private bool SetFilter(Set set)
     {
-        if (string.IsNullOrWhiteSpace(this.searchString))
+        if (string.IsNullOrWhiteSpace(searchString))
             return true;
-        if (set.SetId.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        if (set.SetId.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
-        if (set.Name.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        if (set.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
         return false;
+    }
+    
+    private Task OpenImagePopup(string setId, string setName, string setImgUrl)
+    {
+        var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ImagePopup>
+        {
+            { x => x._id, setId },
+            { x => x._name, setName },
+            { x => x._imgUrl, setImgUrl }
+        };
+
+        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
     }
     
     // events
