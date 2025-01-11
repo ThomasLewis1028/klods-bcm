@@ -90,8 +90,15 @@
     <MudItem xs="12">
         <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)" 
                      SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell" 
-                     CommittedItemChanges="@CommittedItemChanges"
+                     CommittedItemChanges="@CommittedItemChanges" QuickFilter="BrickFilterFunc"
                      ReadOnly="false">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Bricks</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" 
+                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" 
+                              Class="mt-0"></MudTextField>
+            </ToolBarContent>
             <Columns>
                 <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/>
                 <TemplateColumn Title="Image" Editable="false">
@@ -117,13 +124,13 @@
                     </CellTemplate>
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Brick.Count" Title="Stock"/>
-                <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count * x.Sets.First(s => s.SetId == sb.SetId).OwnCount)" Title="Needed" Editable="false"/>
+                @* <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count * x.Sets.First(s => s.SetId == sb.SetId).OwnCount)" Title="Needed" Editable="false"/> *@
                 <PropertyColumn Property="x => x.Sets.Count" Title="In Sets" Editable="false"/>
             </Columns>
             <ChildRowContent >
                 <MudCard>
                     <MudGrid>
-                        @foreach (var set in context.Item.Sets)
+                        @foreach (var set in GetSets(context.Item.Sets))
                         {
                             <MudItem xs="3">
                                 <MudPaper Class="d-flex align-center justify-center mud-width-full py-8">
@@ -170,7 +177,7 @@
                 _brickInfos?.Add(new BrickInfo
                 {
                     Brick = brick,
-                    Sets = GetSets(setBricks.Select(sb => sb.SetId).ToList()),
+                    Sets = setBricks.Select(sb => sb.SetId).ToList(),
                     SetBricks = setBricks
                 });
             }
@@ -220,20 +227,21 @@
         }
     }
 
+    private bool BrickFilterFunc(BrickInfo brick) => BrickFilter(brick, searchString);
 
-    private bool BrickFilterFunc(Brick brick) => BrickFilter(brick, searchString);
-
-    private bool BrickFilter(Brick brick, string searchString)
+    private bool BrickFilter(BrickInfo brickInfo, string searchString)
     {
         if (string.IsNullOrWhiteSpace(this.searchString))
             return true;
-        if (brick.Name.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        if (brickInfo.Brick.Name.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
             return true;
-        if (brick.PartNum.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        if (brickInfo.Brick.PartNum.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
             return true;
-        if (brick.ColorId.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        if (brickInfo.Brick.ColorId.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
             return true;
-        if (brick.ColorName.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+        if (brickInfo.Brick.ColorName.Contains(this.searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (brickInfo.Sets.Any(s => s.Contains(this.searchString, StringComparison.OrdinalIgnoreCase)))
             return true;
         return false;
     }
@@ -257,7 +265,7 @@
     {
         public Brick Brick { get; set; }
 
-        public List<Set> Sets { get; set; }
+        public List<string> Sets { get; set; }
 
         public List<SetBrick> SetBricks { get; set; }
     }
