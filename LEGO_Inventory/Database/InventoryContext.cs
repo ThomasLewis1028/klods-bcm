@@ -9,6 +9,7 @@ public class InventoryContext : DbContext
     public DbSet<Set> Sets { get; set; }
     public DbSet<Minifig> Minifigs { get; set; }
     public DbSet<SetMinifig> SetMinifigs { get; set; }
+    public DbSet<MinifigBrick> MinifigBricks { get; set; }
 
     public string DbPath { get; }
 
@@ -25,47 +26,61 @@ public class InventoryContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         // BRICK
-        modelBuilder.Entity<Brick>().HasKey(e => new { e.PartNum, e.ColorId});
+        modelBuilder.Entity<Brick>().HasKey(e => new { e.PartNum, e.ColorId });
 
         // SET
-        modelBuilder.Entity<Set>().HasKey(e => new { e.SetId});
-        
+        modelBuilder.Entity<Set>().HasKey(e => new { e.SetId });
+
         // SET BRICK
         modelBuilder.Entity<SetBrick>().HasKey(e => new { e.PartNum, e.ColorId, e.SetId });
-        
+
         modelBuilder.Entity<SetBrick>()
             .HasOne<Brick>()
             .WithMany()
-            .HasForeignKey(s => new { s.PartNum, s.ColorId})
+            .HasForeignKey(s => new { s.PartNum, s.ColorId })
             .IsRequired();
-        
+
         modelBuilder.Entity<SetBrick>()
             .HasOne<Set>()
             .WithMany()
             .HasForeignKey(s => s.SetId)
             .IsRequired();
-        
+
         // MINIFIG
-        modelBuilder.Entity<Minifig>().HasKey(e => new { e.MinifigId});
-        
-        // Set Minifig
+        modelBuilder.Entity<Minifig>().HasKey(e => new { e.MinifigId });
+
+        // SET MINIFIG
         modelBuilder.Entity<SetMinifig>().HasKey(e => new { e.MinifigId, e.SetId });
-        
+
         modelBuilder.Entity<SetMinifig>()
             .HasOne<Minifig>()
             .WithMany()
             .HasForeignKey(s => s.MinifigId)
             .IsRequired();
-        
+
         modelBuilder.Entity<SetMinifig>()
             .HasOne<Set>()
             .WithMany()
             .HasForeignKey(s => s.SetId)
             .IsRequired();
+
+        // MINIFIG BRICK
+        modelBuilder.Entity<MinifigBrick>().HasKey(e => new { e.MinifigID, e.BrickID, e.ColorId });
+
+        modelBuilder.Entity<MinifigBrick>()
+            .HasOne<Brick>()
+            .WithMany()
+            .HasForeignKey(s => new { s.BrickID, s.ColorId })
+            .IsRequired();
+
+        modelBuilder.Entity<MinifigBrick>()
+            .HasOne<Minifig>()
+            .WithMany()
+            .HasForeignKey(s => s.MinifigID)
+            .IsRequired();
     }
-    
+
     protected override void OnConfiguring(DbContextOptionsBuilder options) =>
         options
             .UseSqlite($"Data Source={DbPath}");
-
 }

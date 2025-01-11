@@ -170,9 +170,14 @@ public class ImportData
 
             foreach (var minifig in jsonObject!["results"].AsArray())
             {
-                ImportMinifig(minifig!["set_num"]!.ToString());
+                var minifigId = minifig!["set_num"]!.ToString();
+                var quantity = (int)minifig!["quantity"]!;
+                
+                ImportMinifig(minifigId);
 
-                LinkMinifigToSet(minifig!["set_num"]!.ToString(), setId, (int)minifig!["quantity"]!);
+                LinkMinifigToSet(minifigId, setId, quantity);
+                
+                LinkMinifigBricks(minifigId);
             }
         }
 
@@ -197,7 +202,6 @@ public class ImportData
                 var minifigName = minifigJsonObject!["name"].ToString();
                 var minifigImgUrl = minifigJsonObject!["set_img_url"].ToString();
                 var minifigUrl = minifigJsonObject!["set_url"].ToString();
-                // var minifigBricks = LinkMinifigBricks(minifigId);
 
                 minifig = new Minifig
                 {
@@ -205,7 +209,6 @@ public class ImportData
                     MinifigName = minifigName,
                     MinifigImgUrl = minifigImgUrl,
                     MinifigUrl = minifigUrl,
-                    // MinifigBricks = minifigBricks,
                 };
 
                 minifigContext.Add(minifig);
@@ -234,6 +237,8 @@ public class ImportData
                     SetId = setId,
                     Count = quantity,
                 };
+                
+                var setContext = context.Set<Set>();
 
                 setMinifigContext.Add(setMinifig);
 
@@ -244,35 +249,64 @@ public class ImportData
         return false;
     }
 
-    public List<Brick> LinkMinifigBricks(string minifigId)
+    public bool LinkMinifigBricks(string minifigId)
     {
         _logger.LogInformation($"Linking minifig bricks for {minifigId}");
         RebrickableApi api = new RebrickableApi();
 
         using (var context = new InventoryContext())
         {
+            var minifigBrickContext = context.Set<MinifigBrick>();
             var brickContext = context.Set<Brick>();
 
             JsonObject? jsonObject = api.GetMinifigParts(minifigId).Result;
 
-            List<Brick> minifigBricks = new List<Brick>();
-
             foreach (var brick in jsonObject!["results"]!.AsArray())
             {
-                try
+                var brickId = brick["part"]!["part_num"]!.ToString();
+                var colorId = brick["color"]!["id"]!.ToString();
+                var quantity = (int)brick["quantity"]!;
+                
+                MinifigBrick minifigBrick;
+
+                if (minifigBrickContext.Any(mb => mb.MinifigID == minifigId
+                                                  && mb.BrickID == brickId
+                                                  && mb.ColorId == colorId))
+                    continue;
+                
+                if (brickContext.Any(b => b.PartNum == brickId && b.ColorId == colorId))
                 {
-                    minifigBricks.Add(brickContext.First(b => b.PartNum == brick["part"]!["part_num"]!.ToString()
-                                                              && b.ColorId == brick["color"]!["id"]!.ToString()));
+                    minifigBrick = new MinifigBrick
+                    {
+                        MinifigID = minifigId,
+                        BrickID = brickId,
+                        ColorId = colorId,
+                        Quantity = quantity,
+                    };
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.LogError($"Failed to get minifig bricks for {minifigId}");
-                    throw new Exception($"Failed to get minifig bricks for {minifigId}", ex);
+                    Brick newBrick = ImportBrick(brick);
+                    
+                    
+                    minifigBrick = new MinifigBrick
+                    {
+                        MinifigID = minifigId,
+                        BrickID = newBrick.PartNum,
+                        ColorId = newBrick.ColorId,
+                        Quantity = quantity,
+                    };
                 }
+                
+                
+                minifigBrickContext.Add(minifigBrick);
+                
             }
 
-            return minifigBricks;
+                return context.SaveChanges() > 0;
         }
+
+        return false;
     }
 
     public Brick ImportBrick(JsonNode part)
