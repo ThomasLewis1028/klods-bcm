@@ -29,7 +29,7 @@ public class ImportData
                     set.SetImg = setInfo!["set_img_url"]!.ToString();
                     set.SetURL = setInfo!["set_url"]!.ToString();
                     set.DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString());
-                    set.NumParts = int.Parse(setInfo!["num_parts"]!.ToString());
+                    set.NumBricks = int.Parse(setInfo!["num_parts"]!.ToString());
                     set.ReleaseYear = int.Parse(setInfo!["year"]!.ToString());
                 }
             }
@@ -42,7 +42,7 @@ public class ImportData
                     SetURL = setInfo!["set_url"]!.ToString(),
                     SetImg = setInfo!["set_img_url"]!.ToString(),
                     DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()),
-                    NumParts = int.Parse(setInfo!["num_parts"]!.ToString()),
+                    NumBricks = int.Parse(setInfo!["num_parts"]!.ToString()),
                     ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
                     ManualUrl = "",
                     OwnCount = 0,
@@ -157,6 +157,94 @@ public class ImportData
         }
 
         return false;
+    }
+
+    public bool ImportSetMinifigs(string setId)
+    {
+        _logger.LogInformation($"Importing set minifigs for {setId}");
+        RebrickableApi api = new RebrickableApi();
+
+        using (var context = new InventoryContext())
+        {
+            JsonObject? jsonObject = api.GetSetMinifigs(setId).Result;
+
+            foreach (var minifig in jsonObject!["results"].AsArray())
+            {
+                ImportMinifig(minifig!["set_num"]!.ToString());
+            }
+        }
+        
+        return false;
+    }
+
+    public Minifig ImportMinifig(string minifigId)
+    {
+        _logger.LogInformation($"Importing minifig {minifigId}");
+        RebrickableApi api = new RebrickableApi();
+        
+        using (var context = new InventoryContext())
+        {
+            var minifigContext = context.Set<Minifig>();
+            
+            Minifig minifig;
+
+            if (!minifigContext.Any(m => m.MinifigId == minifigId))
+            {
+                JsonObject? minifigJsonObject = api.GetMinifigInfo(minifigId).Result;
+                
+                var minifigName = minifigJsonObject!["name"].ToString();
+                var minifigImgUrl = minifigJsonObject!["set_img_url"].ToString();
+                var minifigUrl = minifigJsonObject!["set_url"].ToString();
+                // var minifigBricks = LinkMinifigBricks(minifigId);
+
+                minifig = new Minifig
+                {
+                    MinifigId = minifigId,
+                    MinifigName = minifigName,
+                    MinifigImgUrl = minifigImgUrl,
+                    MinifigUrl = minifigUrl,
+                    // MinifigBricks = minifigBricks,
+                };
+                
+                minifigContext.Add(minifig);
+                context.SaveChanges();
+                
+                return minifig;
+            }
+            
+            return null;
+        }
+    }
+
+    public List<Brick> LinkMinifigBricks(string minifigId)
+    {
+        _logger.LogInformation($"Linking minifig bricks for {minifigId}");
+        RebrickableApi api = new RebrickableApi();
+
+        using (var context = new InventoryContext())
+        {
+            var brickContext = context.Set<Brick>();
+            
+            JsonObject? jsonObject = api.GetMinifigParts(minifigId).Result;
+            
+            List<Brick> minifigBricks = new List<Brick>();
+
+            foreach (var brick in jsonObject!["results"]!.AsArray())
+            {
+                try
+                {
+                    minifigBricks.Add(brickContext.First(b => b.PartNum == brick["part"]!["part_num"]!.ToString()
+                                                              && b.ColorId == brick["color"]!["id"]!.ToString()));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Failed to get minifig bricks for {minifigId}");
+                    throw new Exception($"Failed to get minifig bricks for {minifigId}", ex);
+                }
+            }
+            
+            return minifigBricks;
+        }
     }
 
     public Brick ImportBrick(JsonNode part)

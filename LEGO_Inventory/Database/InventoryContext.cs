@@ -7,6 +7,7 @@ public class InventoryContext : DbContext
     public DbSet<Brick> Bricks { get; set; }
     public DbSet<SetBrick> SetBricks { get; set; }
     public DbSet<Set> Sets { get; set; }
+    public DbSet<Minifig> Minifigs { get; set; }
 
     public string DbPath { get; }
 
@@ -30,6 +31,9 @@ public class InventoryContext : DbContext
         
         // SET BRICK
         modelBuilder.Entity<SetBrick>().HasKey(e => new { e.PartNum, e.ColorId, e.SetId });
+        
+        // MINIFIG
+        modelBuilder.Entity<Minifig>().HasKey(e => new { e.MinifigId});
         
         modelBuilder.Entity<SetBrick>()
             .HasOne<Brick>()

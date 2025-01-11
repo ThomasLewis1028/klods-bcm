@@ -42,7 +42,7 @@
                 <PropertyColumn Property="x => x.ReleaseYear" Title="Release Year" Editable="false"/>
                 <PropertyColumn Property="x => x.OwnCount" Title="Owned"/>
                 <PropertyColumn Property="x => x.BuildCount" Title="Built"/>
-                <PropertyColumn Property="x => x.NumParts" Title="Pieces" Editable="false"/>
+                <PropertyColumn Property="x => x.NumBricks" Title="Pieces" Editable="false"/>
                 <TemplateColumn Title="Delete" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
@@ -112,6 +112,7 @@
         {
             importData.ImportSetInfo(setId);
             importData.ImportSetParts(setId);
+            importData.ImportSetMinifigs(setId);
         }
 
         OnInitializedAsync();

@@ -80,7 +80,7 @@ public class InventoryTests
             var brickContext = context.Set<Brick>();
 
             var count = setBrickContext.Where(sb => sb.SetId == "4502-1").Sum(b => b.Count);
-            var setCount = setContext.First(sb => sb.SetId == "4502-1").NumParts;
+            var setCount = setContext.First(sb => sb.SetId == "4502-1").NumBricks;
             
             Assert.AreEqual(count, setCount);
             

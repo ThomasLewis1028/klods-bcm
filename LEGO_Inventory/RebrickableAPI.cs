@@ -33,6 +33,30 @@ public class RebrickableApi
 
         return await SendQuery(url);
     }
+    
+    public async Task<JsonObject?> GetSetMinifigs(string setId)
+    {
+        _logger.LogInformation("Getting minifig info for {setId}", setId);
+        string url = $"{BaseUrl}sets/{setId}/minifigs?";
+        
+        return await SendQuery(url);
+    }
+
+    public async Task<JsonObject?> GetMinifigInfo(string itemNum)
+    {
+        _logger.LogInformation("Getting minifig info for {itemNum}", itemNum);
+        string url = $"{BaseUrl}minifigs/{itemNum}/?";
+        
+        return await SendQuery(url);
+    }
+
+    public async Task<JsonObject?> GetMinifigParts(string itemNum)
+    {
+        _logger.LogInformation("Getting minifig Parts for {itemNum}", itemNum);
+        string url = $"{BaseUrl}minifigs/{itemNum}/parts/?page_size=1000000&inc_minifig_parts=1&";
+        
+        return await SendQuery(url);
+    }
 
     private async Task<JsonObject?> SendQuery(string url)
     {

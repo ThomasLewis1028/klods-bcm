@@ -13,7 +13,9 @@ public class Set
     
     public string SetImg { get; set; }
     
-    public int NumParts { get; set; }
+    public int NumBricks { get; set; }
+    
+    public int MinifigCount { get; set; }
     
     public int ReleaseYear { get; set; }
     

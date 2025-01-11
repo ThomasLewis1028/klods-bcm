@@ -1,0 +1,145 @@
+﻿@page "/minifigs"
+@inject ILoggerFactory LoggerFactory
+@inject IDialogService DialogService
+@using LEGO_Inventory.Database
+@rendermode InteractiveServer
+
+<PageTitle>Minifigs</PageTitle>
+
+<h1>Minifigs</h1>
+
+<MudGrid>
+    <MudItem xs="12">
+        <MudDataGrid T="Minifig" Items="@_minifigs.OrderBy(b => b.MinifigId)"
+                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
+                     QuickFilter="MinifigFilterFunc"
+                     ReadOnly="false">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Minifigs</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                              Class="mt-0"></MudTextField>
+            </ToolBarContent>
+            <Columns>
+                @* <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/> *@
+                <TemplateColumn Title="Image" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudImage class="cursor-pointer" Src="@context.Item.MinifigImgUrl" Height="50"
+                                      @onclick="((e) => OpenImagePopup(context.Item.MinifigId, context.Item.MinifigName, context.Item.MinifigImgUrl))"/>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.MinifigId" Title="Set Id" Editable="false"/>
+                <PropertyColumn Property="x => x.MinifigName" Title="Name" Editable="false"/>
+                @* <TemplateColumn Title="Delete" Editable="false"> *@
+                @*     <CellTemplate> *@
+                @*         <MudStack Row> *@
+                @*             <MudIconButton *@
+                @*                 Icon="@Icons.Material.Filled.Delete" *@
+                @*                 Variant="Variant.Filled" *@
+                @*                 Color="Color.Error" *@
+                @*                 Size="Size.Small" *@
+                @*                 OnClick="() => DeleteSet(context.Item.SetId)"/> *@
+                @*         </MudStack> *@
+                @*     </CellTemplate> *@
+                @* </TemplateColumn> *@
+            </Columns>
+            @* <ChildRowContent> *@
+            @*     <MudCard> *@
+            @*         <MudGrid> *@
+            @*             @foreach (var set in context.Item.Sets) *@
+            @*             { *@
+            @*                 <MudItem xs="3"> *@
+            @*                     <MudPaper Class="d-flex align-center justify-center mud-width-full py-8"> *@
+            @*                         <MudItem> *@
+            @*                             <MudText Align="Align.Center">@set.Name</MudText> *@
+            @*                             <MudText Align="Align.Center">@set.SetId</MudText> *@
+            @*                         </MudItem> *@
+            @*                     </MudPaper> *@
+            @*                 </MudItem> *@
+            @*             } *@
+            @*         </MudGrid> *@
+            @*     </MudCard> *@
+            @* </ChildRowContent> *@
+            <PagerContent>
+                <MudDataGridPager T="Minifig"/>
+            </PagerContent>
+        </MudDataGrid>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<Minifig>? _minifigs;
+    private string searchString;
+    MudForm form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var logger = LoggerFactory.CreateLogger<Minifig>();
+        logger.LogTrace("Loading Minifigs");
+        using (var context = new InventoryContext())
+        {
+            var minifigContext = context.Set<Minifig>();
+
+            _minifigs = minifigContext.ToList();
+        }
+
+        StateHasChanged();
+        logger.LogTrace("Loading Sets Complete");
+    }
+    
+
+    private bool MinifigFilterFunc(Minifig minifig) => MinifigFilter(minifig);
+
+    private bool MinifigFilter(Minifig minifig)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (minifig.MinifigId.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (minifig.MinifigName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
+    private Task OpenImagePopup(string minifigId, string minifigName, string minifigImgUrl)
+    {
+        var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ImagePopup>
+        {
+            { x => x._id, minifigId },
+            { x => x._name, minifigName },
+            { x => x._imgUrl, minifigImgUrl }
+        };
+
+        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
+    }
+
+    // // events
+    // void CommittedItemChanges(Set set)
+    // {
+    //     using (var context = new InventoryContext())
+    //     {
+    //         var sets = context.Set<Set>();
+    //
+    //         Set temp = sets.First(s => s == set);
+    //
+    //         temp.OwnCount = set.OwnCount;
+    //         temp.BuildCount = set.BuildCount;
+    //
+    //         context.SaveChanges();
+    //     }
+    // }
+
+    // private void DeleteSet(string setId)
+    // {
+    //     DeleteData deleteData = new DeleteData();
+    //
+    //     deleteData.DeleteSetInfo(setId);
+    //
+    //     OnInitializedAsync();
+    // }
+}
