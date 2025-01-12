@@ -3,6 +3,7 @@ using System;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LEGO_Inventory.Migrations
 {
     [DbContext(typeof(InventoryContext))]
-    partial class InventoryContextModelSnapshot : ModelSnapshot
+    [Migration("20250112000503_MinifigCount")]
+    partial class MinifigCount
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
@@ -58,6 +61,7 @@ namespace LEGO_Inventory.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("MinifigImgUrl")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("MinifigName")
@@ -126,9 +130,11 @@ namespace LEGO_Inventory.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("SetImg")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SetURL")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("SetId");

@@ -9,9 +9,9 @@ public class Set
     
     public string Name { get; set; }
     
-    public string SetURL { get; set; }
+    public string? SetURL { get; set; }
     
-    public string SetImg { get; set; }
+    public string? SetImg { get; set; }
     
     public int NumBricks { get; set; }
     

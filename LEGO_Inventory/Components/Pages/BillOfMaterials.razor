@@ -73,10 +73,12 @@
                         </PagerContent>
                     </MudDataGrid>
                 </MudTabPanel>
+                
                 <MudTabPanel Text="Minifigures" Disabled="@(_setMinifigInfo.Count == 0)">
                     <MudDataGrid T="SetMinifigInfo" Items="@_setMinifigInfo.OrderBy(b => b.Minifig.MinifigId)"
-                                 SortMode="@SortMode.Multiple"
-                                 QuickFilter="SetMinifigFilterFunc">
+                                 SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
+                                 QuickFilter="SetMinifigFilterFunc" CommittedItemChanges="@UpdateBrick"
+                                 ReadOnly="false">
                         <ToolBarContent>
                             <MudText Typo="Typo.h6">@_setId</MudText>
                             <MudSpacer/>
@@ -87,7 +89,7 @@
                                           Class="mt-0"></MudTextField>
                         </ToolBarContent>
                         <Columns>
-                            <TemplateColumn Title="Image">
+                            <TemplateColumn Title="Image"  Editable="false">
                                 <CellTemplate>
                                     <MudStack Row>
                                         <MudImage class="cursor-pointer" Src="@context.Item.Minifig.MinifigImgUrl" Height="50"
@@ -95,11 +97,12 @@
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Minifig Id"/>
-                            <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name"/>
+                            <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Minifig Id" Editable="false"/>
+                            <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name" Editable="false"/>
+                            <PropertyColumn Property="x => x.Minifig.Stock" Title="Stock" Editable="true"/>
                             <PropertyColumn
                                 Property="x => x.SetMinifig.Count"
-                                Title="Needed" SortBy="x => x.SetMinifig.Count"/>
+                                Title="Needed" SortBy="x => x.SetMinifig.Count" Editable="false"/>
                         </Columns>
                         <PagerContent>
                             <MudDataGridPager T="SetMinifigInfo"/>
@@ -212,6 +215,12 @@
     {
         UpdateData updateData = new UpdateData();
         updateData.UpdateBrick(setBrickInfo.Brick);
+    }
+    
+    void UpdateBrick(SetMinifigInfo setMinifigInfo)
+    {
+        UpdateData updateData = new UpdateData();
+        updateData.UpdateMinifig(setMinifigInfo.Minifig);
     }
 
     public class SetBrickInfo

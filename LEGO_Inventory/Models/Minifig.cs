@@ -9,7 +9,9 @@ public class Minifig
     
     public string MinifigName { get; set; }
     
-    public string MinifigImgUrl { get; set; }
+    public string? MinifigImgUrl { get; set; }
     
     public string MinifigUrl { get; set; }
+    
+    public int Stock { get; set; }
 }

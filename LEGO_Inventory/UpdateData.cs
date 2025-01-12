@@ -29,4 +29,18 @@ public class UpdateData
             return  context.SaveChanges() > 0;
         }
     }
+    
+    
+    
+    public bool UpdateMinifig(Minifig minifig)
+    {
+        using (var context = new InventoryContext())
+        {
+            var minifigContext = context.Set<Minifig>();
+            
+            minifigContext.Update(minifig);
+            
+            return  context.SaveChanges() > 0;
+        }
+    }
 }

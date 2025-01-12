@@ -64,8 +64,8 @@ public class ImportData
                 {
                     SetId = setInfo!["set_num"]!.ToString(),
                     Name = setInfo!["name"]!.ToString(),
-                    SetURL = setInfo!["set_url"]!.ToString(),
-                    SetImg = setInfo!["set_img_url"]!.ToString(),
+                    SetURL = setInfo["set_url"]?.ToString(),
+                    SetImg = setInfo!["set_img_url"]?.ToString(),
                     DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()),
                     NumBricks = int.Parse(setInfo!["num_parts"]!.ToString()),
                     ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
@@ -224,9 +224,9 @@ public class ImportData
             {
                 JsonObject? minifigJsonObject = api.GetMinifigInfo(minifigId).Result;
 
-                var minifigName = minifigJsonObject!["name"].ToString();
-                var minifigImgUrl = minifigJsonObject!["set_img_url"].ToString();
-                var minifigUrl = minifigJsonObject!["set_url"].ToString();
+                var minifigName = minifigJsonObject!["name"]?.ToString();
+                var minifigImgUrl = minifigJsonObject["set_img_url"]?.ToString();
+                var minifigUrl = minifigJsonObject["set_url"]?.ToString();
 
                 minifig = new Minifig
                 {
@@ -239,7 +239,9 @@ public class ImportData
                 minifigContext.Add(minifig);
                 _logger.LogInformation($"Imported minifig ({minifigId}) {minifigName}");
 
-                return context.SaveChanges() > 0;
+                if (context.SaveChanges() > 0)
+                    return true;
+                else return false;
             }
 
             return false;
@@ -288,8 +290,8 @@ public class ImportData
 
             foreach (var brick in jsonObject!["results"]!.AsArray())
             {
-                var brickId = brick["part"]!["part_num"]!.ToString();
-                var colorId = brick["color"]!["id"]!.ToString();
+                var brickId = brick["part"]!["part_num"]?.ToString();
+                var colorId = brick["color"]!["id"]?.ToString();
                 var quantity = (int)brick["quantity"]!;
                 
                 MinifigBrick minifigBrick;
