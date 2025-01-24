@@ -64,11 +64,11 @@
                                         {
                                             @if (IsDark(context.Item.Brick.HexColor))
                                             {
-                                                <MudChip class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                                <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)" class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
                                             }
                                             else
                                             {
-                                                <MudChip class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                                <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)" class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
                                             }
                                         }
                                         else
@@ -263,6 +263,19 @@
         };
 
         return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
+    }
+
+    private Task OpenColorPopup(string hex, string name)
+    {
+        var colorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ColorPopup>
+        {
+            { x => x._hexColor, hex },
+            { x => x._name, name },
+        };
+
+        return DialogService.ShowAsync<ColorPopup>("Color Popup", parameters, colorPopup);
     }
 
     void UpdateBrick(SetBrickInfo setBrickInfo)

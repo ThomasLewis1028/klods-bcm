@@ -1,0 +1,22 @@
+﻿<MudDialog>
+    <TitleContent>
+       @_name
+    </TitleContent>
+    <DialogContent>
+        <div class="rounded py-4"
+             style="@($"background-color:{"#" + _hexColor}; height: 250px; width: 250px")"></div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public string _hexColor { get; set; }
+
+    [Parameter] public string _name { get; set; }
+
+    private void Cancel() => MudDialog.Cancel();
+}
