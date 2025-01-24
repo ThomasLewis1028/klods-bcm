@@ -42,6 +42,9 @@
                             <MudSpacer/>
                             <MudText Typo="Typo.h6">@_setId - @_set.Name</MudText>
                             <MudSpacer/>
+
+                            <MudText Typo="Typo.body1">Missing Pieces: @_setBrickInfo.Sum(sb => sb.SetBrick.Count - sb.SetBrick.Stock)</MudText>
+                            <MudSpacer/>
                             <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
                                           Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
                                           Class="mt-0"></MudTextField>
@@ -64,11 +67,19 @@
                                         {
                                             @if (IsDark(context.Item.Brick.HexColor))
                                             {
-                                                <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)" class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                                <MudChip 
+                                                    OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)" 
+                                                    class="mud-elevation-2" 
+                                                    Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")"
+                                                    >@context.Item.Brick.ColorName</MudChip>
                                             }
                                             else
                                             {
-                                                <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)" class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                                <MudChip 
+                                                    OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)" 
+                                                    class="mud-elevation-2" 
+                                                    Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")"
+                                                    >@context.Item.Brick.ColorName</MudChip>
                                             }
                                         }
                                         else
@@ -78,7 +89,7 @@
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="Need (Spare)" Editable="false" SortBy="x => x.SetBrick.Count + x.SetBrick.SpareCount">
+                            <TemplateColumn Title="Need (Spare)" Editable="false" SortBy="x => x.SetBrick.Count + x.SetBrick.SpareCount" Sortable="true">
                                 <CellTemplate>
                                     <MudStack Row Spacing="1">
                                         @if(context.Item.SetBrick.Count <= context.Item.SetBrick.Stock)
@@ -93,17 +104,20 @@
                                         {
                                             <MudText Color="@Color.Error">@context.Item.SetBrick.Count</MudText>
                                         }
-                                        <MudText Style="padding: -10px">(@context.Item.SetBrick.SpareCount)</MudText>
+                                        @if(context.Item.SetBrick.SpareCount > 0)
+                                        {
+                                            <MudText Style="padding: -10px">(@context.Item.SetBrick.SpareCount)</MudText>
+                                        }
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <PropertyColumn Title="Stock Used" Property="x => x.SetBrick.Stock" Editable="true" SortBy="x => x.SetBrick.Stock"></PropertyColumn>
+                            <PropertyColumn Title="Stock Used" Property="x => x.SetBrick.Stock" Editable="true" SortBy="x => x.SetBrick.Stock"/>
                             <TemplateColumn Title="Move Stock" Editable="false">
                                 <CellTemplate>
                                     <MudStack Row Spacing="0">
-                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowLeft" OnClick="() => MoveStock(Direction.left, context.Item)"></MudIconButton>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowLeft" OnClick="() => MoveStock(Direction.left, context.Item)"/>
                                         <MudNumericField Variant="Variant.Outlined" Min="0" @bind-Value="context.Item.MoveCount"></MudNumericField>
-                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowRight" OnClick="() => MoveStock(Direction.right, context.Item)"></MudIconButton>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowRight" OnClick="() => MoveStock(Direction.right, context.Item)"/>
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
@@ -121,9 +135,10 @@
                                  QuickFilter="SetMinifigFilterFunc" CommittedItemChanges="@UpdateMinifig"
                                  ReadOnly="false">
                         <ToolBarContent>
-                            <MudText Typo="Typo.h6">@_setId</MudText>
+                            <MudImage class="cursor-pointer rounded-2" Elevation="2" Src="@_set.SetImg" Height="50"
+                                      @onclick="((e) => OpenImagePopup(_set.SetId, _set.Name, _set.SetImg))"/>
                             <MudSpacer/>
-                            <MudText Typo="Typo.h6">@_set.Name</MudText>
+                            <MudText Typo="Typo.h6">@_setId - @_set.Name</MudText>
                             <MudSpacer/>
                             <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
                                           Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"

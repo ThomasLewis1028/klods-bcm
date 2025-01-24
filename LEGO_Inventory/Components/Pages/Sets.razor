@@ -33,8 +33,8 @@
             <Columns>
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
-                        <MudStack Row>
-                            <MudImage class="cursor-pointer" Src="@context.Item.SetImg" Height="50"
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                            <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.SetImg" Height="50"
                                       @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>
                         </MudStack>
                     </CellTemplate>
@@ -67,6 +67,13 @@
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
+                @* <TemplateColumn Title="Manual" Editable="false"> *@
+                @*     <CellTemplate> *@
+                @*         <MudStack Row> *@
+                @*             <MudImage class="cursor-pointer rounded-3" Elevation="2" Height="50" Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png" href="@context.Item.ManualUrl"/> *@
+                @*         </MudStack> *@
+                @*     </CellTemplate> *@
+                @* </TemplateColumn> *@
             </Columns>
             <PagerContent>
                 <MudDataGridPager T="Set"/>

@@ -1,7 +1,51 @@
 ﻿@page "/"
+@using LEGO_Inventory.Database
+@using MudBlazor.Extensions
+@inject ILoggerFactory LoggerFactory
+@inject NavigationManager navigationManager;
 
 <PageTitle>LEGO Inventory Tool</PageTitle>
 
 <h1>This is tool 4 ur legos</h1>
 
 Put ur bricks in here
+
+@* <MudGrid> *@
+@*     <MudItem sm="12" md="6"> *@
+@*         <MudPaper Height="500px"> *@
+@*             <MudImage Class="align-content-center" ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@setUrl"/> *@
+@*         </MudPaper> *@
+@*     </MudItem> *@
+@*     <MudItem sm="12" md="6"> *@
+@*         <MudPaper Height="500px"> *@
+@*             <MudImage Class="align-content-center" ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@brickUrl"/> *@
+@*         </MudPaper> *@
+@*     </MudItem> *@
+@*     <MudItem sm="12" md="6"> *@
+@*         <MudPaper Height="500px"> *@
+@*             <MudImage ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@minifigUrl"/> *@
+@*         </MudPaper> *@
+@*     </MudItem> *@
+@*     <MudItem sm="12" md="6"> *@
+@*         <MudPaper Height="500px"> *@
+@*             <MudImage ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@bomUrl"/> *@
+@*         </MudPaper> *@
+@*     </MudItem> *@
+@* </MudGrid> *@
+
+
+
+@code{
+    string setUrl = "https://cdn.rebrickable.com/media/thumbs/sets/5610-1/123928.jpg/1000x800p.jpg?1736446814.0387728";
+    string brickUrl = "https://cdn.rebrickable.com/media/thumbs/parts/elements/300321.jpg/250x250p.jpg?1658339205.0528646";
+    string minifigUrl = "https://rebrickable.com/static/img/nil_mf.jpg";
+    string bomUrl;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        
+        navigationManager.NavigateTo($"/sets/", forceLoad:true);
+        
+        StateHasChanged();
+    }
+}
