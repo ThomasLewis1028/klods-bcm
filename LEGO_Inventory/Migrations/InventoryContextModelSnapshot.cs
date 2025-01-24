@@ -153,6 +153,9 @@ namespace LEGO_Inventory.Migrations
                     b.Property<int>("SpareCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Stock")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("PartNum", "ColorId", "SetId");
 
                     b.HasIndex("SetId");

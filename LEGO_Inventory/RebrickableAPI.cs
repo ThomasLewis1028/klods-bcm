@@ -79,7 +79,7 @@ public class RebrickableApi
         }
         catch (Exception e)
         {
-            Console.WriteLine(e.Message);
+            _logger.LogTrace("SendQuery Exception: {e}", e.Message);
             
             throw;
         }

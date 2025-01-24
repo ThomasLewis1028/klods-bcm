@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -52,7 +51,7 @@ public class InventoryTests
         {
             var ImportData = new ImportData();
             
-            Assert.IsTrue(ImportData.ImportSetInfo("4502-2"));
+            Assert.IsTrue(ImportData.ImportSetInfo("4502-1"));
 
             var context = new InventoryContext();
             var setBrickContext = context.Set<SetBrick>();

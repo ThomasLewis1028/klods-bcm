@@ -14,4 +14,6 @@ public class SetBrick
     public int Count { get; set; }
     
     public int SpareCount { get; set; }
+    
+    public int Stock { get; set; }
 }

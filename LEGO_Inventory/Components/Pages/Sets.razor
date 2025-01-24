@@ -1,6 +1,7 @@
 ﻿@page "/sets"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
+@using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @rendermode InteractiveServer
 
@@ -48,7 +49,8 @@
                     <CellTemplate>
                         <MudStack Row>
                             <MudIconButton href=@($"/bom/{context.Item.SetId}") Icon="@Icons.Material.Filled.List"
-                                           Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" ></MudIconButton>
+                                           Variant="Variant.Filled" Color="Color.Primary"
+                                           Size="Size.Small"></MudIconButton>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
@@ -92,6 +94,8 @@
 
             _sets = setContext.ToList();
         }
+
+        _setId = "";
 
         StateHasChanged();
         logger.LogTrace("Loading Sets Complete");

@@ -56,6 +56,8 @@ public class ImportData
                     set.DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString());
                     set.NumBricks = int.Parse(setInfo!["num_parts"]!.ToString());
                     set.ReleaseYear = int.Parse(setInfo!["year"]!.ToString());
+                    set.ManualUrl =
+                        $"https://www.lego.com/en-us/service/buildinginstructions/{setId.Split('-').First()}";
                 }
             }
             else
@@ -69,7 +71,7 @@ public class ImportData
                     DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()),
                     NumBricks = int.Parse(setInfo!["num_parts"]!.ToString()),
                     ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
-                    ManualUrl = "",
+                    ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId.Split('-').First()}",
                     OwnCount = 0,
                     BuildCount = 0
                 };

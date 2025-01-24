@@ -29,8 +29,18 @@ public class UpdateData
             return  context.SaveChanges() > 0;
         }
     }
-    
-    
+
+    public bool UpdateSetBrick(SetBrick setBrick)
+    {
+        using (var context = new InventoryContext())
+        {
+            var setBrickContext = context.Set<SetBrick>();
+            
+            setBrickContext.Update(setBrick);
+            
+            return  context.SaveChanges() > 0;
+        }
+    }
     
     public bool UpdateMinifig(Minifig minifig)
     {

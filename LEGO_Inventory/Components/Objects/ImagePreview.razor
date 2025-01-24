@@ -1,0 +1,27 @@
+﻿@* <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.Brick.PartImg" Height="50" *@
+@*           @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg))"/> *@
+@* *@
+@* @code { *@
+@*    [Parameter] public string _id { get; set; } *@
+@* *@
+@*     [Parameter] public string _name { get; set; } *@
+@* *@
+@*     [Parameter] public string _imgUrl { get; set; } *@
+@* *@
+@*     private void Cancel() => MudDialog.Cancel(); *@
+@*      *@
+@*      *@
+@*     private Task OpenImagePopup(string id, string name, string imgUrl) *@
+@*     { *@
+@*         var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true }; *@
+@* *@
+@*         var parameters = new DialogParameters<ImagePopup> *@
+@*         { *@
+@*             { x => x._id, id }, *@
+@*             { x => x._name, name }, *@
+@*             { x => x._imgUrl, imgUrl } *@
+@*         }; *@
+@* *@
+@*         return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup); *@
+@*     } *@
+@* } *@

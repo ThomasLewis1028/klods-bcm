@@ -2,6 +2,7 @@
 @page "/bom"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
+@using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @rendermode InteractiveServer
 
@@ -29,7 +30,7 @@
                     <MudDataGrid T="SetBrickInfo" Items="@_setBrickInfo.OrderBy(b => b.Brick.PartNum)"
                                  SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
                                  QuickFilter="SetBrickFilterFunc" CommittedItemChanges="@UpdateBrick"
-                                 ReadOnly="false">
+                                 ReadOnly="false" Bordered="true">
                         <ToolBarContent>
                             <MudText Typo="Typo.h6">@_setId</MudText>
                             <MudSpacer/>
@@ -43,7 +44,7 @@
                             <TemplateColumn Title="Image" Editable="false">
                                 <CellTemplate>
                                     <MudStack Row>
-                                        <MudImage class="cursor-pointer" Src="@context.Item.Brick.PartImg" Height="50"
+                                        <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.Brick.PartImg" Height="50"
                                                   @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg))"/>
                                     </MudStack>
                                 </CellTemplate>
@@ -57,15 +58,41 @@
                                         @if (context.Item.Brick.HexColor != null)
                                         {
                                             <MudSpacer/>
-                                            <div class="mud-width-half rounded-circle pa-7"
+                                            <div class="mud-width-half rounded-3 pa-5 mud-elevation-2"
                                                  style="@($"background-color:{"#" + context.Item.Brick.HexColor};")"></div>
                                         }
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <PropertyColumn
-                                Property="x => x.SetBrick.Count"
-                                Title="Needed" Editable="false" SortBy="x => x.SetBrick.Count"/>
+                            <TemplateColumn Title="Need (Spare)" Editable="false" SortBy="x => x.SetBrick.Count + x.SetBrick.SpareCount">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        @if(context.Item.SetBrick.Count <= context.Item.SetBrick.Stock)
+                                        {
+                                            <MudText Color="@Color.Success">@context.Item.SetBrick.Count</MudText>
+                                        }
+                                        else if (context.Item.SetBrick.Count - context.Item.SetBrick.Stock <= context.Item.Brick.Count)
+                                        {
+                                            <MudText Color="@Color.Warning">@context.Item.SetBrick.Count</MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText Color="@Color.Error">@context.Item.SetBrick.Count</MudText>
+                                        }
+                                        <MudText>(@context.Item.SetBrick.SpareCount)</MudText>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Title="Stock Used" Property="x => x.SetBrick.Stock" Editable="true" SortBy="x => x.SetBrick.Stock"></PropertyColumn>
+                            <TemplateColumn Title="Move Stock" Editable="false">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowLeft" OnClick="() => MoveStock(Direction.left, context.Item)"></MudIconButton>
+                                        <MudNumericField Variant="Variant.Filled" Min="0" @bind-Value="context.Item.MoveCount"></MudNumericField>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowRight" OnClick="() => MoveStock(Direction.right, context.Item)"></MudIconButton>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
                             <PropertyColumn Property="x => x.Brick.Count" Title="Stock" Editable="true"/>
                         </Columns>
                         <PagerContent>
@@ -77,7 +104,7 @@
                 <MudTabPanel Text="Minifigures" Disabled="@(_setMinifigInfo.Count == 0)">
                     <MudDataGrid T="SetMinifigInfo" Items="@_setMinifigInfo.OrderBy(b => b.Minifig.MinifigId)"
                                  SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
-                                 QuickFilter="SetMinifigFilterFunc" CommittedItemChanges="@UpdateBrick"
+                                 QuickFilter="SetMinifigFilterFunc" CommittedItemChanges="@UpdateMinifig"
                                  ReadOnly="false">
                         <ToolBarContent>
                             <MudText Typo="Typo.h6">@_setId</MudText>
@@ -137,7 +164,7 @@
             var minifigContext = context.Set<Minifig>();
             var setMinifigContext = context.Set<SetMinifig>();
             var setContext = context.Set<Set>();
-
+            
             if (_setId != null)
             {
                 foreach (var setBrick in setBrickContext.Where(sb => sb.SetId == _setId))
@@ -215,12 +242,41 @@
     {
         UpdateData updateData = new UpdateData();
         updateData.UpdateBrick(setBrickInfo.Brick);
+        updateData.UpdateSetBrick(setBrickInfo.SetBrick);
     }
     
-    void UpdateBrick(SetMinifigInfo setMinifigInfo)
+    void UpdateMinifig(SetMinifigInfo setMinifigInfo)
     {
         UpdateData updateData = new UpdateData();
         updateData.UpdateMinifig(setMinifigInfo.Minifig);
+    }
+
+    void MoveStock(Direction dir, SetBrickInfo setBrickInfo)
+    {
+       if (dir == Direction.left)
+        {
+            setBrickInfo.Brick.Count -= setBrickInfo.MoveCount;
+            setBrickInfo.SetBrick.Stock += setBrickInfo.MoveCount;
+            
+            UpdateBrick(setBrickInfo);
+        }
+        else if (dir == Direction.right)
+        {
+            setBrickInfo.Brick.Count += setBrickInfo.MoveCount;
+            setBrickInfo.SetBrick.Stock -= setBrickInfo.MoveCount;
+            
+            UpdateBrick(setBrickInfo);
+        }
+        else
+        {
+            throw new Exception();
+        }
+    }
+
+    enum Direction
+    {
+        left,
+        right
     }
 
     public class SetBrickInfo
@@ -228,6 +284,8 @@
         public SetBrick SetBrick { get; set; }
 
         public Brick Brick { get; set; }
+
+        public int MoveCount { get; set; } = 0;
     }
 
     public class SetMinifigInfo
@@ -236,29 +294,4 @@
 
         public SetMinifig SetMinifig { get; set; }
     }
-
-    // // events
-    // void CommittedItemChanges(Set set)
-    // {
-    //     using (var context = new InventoryContext())
-    //     {
-    //         var sets = context.Set<Set>();
-    //
-    //         Set temp = sets.First(s => s == set);
-    //
-    //         temp.OwnCount = set.OwnCount;
-    //         temp.BuildCount = set.BuildCount;
-    //
-    //         context.SaveChanges();
-    //     }
-    // }
-
-    // private void DeleteSet(string setId)
-    // {
-    //     DeleteData deleteData = new DeleteData();
-    //
-    //     deleteData.DeleteSetInfo(setId);
-    //
-    //     OnInitializedAsync();
-    // }
 }
