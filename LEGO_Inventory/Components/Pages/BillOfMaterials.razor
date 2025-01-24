@@ -2,8 +2,12 @@
 @page "/bom"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
+@inject NavigationManager navigationManager;
+@using System.Drawing
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
 @rendermode InteractiveServer
 
 <PageTitle>Bill of Materials</PageTitle>
@@ -12,9 +16,10 @@
 
 <MudGrid>
     <MudItem xs="12">
-        <MudSelect @bind-Value="_set"
-                   Variant="Variant.Outlined"
-                   Dense="true">
+        <MudSelect T="Set" 
+            Variant="Variant.Outlined"
+                   Dense="true"
+                   ValueChanged="ChangeSet">
             @foreach (var set in _sets)
             {
                 <MudSelectItem Value="@set">@set.SetId - @set.Name</MudSelectItem>
@@ -30,11 +35,12 @@
                     <MudDataGrid T="SetBrickInfo" Items="@_setBrickInfo.OrderBy(b => b.Brick.PartNum)"
                                  SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
                                  QuickFilter="SetBrickFilterFunc" CommittedItemChanges="@UpdateBrick"
-                                 ReadOnly="false" Bordered="true">
+                                 ReadOnly="false" Bordered="false">
                         <ToolBarContent>
-                            <MudText Typo="Typo.h6">@_setId</MudText>
+                            <MudImage class="cursor-pointer rounded-2" Elevation="2" Src="@_set.SetImg" Height="50"
+                                      @onclick="((e) => OpenImagePopup(_set.SetId, _set.Name, _set.SetImg))"/>
                             <MudSpacer/>
-                            <MudText Typo="Typo.h6">@_set.Name</MudText>
+                            <MudText Typo="Typo.h6">@_setId - @_set.Name</MudText>
                             <MudSpacer/>
                             <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
                                           Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
@@ -53,20 +59,28 @@
                             <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
                             <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
                                 <CellTemplate>
-                                    <MudStack Row>
-                                        <MudText>@context.Item.Brick.ColorName</MudText>
+                                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                                         @if (context.Item.Brick.HexColor != null)
                                         {
-                                            <MudSpacer/>
-                                            <div class="mud-width-half rounded-3 pa-5 mud-elevation-2"
-                                                 style="@($"background-color:{"#" + context.Item.Brick.HexColor};")"></div>
+                                            @if (IsDark(context.Item.Brick.HexColor))
+                                            {
+                                                <MudChip class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                            }
+                                            else
+                                            {
+                                                <MudChip class="mud-elevation-2" Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <MudChip Color="default">N/A</MudChip>
                                         }
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
                             <TemplateColumn Title="Need (Spare)" Editable="false" SortBy="x => x.SetBrick.Count + x.SetBrick.SpareCount">
                                 <CellTemplate>
-                                    <MudStack Row>
+                                    <MudStack Row Spacing="1">
                                         @if(context.Item.SetBrick.Count <= context.Item.SetBrick.Stock)
                                         {
                                             <MudText Color="@Color.Success">@context.Item.SetBrick.Count</MudText>
@@ -79,16 +93,16 @@
                                         {
                                             <MudText Color="@Color.Error">@context.Item.SetBrick.Count</MudText>
                                         }
-                                        <MudText>(@context.Item.SetBrick.SpareCount)</MudText>
+                                        <MudText Style="padding: -10px">(@context.Item.SetBrick.SpareCount)</MudText>
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
                             <PropertyColumn Title="Stock Used" Property="x => x.SetBrick.Stock" Editable="true" SortBy="x => x.SetBrick.Stock"></PropertyColumn>
                             <TemplateColumn Title="Move Stock" Editable="false">
                                 <CellTemplate>
-                                    <MudStack Row>
+                                    <MudStack Row Spacing="0">
                                         <MudIconButton Icon="@Icons.Material.Filled.ArrowLeft" OnClick="() => MoveStock(Direction.left, context.Item)"></MudIconButton>
-                                        <MudNumericField Variant="Variant.Filled" Min="0" @bind-Value="context.Item.MoveCount"></MudNumericField>
+                                        <MudNumericField Variant="Variant.Outlined" Min="0" @bind-Value="context.Item.MoveCount"></MudNumericField>
                                         <MudIconButton Icon="@Icons.Material.Filled.ArrowRight" OnClick="() => MoveStock(Direction.right, context.Item)"></MudIconButton>
                                     </MudStack>
                                 </CellTemplate>
@@ -164,6 +178,10 @@
             var minifigContext = context.Set<Minifig>();
             var setMinifigContext = context.Set<SetMinifig>();
             var setContext = context.Set<Set>();
+
+            _setBrickInfo.Clear();
+            _setMinifigInfo.Clear();
+
             
             if (_setId != null)
             {
@@ -191,8 +209,17 @@
             _sets = setContext.ToList();
         }
 
+        navigationManager.NavigateTo($"/bom/{_setId}");
+        
         StateHasChanged();
         logger.LogTrace("Loading Sets Complete");
+    }
+
+    private void ChangeSet(Set set)
+    {
+        _setId = set.SetId;
+        
+        _ = OnInitializedAsync();
     }
 
     private bool SetBrickFilterFunc(SetBrickInfo setBrickInfo) => SetBrickFilter(setBrickInfo);
@@ -244,7 +271,7 @@
         updateData.UpdateBrick(setBrickInfo.Brick);
         updateData.UpdateSetBrick(setBrickInfo.SetBrick);
     }
-    
+
     void UpdateMinifig(SetMinifigInfo setMinifigInfo)
     {
         UpdateData updateData = new UpdateData();
@@ -253,18 +280,18 @@
 
     void MoveStock(Direction dir, SetBrickInfo setBrickInfo)
     {
-       if (dir == Direction.left)
+        if (dir == Direction.left)
         {
             setBrickInfo.Brick.Count -= setBrickInfo.MoveCount;
             setBrickInfo.SetBrick.Stock += setBrickInfo.MoveCount;
-            
+
             UpdateBrick(setBrickInfo);
         }
         else if (dir == Direction.right)
         {
             setBrickInfo.Brick.Count += setBrickInfo.MoveCount;
             setBrickInfo.SetBrick.Stock -= setBrickInfo.MoveCount;
-            
+
             UpdateBrick(setBrickInfo);
         }
         else
@@ -277,6 +304,17 @@
     {
         left,
         right
+    }
+
+    public bool IsDark(string hex)
+    {
+        System.Drawing.Color color = ColorTranslator.FromHtml($"#{hex}");
+        
+        int r = Convert.ToInt16(color.R);
+        int g = Convert.ToInt16(color.G);
+        int b = Convert.ToInt16(color.B);
+        
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
     }
 
     public class SetBrickInfo
