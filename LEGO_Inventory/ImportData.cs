@@ -282,7 +282,7 @@ public class ImportData
                     {
                         setBrickContext.First(sb =>
                             sb.PartNum == minifigBrick.BrickID && sb.ColorId == minifigBrick.ColorId &&
-                            sb.SetId == setId).Count += quantity;
+                            sb.SetId == setId).Count += quantity * minifigBrick.Quantity;
                     }
                     else
                     {

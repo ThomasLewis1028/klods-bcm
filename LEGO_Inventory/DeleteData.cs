@@ -6,17 +6,42 @@ namespace LEGO_Inventory;
 
 public class DeleteData
 {
-    public bool DeleteSetInfo(string? setId)
+    private readonly ILogger<ImportData> _logger =
+        LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<ImportData>();
+    
+    public bool DeleteSetInfo(string? setId, bool moveStock = false)
     {
+        
+        _logger.LogInformation($"Deleting All Data for set {setId}");
+        
         using (var context = new InventoryContext())
         {
             var setContext = context.Set<Set>();
+            var setBrickContext = context.Set<SetBrick>();
+            var brickContext = context.Set<Brick>();
+
+            if(moveStock)
+            {
+                _logger.LogInformation($"Moving stock back to inventory {setId}");
+                
+                foreach (var setBrick in setBrickContext.Where(sb => sb.SetId == setId))
+                {
+                    brickContext.First(b => b.PartNum == setBrick.PartNum 
+                                            && b.ColorId == setBrick.ColorId)
+                        .Count += setBrick.Stock;
+                }
+                
+                _logger.LogInformation($"Stock for set {setId} has been moved to inventory");
+            }
             
             setContext
                 .Where(s => s.SetId == setId)
                 .ExecuteDelete();
             
             context.SaveChanges();
+            
+            
+            _logger.LogInformation($"{setId} has been deleted");
             
             return !setContext.Any(s => s.SetId == setId);
         }

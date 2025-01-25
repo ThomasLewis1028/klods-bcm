@@ -1,0 +1,39 @@
+﻿<MudDialog>
+    <TitleContent>
+        Deleting Set @_id - @_name
+    </TitleContent>
+    <DialogContent>
+        <MudText>Would you like to return the stock to inventory?</MudText>
+        <MudSwitch @bind-Value="MoveStock" Label="Move Stock?" Color="Color.Success" UncheckedColor="Color.Error"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+        <MudSpacer></MudSpacer>
+        <MudButton OnClick="() => DeleteSet(_id)" Color="Color.Error">DELETE</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public string _id { get; set; }
+
+    [Parameter] public string _name { get; set; }
+
+    [Parameter] public string _imgUrl { get; set; }
+
+    public bool MoveStock { get; set; } = false;
+
+    private void Cancel() => MudDialog.Cancel();
+    
+    private void DeleteSet(string id)
+    {
+        DeleteData deleteData = new DeleteData();
+        
+        deleteData.DeleteSetInfo(id, MoveStock);
+        
+        Cancel();
+        OnInitializedAsync();
+    }
+
+}

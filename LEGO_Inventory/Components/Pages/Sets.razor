@@ -62,7 +62,7 @@
                                 Variant="Variant.Filled"
                                 Color="Color.Error"
                                 Size="Size.Small"
-                                OnClick="() => DeleteSet(context.Item.SetId)"
+                                OnClick="() => DeleteSet(context.Item.SetId, context.Item.Name, context.Item.SetImg)"
                             />
                         </MudStack>
                     </CellTemplate>
@@ -186,13 +186,23 @@
     //     StateHasChanged();
     // }
 
-    private void DeleteSet(string setId)
+    private async Task DeleteSet(string setId, string setName, string setImgUrl)
     {
-        DeleteData deleteData = new DeleteData();
+        var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
 
-        deleteData.DeleteSetInfo(setId);
+        var parameters = new DialogParameters<DeletePopup>
+        {
+            { x => x._id, setId },
+            { x => x._name, setName },
+            { x => x._imgUrl, setImgUrl }
+        };
+ 
+        var dialog = DialogService.Show<DeletePopup>("Delete Popup", parameters, deletePopup);
 
-        OnInitializedAsync();
+        var result = await dialog.Result;
+        
+        if (result.Canceled)
+            OnInitializedAsync();
     }
 
 }
