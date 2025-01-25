@@ -22,6 +22,7 @@ public class ImportData
                 ImportSetParts(setId);
                 ImportSetMinifigs(setId);
                 
+                _logger.LogInformation($"DONE Importing All Data for set {setId}");
             }
             catch
             {
@@ -29,10 +30,10 @@ public class ImportData
                 return false;
             }
         }
-        
+
         return true;
     }
-    
+
     public bool ImportSetInfo(string? setId)
     {
         _logger.LogInformation($"Importing {setId}");
@@ -199,12 +200,12 @@ public class ImportData
             {
                 var minifigId = minifig!["set_num"]!.ToString();
                 var quantity = (int)minifig!["quantity"]!;
-                
+
                 ImportMinifig(minifigId);
 
-                LinkMinifigToSet(minifigId, setId, quantity);
-                
                 LinkMinifigBricks(minifigId);
+
+                LinkMinifigToSet(minifigId, setId, quantity);
             }
         }
 
@@ -257,18 +258,47 @@ public class ImportData
         using (var context = new InventoryContext())
         {
             var setMinifigContext = context.Set<SetMinifig>();
+            var setBrickContext = context.Set<SetBrick>();
+            var minifigBrickContext = context.Set<MinifigBrick>();
 
             if (!setMinifigContext.Any(sm => sm.MinifigId == minifigId && sm.SetId == setId))
             {
+                List<MinifigBrick> minifigBricks = minifigBrickContext.Where(mb => mb.MinifigID == minifigId).ToList();
+
                 SetMinifig setMinifig = new SetMinifig
                 {
                     MinifigId = minifigId,
                     SetId = setId,
                     Count = quantity,
                 };
-                
-                var setContext = context.Set<Set>();
 
+                List<SetBrick> setBricks = new List<SetBrick>();
+
+                foreach (var minifigBrick in minifigBricks)
+                {
+                    if (setBrickContext.Any(sb =>
+                            sb.PartNum == minifigBrick.BrickID && sb.ColorId == minifigBrick.ColorId &&
+                            sb.SetId == setId))
+                    {
+                        setBrickContext.First(sb =>
+                            sb.PartNum == minifigBrick.BrickID && sb.ColorId == minifigBrick.ColorId &&
+                            sb.SetId == setId).Count += quantity;
+                    }
+                    else
+                    {
+                        SetBrick setBrick = new SetBrick()
+                        {
+                            SetId = setId,
+                            PartNum = minifigBrick.BrickID,
+                            ColorId = minifigBrick!.ColorId,
+                            Count = quantity,
+                        };
+
+                        setBricks.Add(setBrick);
+                    }
+                }
+
+                setBrickContext.AddRange(setBricks);
                 setMinifigContext.Add(setMinifig);
 
                 return context.SaveChanges() > 0;
@@ -295,14 +325,14 @@ public class ImportData
                 var brickId = brick["part"]!["part_num"]?.ToString();
                 var colorId = brick["color"]!["id"]?.ToString();
                 var quantity = (int)brick["quantity"]!;
-                
+
                 MinifigBrick minifigBrick;
 
                 if (minifigBrickContext.Any(mb => mb.MinifigID == minifigId
                                                   && mb.BrickID == brickId
                                                   && mb.ColorId == colorId))
                     continue;
-                
+
                 if (brickContext.Any(b => b.PartNum == brickId && b.ColorId == colorId))
                 {
                     minifigBrick = new MinifigBrick
@@ -316,8 +346,7 @@ public class ImportData
                 else
                 {
                     Brick newBrick = ImportBrick(brick);
-                    
-                    
+
                     minifigBrick = new MinifigBrick
                     {
                         MinifigID = minifigId,
@@ -326,13 +355,12 @@ public class ImportData
                         Quantity = quantity,
                     };
                 }
-                
-                
+
+
                 minifigBrickContext.Add(minifigBrick);
-                
             }
 
-                return context.SaveChanges() > 0;
+            return context.SaveChanges() > 0;
         }
 
         return false;

@@ -20,7 +20,7 @@ public class RebrickableApi
     public async Task<JsonObject?> GetSetParts(string setId)
     {
         _logger.LogInformation("Getting set parts for {setId}", setId);
-        string url = $"{BaseUrl}sets/{setId}/parts/?page_size=1000000&inc_minifig_parts=1&";
+        string url = $"{BaseUrl}sets/{setId}/parts/?page_size=1000000&";
 
         return await SendQuery(url);
     }

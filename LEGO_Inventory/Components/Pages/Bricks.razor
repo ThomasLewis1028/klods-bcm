@@ -93,7 +93,7 @@
                         <Columns>
                             <TemplateColumn Title="Image">
                                 <CellTemplate>
-                                    <MudStack Row>
+                                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                                         <MudImage class="cursor-pointer rounded-3" Elevation="2"
                                                   Src="@context.Item.SetImg" Height="50"
                                                   @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>

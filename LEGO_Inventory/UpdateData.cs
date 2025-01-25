@@ -53,4 +53,16 @@ public class UpdateData
             return  context.SaveChanges() > 0;
         }
     }
+    
+    public bool UpdateSetMinifig(SetMinifig setMinifig)
+    {
+        using (var context = new InventoryContext())
+        {
+            var setMinifigContext = context.Set<SetMinifig>();
+            
+            setMinifigContext.Update(setMinifig);
+            
+            return  context.SaveChanges() > 0;
+        }
+    }
 }
