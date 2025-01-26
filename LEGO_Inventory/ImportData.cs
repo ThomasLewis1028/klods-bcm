@@ -410,4 +410,40 @@ public class ImportData
 
         return null;
     }
+
+    public bool ImportColors()
+    {
+        _logger.LogInformation($"Importing colors");
+        RebrickableApi api = new RebrickableApi();
+
+        using (var context = new InventoryContext())
+        {
+            var colorContext = context.Set<Color>();
+            JsonObject? jsonObject = api.GetColors().Result;
+            
+            List<Color> colors = new List<Color>();
+
+            foreach (var color in jsonObject!["results"]!.AsArray())
+            {
+                if (colorContext.Any(c => c.Id == color!["id"]!.ToString()))
+                    continue;
+
+                Color c = new Color
+                {
+                    Id = color!["id"]!.ToString(),
+                    Name = color!["name"]!.ToString(),
+                    Hex = color!["rgb"]!.ToString(),
+                    IsTrans = color!["is_trans"]!.ToString().Equals("true")
+                };
+                
+                colors.Add(c);
+            }
+            
+            colorContext.AddRange(colors);
+            
+            return context.SaveChanges() > 0;
+        }
+        
+        return false;
+    }
 }

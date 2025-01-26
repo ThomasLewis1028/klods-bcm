@@ -59,6 +59,14 @@ public class RebrickableApi
         return await SendQuery(url);
     }
 
+    public async Task<JsonObject?> GetColors()
+    {
+        _logger.LogInformation("Getting colors");
+        string url = $"{BaseUrl}colors?page_size=1000000&";
+        
+        return await SendQuery(url);
+    }
+
     private async Task<JsonObject?> SendQuery(string url)
     {
         _logger.LogTrace("API Call {url}", url);

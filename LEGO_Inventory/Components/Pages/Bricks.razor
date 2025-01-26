@@ -16,6 +16,7 @@
     <MudItem xs="12">
         @* <MudTextField xs="6" T="String" Label="Brick ID" Required="true" @bind-Value="_brickId"></MudTextField> *@
         @* <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportBrick())">Import Brick</MudButton> *@
+        <MudButton OnClick="() => ImportColors()">Import Colors</MudButton>
     </MudItem>
 
     <MudItem xs="12">
@@ -276,4 +277,12 @@
         return DialogService.ShowAsync<ColorPopup>("Color Popup", parameters, colorPopup);
     }
 
+    private void ImportColors()
+    {
+        ImportData importData = new ImportData();
+
+        importData.ImportColors();
+
+        OnInitializedAsync();
+    }
 }

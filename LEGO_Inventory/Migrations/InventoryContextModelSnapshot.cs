@@ -52,6 +52,27 @@ namespace LEGO_Inventory.Migrations
                     b.ToTable("Bricks");
                 });
 
+            modelBuilder.Entity("LEGO_Inventory.Color", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hex")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsTrans")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Colors");
+                });
+
             modelBuilder.Entity("LEGO_Inventory.Minifig", b =>
                 {
                     b.Property<string>("MinifigId")

@@ -1,10 +1,21 @@
-﻿<MudDialog>
+﻿@using Color = MudBlazor.Color
+<MudDialog>
     <TitleContent>
         Deleting Set @_id - @_name
     </TitleContent>
     <DialogContent>
-        <MudText>Would you like to return the stock to inventory?</MudText>
-        <MudSwitch @bind-Value="MoveStock" Label="Move Stock?" Color="Color.Success" UncheckedColor="Color.Error"/>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudText>Would you like to return the stock to inventory?</MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudText>No</MudText>
+                <MudSpacer/>
+                <MudSwitch @bind-Value="MoveStock" Color="Color.Success" UncheckedColor="Color.Error"/>
+                <MudSpacer/>
+                <MudText>Yes</MudText>
+            </MudItem>
+        </MudGrid>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Close</MudButton>
