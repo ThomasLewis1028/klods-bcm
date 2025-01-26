@@ -291,7 +291,7 @@ public class ImportData
                             SetId = setId,
                             PartNum = minifigBrick.BrickID,
                             ColorId = minifigBrick!.ColorId,
-                            Count = quantity,
+                            Count = quantity * minifigBrick.Quantity,
                         };
 
                         setBricks.Add(setBrick);
