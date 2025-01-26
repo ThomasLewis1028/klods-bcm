@@ -1,0 +1,6 @@
+*.sln
+obj
+bin
+packages
+.idea
+.env

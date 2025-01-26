@@ -1,0 +1,36 @@
+version: '3'
+
+services:
+  postgres:
+    image: 'postgres:latest'
+    ports:
+      - 5432:5432
+    env_file:
+      - ../.env
+    networks:
+      - postgres-network
+    volumes:
+      - data-volume:/var/lib/postgresql/data/:rw
+      # - data-volume:/docker-entrypoint-initdb.d/init.sql
+  
+  pgwebadmin:
+    image: dpage/pgadmin4
+    user: "${UID}:${GID}"
+    ports:
+      - 8888:80
+    env_file:
+      - ../.env
+    depends_on:
+      - postgres
+    networks:
+      - postgres-network
+    volumes:
+      - data-volume:/var/lib/pgadmin/:rw
+volumes:
+  data-volume:
+
+networks: 
+  postgres-network:
+    driver: bridge
+
+  

@@ -5,8 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    environment:
-      LEGO_API_KEY: ${LEGO_API_KEY}
+    env_file:
+      - ../.env
     ports:
       - "8080:8080"
     network_mode: "host"

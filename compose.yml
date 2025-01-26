@@ -1,0 +1,53 @@
+version: '3'
+
+services:
+  postgres:
+    image: 'postgres:latest'
+    ports:
+      - 5432:5432
+    env_file:
+      - .env
+    networks:
+      - lego-network
+    volumes:
+      - data-volume:/var/lib/postgresql/data/:rw
+      # - data-volume:/docker-entrypoint-initdb.d/init.sql
+  
+  pgwebadmin:
+    image: dpage/pgadmin4
+    user: "${UID}:${GID}"
+    ports:
+      - 8888:80
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - lego-network
+    volumes:
+      - data-volume:/var/lib/pgadmin/:rw
+
+  lego_inventory:
+    image: lego_inventory
+    build:
+      context: .
+      dockerfile: LEGO_Inventory/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - lego-network
+    volumes:
+      - data-volume:/home/app/.local/share:rw
+
+volumes:
+  data-volume:
+
+networks: 
+  lego-network:
+    driver: bridge
+
+  
