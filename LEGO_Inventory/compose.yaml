@@ -1,16 +1,60 @@
 ﻿version: "3"
 services:
+  # https://github.com/felipewom/docker-compose-postgres/blob/main/README.md
+  postgres:
+    image: 'postgres:latest'
+    ports:
+      - 5432:5432
+    env_file:
+      - .env
+    networks:
+      - lego-network
+    volumes:
+      - lego-db-volume:/var/lib/postgresql/data/:rw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
+  
+  pgwebadmin:
+    image: dpage/pgadmin4
+    user: "${UID}:${GID}"
+    ports:
+      - 8888:80
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+    networks:
+      - lego-network
+    volumes:
+      - lego-db-volume:/var/lib/pgadmin/:rw
+
   lego_inventory:
     image: lego_inventory
     build:
       context: .
       dockerfile: Dockerfile
     env_file:
-      - ../.env
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
     ports:
       - "8080:8080"
     network_mode: "host"
     volumes:
-      - data-volume:/home/app/.local/share:rw
+      - lego-volume:/home/app/.local/share:rw
+
 volumes:
-  data-volume:
+  lego-volume:
+  lego-db-volume:
+
+networks: 
+  lego-network:
+    driver: bridge
