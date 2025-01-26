@@ -24,7 +24,11 @@
                      CommittedItemChanges="@CommittedItemChanges" QuickFilter="BrickFilterFunc"
                      ReadOnly="false">
             <ToolBarContent>
-                <MudText Typo="Typo.h6">Bricks</MudText>
+                <MudText Typo="Typo.h6">Total Bricks: @_brickInfos.Count</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.h6">In Stock: @_brickInfos.Sum(bi => bi.Brick.Count)</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.h6">Total Needed: @_brickInfos.Sum(bi => bi.SetBricks.Sum(sb => sb.Count))</MudText>
                 <MudSpacer/>
                 <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
                               Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"

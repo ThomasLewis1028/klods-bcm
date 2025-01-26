@@ -1,6 +1,7 @@
 ﻿@page "/sets"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
+@inject IJSRuntime JSRuntime
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @rendermode InteractiveServer
@@ -34,7 +35,8 @@
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
-                            <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.SetImg" Height="50"
+                            <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.SetImg"
+                                      Height="50"
                                       @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>
                         </MudStack>
                     </CellTemplate>
@@ -67,13 +69,15 @@
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
-                @* <TemplateColumn Title="Manual" Editable="false"> *@
-                @*     <CellTemplate> *@
-                @*         <MudStack Row> *@
-                @*             <MudImage class="cursor-pointer rounded-3" Elevation="2" Height="50" Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png" href="@context.Item.ManualUrl"/> *@
-                @*         </MudStack> *@
-                @*     </CellTemplate> *@
-                @* </TemplateColumn> *@
+                <TemplateColumn Title="Manual" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudImage @onclick="() => OpenBuildingInstructions(context.Item.ManualUrl)"
+                                      class="cursor-pointer rounded-2" Elevation="2" Height="30"
+                                      Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
             </Columns>
             <PagerContent>
                 <MudDataGridPager T="Set"/>
@@ -186,6 +190,11 @@
     //     StateHasChanged();
     // }
 
+    protected void OpenBuildingInstructions(string url)
+    {
+        JSRuntime.InvokeVoidAsync("open", url, "_blank");
+    }
+
     private async Task DeleteSet(string setId, string setName, string setImgUrl)
     {
         var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
@@ -196,11 +205,11 @@
             { x => x._name, setName },
             { x => x._imgUrl, setImgUrl }
         };
- 
+
         var dialog = DialogService.Show<DeletePopup>("Delete Popup", parameters, deletePopup);
 
         var result = await dialog.Result;
-        
+
         if (result.Canceled)
             OnInitializedAsync();
     }
