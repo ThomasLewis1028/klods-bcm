@@ -4,7 +4,7 @@ using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using MudBlazor.Services;
-
+var POSTGRES_HOST = Environment.GetEnvironmentVariable("POSTGRES_HOST");
 var POSTGRES_USER = Environment.GetEnvironmentVariable("POSTGRES_USER");
 var POSTGRES_PASSWORD = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
 var POSTGRES_DB = Environment.GetEnvironmentVariable("POSTGRES_DB");
@@ -16,7 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<InventoryContext>();
 var dbContextFactory = new PooledDbContextFactory<InventoryContext>(
     new DbContextOptionsBuilder<InventoryContext>()
-        .UseNpgsql($"Host=postgres;Database={POSTGRES_DB};Username={POSTGRES_USER};Password={POSTGRES_PASSWORD}")
+        .UseNpgsql($"Host={POSTGRES_HOST};Database={POSTGRES_DB};Username={POSTGRES_USER};Password={POSTGRES_PASSWORD}")
         .Options);
 
 

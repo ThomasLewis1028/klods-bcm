@@ -78,7 +78,5 @@ public class InventoryContext : DbContext
             .HasForeignKey(s => s.MinifigID)
             .IsRequired();
     }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder options) =>
-        options.UseNpgsql("<connection string>");
+    
 }
