@@ -12,7 +12,11 @@ services:
     volumes:
       - lego-db-volume:/var/lib/postgresql/data/:rw
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
+      test:
+        [
+          "CMD-SHELL",                         # Use the shell form to execute the health check command
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" # Check if PostgreSQL is ready
+        ]
       interval: 30s
       timeout: 60s
       retries: 5
@@ -47,7 +51,8 @@ services:
         restart: true
     ports:
       - "8080:8080"
-    network_mode: "host"
+    networks:
+      - lego-network
     volumes:
       - lego-volume:/home/app/.local/share:rw
 

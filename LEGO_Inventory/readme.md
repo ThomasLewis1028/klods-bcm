@@ -15,3 +15,6 @@ prereq: dotnet tool install --global dotnet-ef
 1. Change current directory to the `LEGO_Inventory` project folder.
 2. Run `dotnet ef migrations add <migrationName>` where `<migrationName>` is the name of the current migration.
 3. Run `dotnet ef database update`.
+
+# Remove datadase Migration
+1. Run `ef migrations remove <migrationName>`

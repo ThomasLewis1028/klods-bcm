@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace LEGO_Inventory.Database;
 
@@ -11,15 +12,11 @@ public class InventoryContext : DbContext
     public DbSet<SetMinifig> SetMinifigs { get; set; }
     public DbSet<MinifigBrick> MinifigBricks { get; set; }
 
-    public string DbConnection { get; }
-
-
     public InventoryContext()
     {
-
-        DbConnection = "";
+        
     }
-
+    
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -77,6 +74,18 @@ public class InventoryContext : DbContext
             .WithMany()
             .HasForeignKey(s => s.MinifigID)
             .IsRequired();
+    }
+    
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        var POSTGRES_HOST = Environment.GetEnvironmentVariable("POSTGRES_HOST");
+        var POSTGRES_USER = Environment.GetEnvironmentVariable("POSTGRES_USER");
+        var POSTGRES_PASSWORD = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
+        var POSTGRES_DB = Environment.GetEnvironmentVariable("POSTGRES_DB");
+        var connectionString = $"Host={POSTGRES_HOST};Database={POSTGRES_DB};Username={POSTGRES_USER};Password={POSTGRES_PASSWORD}";
+        optionsBuilder.UseNpgsql(connectionString);
+        optionsBuilder.ConfigureWarnings(warnings =>
+            warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
     }
     
 }
