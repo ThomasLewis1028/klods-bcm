@@ -80,7 +80,7 @@
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
-                <PropertyColumn Property="x => x.Brick.PartNum" Title="Brick Id" Editable="false"/>
+                <PropertyColumn Property="x => x.Brick.PartNum" Title="Id" Editable="false"/>
                 <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
                 <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
                     <CellTemplate>
@@ -111,7 +111,7 @@
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Brick.Count" Title="Stock"/>
                 <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count)" Title="Needed" Editable="false"/>
-                <PropertyColumn Property="x => x.Sets.Count" Title="In Sets" Editable="false"/>
+                <PropertyColumn Property="x => x.Sets.Count" Title="Sets" Editable="false"/>
                 <TemplateColumn Title="Delete" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
@@ -126,6 +126,7 @@
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>
+            
             <ChildRowContent Context="brickContext">
                 <MudCard>
                     <MudDataGrid T="Set" Items="GetSets(brickContext.Item.Sets).OrderBy(s => s.SetId)">
