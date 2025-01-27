@@ -5,6 +5,7 @@
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @using Color = MudBlazor.Color
+@using BrickColor = Color
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
 
@@ -13,10 +14,43 @@
 <h1>Bricks</h1>
 
 <MudGrid>
-    <MudItem xs="12">
-        @* <MudTextField xs="6" T="String" Label="Brick ID" Required="true" @bind-Value="_brickId"></MudTextField> *@
-        @* <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportBrick())">Import Brick</MudButton> *@
-        <MudButton OnClick="() => ImportColors()">Import Colors</MudButton>
+    <MudItem xs="4">
+        <MudTextField xs="6" T="String" Label="Brick ID" Required="true" @bind-Value="_brickId"></MudTextField>
+    </MudItem>
+    <MudItem xs="4">
+        <MudSelect xs="6" T="BrickColor"
+                   Variant="Variant.Outlined"
+                   Dense="true"
+                   ValueChanged="ChangeColor"
+                   >
+            @foreach (var color in _colors.OrderBy(c => c.Name))
+            {
+                <MudSelectItem Value="@color">
+                    @if (IsDark(color.Hex))
+                    {
+                        <MudChip
+                            T="string"
+                            class="mud-elevation-2"
+                            Style="@($"background-color: {"#" + color.Hex}; width: -moz-available;")">@color.Name - @color.Id</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip
+                            T="string"
+                            class="mud-elevation-2"
+                            Style="@($"background-color: {"#" + color.Hex}; color: #202020; width: -moz-available;")">@color.Name - @color.Id</MudChip>
+                    }
+                </MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="2">
+        <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportBrick())">
+            Import Brick
+        </MudButton>
+    </MudItem>
+    <MudItem xs="2">
+        <MudButton Variant="Variant.Filled" OnClick="() => ImportColors()" Color="Color.Info">Import ALL Colors</MudButton>
     </MudItem>
 
     <MudItem xs="12">
@@ -144,7 +178,9 @@
 
 @code {
     private string? _brickId;
+    private BrickColor _color { get; set; }
     private List<BrickInfo>? _brickInfos = [];
+    private List<BrickColor>? _colors = [];
     private string searchString;
     MudForm form;
 
@@ -155,6 +191,9 @@
         using (var context = new InventoryContext())
         {
             var brickContext = context.Set<Brick>();
+            var colorContext = context.Set<BrickColor>();
+
+            _colors = colorContext.ToList();
 
             foreach (Brick brick in brickContext.ToList())
             {
@@ -277,6 +316,21 @@
         return DialogService.ShowAsync<ColorPopup>("Color Popup", parameters, colorPopup);
     }
 
+    private void ChangeColor(BrickColor color)
+    {
+        _color = color;
+    }
+
+    private void ImportBrick()
+    {
+        ImportData importData = new ImportData();
+        
+        if(_brickId != null)
+            importData.ImportBrick(_brickId, _color.Id);
+
+        OnInitializedAsync();
+    }
+
     private void ImportColors()
     {
         ImportData importData = new ImportData();
@@ -285,4 +339,5 @@
 
         OnInitializedAsync();
     }
+
 }

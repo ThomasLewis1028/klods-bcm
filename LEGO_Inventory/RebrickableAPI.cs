@@ -34,6 +34,23 @@ public class RebrickableApi
 
         return await SendQuery(url);
     }
+    
+    
+    public async Task<JsonObject?> GetColorInfo(string colorId)
+    {
+        _logger.LogInformation("Getting color info for color {colorId}", colorId);
+        string url = $"{BaseUrl}colors/{colorId}/?";
+
+        return await SendQuery(url);
+    }
+    
+    public async Task<JsonObject?> GetPartColorInfo(string partNum, string colorId)
+    {
+        _logger.LogInformation("Getting part info for {partNum}", partNum);
+        string url = $"{BaseUrl}parts/{partNum}/colors/{colorId}?";
+
+        return await SendQuery(url);
+    }
 
     public async Task<JsonObject?> GetSetMinifigs(string setId)
     {
