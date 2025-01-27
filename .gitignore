@@ -4,3 +4,4 @@ bin
 packages
 .idea
 .env
+.DS_Store
