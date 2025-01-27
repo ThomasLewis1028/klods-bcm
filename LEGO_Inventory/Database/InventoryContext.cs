@@ -82,7 +82,7 @@ public class InventoryContext : DbContext
         var POSTGRES_USER = Environment.GetEnvironmentVariable("POSTGRES_USER");
         var POSTGRES_PASSWORD = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
         var POSTGRES_DB = Environment.GetEnvironmentVariable("POSTGRES_DB");
-        var connectionString = $"Host={POSTGRES_HOST};Database={POSTGRES_DB};Username={POSTGRES_USER};Password={POSTGRES_PASSWORD}";
+        var connectionString = $"Host={POSTGRES_HOST};Database={POSTGRES_DB};Username={POSTGRES_USER};Password={POSTGRES_PASSWORD};Pooling=true;MaxPoolSize=100;";
         optionsBuilder.UseNpgsql(connectionString);
         optionsBuilder.ConfigureWarnings(warnings =>
             warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
