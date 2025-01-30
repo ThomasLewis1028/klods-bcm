@@ -11,6 +11,7 @@ public class InventoryContext : DbContext
     public DbSet<Minifig> Minifigs { get; set; }
     public DbSet<SetMinifig> SetMinifigs { get; set; }
     public DbSet<MinifigBrick> MinifigBricks { get; set; }
+    public DbSet<Color> Colors { get; set; }
 
     public InventoryContext()
     {
@@ -74,6 +75,9 @@ public class InventoryContext : DbContext
             .WithMany()
             .HasForeignKey(s => s.MinifigID)
             .IsRequired();
+        
+        // COLOR
+        modelBuilder.Entity<Color>().HasKey(e => new { e.Id });
     }
     
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

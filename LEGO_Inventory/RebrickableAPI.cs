@@ -34,6 +34,23 @@ public class RebrickableApi
 
         return await SendQuery(url);
     }
+    
+    
+    public async Task<JsonObject?> GetColorInfo(string colorId)
+    {
+        _logger.LogInformation("Getting color info for color {colorId}", colorId);
+        string url = $"{BaseUrl}colors/{colorId}/?";
+
+        return await SendQuery(url);
+    }
+    
+    public async Task<JsonObject?> GetPartColorInfo(string partNum, string colorId)
+    {
+        _logger.LogInformation("Getting part info for {partNum}", partNum);
+        string url = $"{BaseUrl}parts/{partNum}/colors/{colorId}?";
+
+        return await SendQuery(url);
+    }
 
     public async Task<JsonObject?> GetSetMinifigs(string setId)
     {
@@ -56,6 +73,14 @@ public class RebrickableApi
         _logger.LogInformation("Getting minifig Parts for {itemNum}", itemNum);
         string url = $"{BaseUrl}minifigs/{itemNum}/parts/?page_size=1000000&inc_minifig_parts=1&";
 
+        return await SendQuery(url);
+    }
+
+    public async Task<JsonObject?> GetColors()
+    {
+        _logger.LogInformation("Getting colors");
+        string url = $"{BaseUrl}colors?page_size=1000000&";
+        
         return await SendQuery(url);
     }
 

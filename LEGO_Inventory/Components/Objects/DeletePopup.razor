@@ -1,15 +1,28 @@
-﻿<MudDialog>
+﻿@using Color = MudBlazor.Color
+<MudDialog>
     <TitleContent>
         Deleting Set @_id - @_name
     </TitleContent>
     <DialogContent>
-        <MudText>Would you like to return the stock to inventory?</MudText>
-        <MudSwitch @bind-Value="MoveStock" Label="Move Stock?" Color="Color.Success" UncheckedColor="Color.Error"/>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                <MudText>Would you like to return the stock to inventory?</MudText>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12">
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                    <MudText>No</MudText>
+                    <MudSwitch @bind-Value="MoveStock" Color="Color.Success" UncheckedColor="Color.Error"/>
+                    <MudText>Yes</MudText>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Close</MudButton>
+        <MudButton OnClick="Cancel" Variant="Variant.Filled">Close</MudButton>
         <MudSpacer></MudSpacer>
-        <MudButton OnClick="() => DeleteSet(_id)" Color="Color.Error">DELETE</MudButton>
+        <MudButton OnClick="() => DeleteSet(_id)" Color="Color.Error" Variant="Variant.Filled">DELETE</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -25,13 +38,13 @@
     public bool MoveStock { get; set; } = false;
 
     private void Cancel() => MudDialog.Cancel();
-    
+
     private void DeleteSet(string id)
     {
         DeleteData deleteData = new DeleteData();
-        
+
         deleteData.DeleteSetInfo(id, MoveStock);
-        
+
         Cancel();
         OnInitializedAsync();
     }

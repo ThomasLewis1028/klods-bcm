@@ -1,0 +1,28 @@
+﻿@using Color = MudBlazor.Color
+<MudDialog>
+    <TitleContent>
+        Error
+    </TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                <MudText>@_errorMessage</MudText>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudSpacer/>
+        <MudButton OnClick="Cancel" Variant="Variant.Filled">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public string _errorMessage { get; set; }
+
+    private void Cancel() => MudDialog.Cancel();
+
+}

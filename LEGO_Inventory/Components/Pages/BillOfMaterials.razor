@@ -5,6 +5,7 @@
 @inject NavigationManager navigationManager
 @inject IJSRuntime JSRuntime
 @using System.Drawing
+@using System.Net
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @using Color = MudBlazor.Color
@@ -401,11 +402,43 @@
         return DialogService.ShowAsync<ColorPopup>("Color Popup", parameters, colorPopup);
     }
 
+    private Task OpenErrorPopup(string errorMessage)
+    {
+        var errorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ErrorPopup>
+        {
+            { x => x._errorMessage, errorMessage }
+        };
+
+        return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
+    }
+
     void UpdateBrick(SetBrickInfo setBrickInfo)
     {
         UpdateData updateData = new UpdateData();
+
+        if (setBrickInfo.SetBrick.Stock < 0 || setBrickInfo.Brick.Count < 0)
+        {
+            if (setBrickInfo.SetBrick.Stock < 0)
+            {
+                setBrickInfo.SetBrick.Stock = 0;
+                OpenErrorPopup("Cannot set stock to less than 0");
+            }
+            
+            if (setBrickInfo.Brick.Count < 0)
+            {
+                setBrickInfo.Brick.Count = 0;
+                OpenErrorPopup("Cannot set inventory to less than 0");
+            }
+            
+            return;
+        }
+        
         updateData.UpdateBrick(setBrickInfo.Brick);
         updateData.UpdateSetBrick(setBrickInfo.SetBrick);
+
+        OnInitializedAsync();
     }
 
     void UpdateMinifig(SetMinifigInfo setMinifigInfo)
@@ -413,12 +446,20 @@
         UpdateData updateData = new UpdateData();
         updateData.UpdateMinifig(setMinifigInfo.Minifig);
         updateData.UpdateSetMinifig(setMinifigInfo.SetMinifig);
+        
+        OnInitializedAsync();
     }
 
     void MoveBrickStock(Direction dir, SetBrickInfo setBrickInfo)
     {
         if (dir == Direction.left)
         {
+            if(setBrickInfo.Brick.Count < setBrickInfo.MoveCount)
+            {
+                OpenErrorPopup("Lacking set stock to move inventory");
+                return;
+            }
+            
             setBrickInfo.Brick.Count -= setBrickInfo.MoveCount;
             setBrickInfo.SetBrick.Stock += setBrickInfo.MoveCount;
 
@@ -426,6 +467,12 @@
         }
         else if (dir == Direction.right)
         {
+            if(setBrickInfo.SetBrick.Stock < setBrickInfo.MoveCount)
+            {
+                OpenErrorPopup("Lacking inventory to move set stock");
+                return;
+            }
+            
             setBrickInfo.Brick.Count += setBrickInfo.MoveCount;
             setBrickInfo.SetBrick.Stock -= setBrickInfo.MoveCount;
 

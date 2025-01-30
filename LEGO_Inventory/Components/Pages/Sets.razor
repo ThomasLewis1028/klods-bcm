@@ -4,6 +4,7 @@
 @inject IJSRuntime JSRuntime
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
+@using Color = MudBlazor.Color
 @rendermode InteractiveServer
 
 <PageTitle>Sets</PageTitle>
@@ -41,9 +42,9 @@
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
-                <PropertyColumn Property="x => x.SetId" Title="Set Id" Editable="false"/>
+                <PropertyColumn Property="x => x.SetId" Title="Id" Editable="false"/>
                 <PropertyColumn Property="x => x.Name" Title="Name" Editable="false"/>
-                <PropertyColumn Property="x => x.ReleaseYear" Title="Release Year" Editable="false"/>
+                <PropertyColumn Property="x => x.ReleaseYear" Title="Year" Editable="false"/>
                 <PropertyColumn Property="x => x.OwnCount" Title="Owned"/>
                 <PropertyColumn Property="x => x.BuildCount" Title="Built"/>
                 <PropertyColumn Property="x => x.NumBricks" Title="Pieces" Editable="false"/>
@@ -156,7 +157,33 @@
     void CommittedItemChanges(Set set)
     {
         UpdateData updateData = new UpdateData();
+        
+        
+        if (set.OwnCount < 0)
+        {
+            set.OwnCount = 0;
+            OpenErrorPopup("Cannot set owned count to less than 0");
+        }
+        
+        if (set.BuildCount < 0)
+        {
+            set.BuildCount = 0;
+            OpenErrorPopup("Cannot set build count to less than 0");
+        }
+        
         updateData.UpdateSet(set);
+    }
+    
+    private Task OpenErrorPopup(string errorMessage)
+    {
+        var errorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ErrorPopup>
+        {
+            { x => x._errorMessage, errorMessage }
+        };
+
+        return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
     }
 
     // public class SetData : INotifyPropertyChanged

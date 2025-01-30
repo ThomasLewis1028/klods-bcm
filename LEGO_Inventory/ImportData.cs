@@ -277,12 +277,14 @@ public class ImportData
                 foreach (var minifigBrick in minifigBricks)
                 {
                     if (setBrickContext.Any(sb =>
-                            sb.PartNum == minifigBrick.BrickID && sb.ColorId == minifigBrick.ColorId &&
-                            sb.SetId == setId))
+                            sb.PartNum == minifigBrick.BrickID 
+                            && sb.ColorId == minifigBrick.ColorId 
+                            && sb.SetId == setId))
                     {
                         setBrickContext.First(sb =>
-                            sb.PartNum == minifigBrick.BrickID && sb.ColorId == minifigBrick.ColorId &&
-                            sb.SetId == setId).Count += quantity * minifigBrick.Quantity;
+                            sb.PartNum == minifigBrick.BrickID 
+                            && sb.ColorId == minifigBrick.ColorId 
+                            && sb.SetId == setId).Count += quantity * minifigBrick.Quantity;
                     }
                     else
                     {
@@ -366,6 +368,65 @@ public class ImportData
         return false;
     }
 
+    public bool ImportBrick(string brickId, string colorId)
+    {
+        _logger.LogInformation($"Importing brick {brickId} with color {colorId}");
+
+        try
+        {
+            using (var context = new InventoryContext())
+            {
+                var brickContext = context.Set<Brick>();
+
+                Brick brick;
+
+                if (brickContext.Any(b => b.PartNum == brickId && b.ColorId == colorId))
+                    throw new Exception("Brick already imported");
+                
+                RebrickableApi api = new RebrickableApi();
+
+                JsonObject part = api.GetPartInfo(brickId).Result.AsObject();
+                var partNum = part!["part_num"]!.ToString();
+                var name = part!["name"]!.ToString();
+                var partUrl = part["part_url"]?.ToString() ?? null;
+                
+                JsonObject color = api.GetColorInfo(colorId).Result;
+                var colorName = color!["name"]?.ToString() ?? null;
+                var rgb = color["rgb"]?.ToString() ?? null;
+                var isTrans = color["is_trans"]!.ToString().Equals("true");
+                var count = 0;
+                
+                JsonObject partColorInfo = api.GetPartColorInfo(brickId, colorId).Result.AsObject();
+                var partImg = partColorInfo!["part_img_url"]?.ToString() ?? null;
+
+                brick = new Brick
+                {
+                    PartNum = partNum,
+                    Name = name,
+                    PartURL = partUrl,
+                    PartImg = partImg,
+                    Count = count,
+                    ColorId = colorId ?? null,
+                    ColorName = colorName,
+                    IsTrans = isTrans,
+                    HexColor = rgb
+                };
+
+                brickContext.Add(brick);
+                context.SaveChanges();
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError($"Failed to import brick {brickId} with color {colorId}");
+            _logger.LogError($"Exception: {e}");
+            
+            return false;
+        }
+
+        return false;
+    }
+
     public Brick ImportBrick(JsonNode part)
     {
         _logger.LogInformation($"Importing set parts for {part!["part"]!["part_num"]}");
@@ -409,5 +470,41 @@ public class ImportData
         }
 
         return null;
+    }
+
+    public bool ImportColors()
+    {
+        _logger.LogInformation($"Importing colors");
+        RebrickableApi api = new RebrickableApi();
+
+        using (var context = new InventoryContext())
+        {
+            var colorContext = context.Set<Color>();
+            JsonObject? jsonObject = api.GetColors().Result;
+            
+            List<Color> colors = new List<Color>();
+
+            foreach (var color in jsonObject!["results"]!.AsArray())
+            {
+                if (colorContext.Any(c => c.Id == color!["id"]!.ToString()))
+                    continue;
+
+                Color c = new Color
+                {
+                    Id = color!["id"]!.ToString(),
+                    Name = color!["name"]!.ToString(),
+                    Hex = color!["rgb"]!.ToString(),
+                    IsTrans = color!["is_trans"]!.ToString().Equals("true")
+                };
+                
+                colors.Add(c);
+            }
+            
+            colorContext.AddRange(colors);
+            
+            return context.SaveChanges() > 0;
+        }
+        
+        return false;
     }
 }
