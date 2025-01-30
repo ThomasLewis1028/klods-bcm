@@ -2,6 +2,7 @@ using LEGO_Inventory;
 using LEGO_Inventory.Components;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);

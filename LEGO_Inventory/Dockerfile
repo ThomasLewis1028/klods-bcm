@@ -12,16 +12,18 @@ WORKDIR /src
 COPY ["LEGO_Inventory.csproj", "./"]
 RUN dotnet restore "LEGO_Inventory.csproj"
 COPY . .
-WORKDIR "/src/"
 RUN dotnet build "LEGO_Inventory.csproj" -c $BUILD_CONFIGURATION -o /app/build
+
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "LEGO_Inventory.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+WORKDIR /app
+RUN cp -r /src/Migrations .
 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-COPY Migrations/ Migrations/.
+COPY --from=publish /app/Migrations .
 
 ENTRYPOINT ["dotnet", "LEGO_Inventory.dll"]

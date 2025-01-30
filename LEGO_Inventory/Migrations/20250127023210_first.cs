@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace LEGO_Inventory.Migrations
 {
     /// <inheritdoc />
-    public partial class First : Migration
+    public partial class first : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -15,15 +15,15 @@ namespace LEGO_Inventory.Migrations
                 name: "Bricks",
                 columns: table => new
                 {
-                    PartNum = table.Column<string>(type: "TEXT", nullable: false),
-                    ColorId = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    PartURL = table.Column<string>(type: "TEXT", nullable: true),
-                    PartImg = table.Column<string>(type: "TEXT", nullable: true),
-                    Count = table.Column<int>(type: "INTEGER", nullable: false),
-                    ColorName = table.Column<string>(type: "TEXT", nullable: true),
-                    HexColor = table.Column<string>(type: "TEXT", nullable: true),
-                    IsTrans = table.Column<bool>(type: "INTEGER", nullable: false)
+                    PartNum = table.Column<string>(type: "text", nullable: false),
+                    ColorId = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    PartURL = table.Column<string>(type: "text", nullable: true),
+                    PartImg = table.Column<string>(type: "text", nullable: true),
+                    Count = table.Column<int>(type: "integer", nullable: false),
+                    ColorName = table.Column<string>(type: "text", nullable: true),
+                    HexColor = table.Column<string>(type: "text", nullable: true),
+                    IsTrans = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -34,11 +34,11 @@ namespace LEGO_Inventory.Migrations
                 name: "Minifigs",
                 columns: table => new
                 {
-                    MinifigId = table.Column<string>(type: "TEXT", nullable: false),
-                    MinifigName = table.Column<string>(type: "TEXT", nullable: false),
-                    MinifigImgUrl = table.Column<string>(type: "TEXT", nullable: true),
-                    MinifigUrl = table.Column<string>(type: "TEXT", nullable: false),
-                    Stock = table.Column<int>(type: "INTEGER", nullable: false)
+                    MinifigId = table.Column<string>(type: "text", nullable: false),
+                    MinifigName = table.Column<string>(type: "text", nullable: false),
+                    MinifigImgUrl = table.Column<string>(type: "text", nullable: true),
+                    MinifigUrl = table.Column<string>(type: "text", nullable: false),
+                    Stock = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -49,16 +49,16 @@ namespace LEGO_Inventory.Migrations
                 name: "Sets",
                 columns: table => new
                 {
-                    SetId = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    SetURL = table.Column<string>(type: "TEXT", nullable: true),
-                    SetImg = table.Column<string>(type: "TEXT", nullable: true),
-                    NumBricks = table.Column<int>(type: "INTEGER", nullable: false),
-                    ReleaseYear = table.Column<int>(type: "INTEGER", nullable: false),
-                    DateModified = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    OwnCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    BuildCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    ManualUrl = table.Column<string>(type: "TEXT", nullable: false)
+                    SetId = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    SetURL = table.Column<string>(type: "text", nullable: true),
+                    SetImg = table.Column<string>(type: "text", nullable: true),
+                    NumBricks = table.Column<int>(type: "integer", nullable: false),
+                    ReleaseYear = table.Column<int>(type: "integer", nullable: false),
+                    DateModified = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    OwnCount = table.Column<int>(type: "integer", nullable: false),
+                    BuildCount = table.Column<int>(type: "integer", nullable: false),
+                    ManualUrl = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -69,10 +69,10 @@ namespace LEGO_Inventory.Migrations
                 name: "MinifigBricks",
                 columns: table => new
                 {
-                    MinifigID = table.Column<string>(type: "TEXT", nullable: false),
-                    BrickID = table.Column<string>(type: "TEXT", nullable: false),
-                    ColorId = table.Column<string>(type: "TEXT", nullable: false),
-                    Quantity = table.Column<int>(type: "INTEGER", nullable: false)
+                    MinifigID = table.Column<string>(type: "text", nullable: false),
+                    BrickID = table.Column<string>(type: "text", nullable: false),
+                    ColorId = table.Column<string>(type: "text", nullable: false),
+                    Quantity = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -95,12 +95,12 @@ namespace LEGO_Inventory.Migrations
                 name: "SetBricks",
                 columns: table => new
                 {
-                    PartNum = table.Column<string>(type: "TEXT", nullable: false),
-                    ColorId = table.Column<string>(type: "TEXT", nullable: false),
-                    SetId = table.Column<string>(type: "TEXT", nullable: false),
-                    Count = table.Column<int>(type: "INTEGER", nullable: false),
-                    SpareCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    Stock = table.Column<int>(type: "INTEGER", nullable: false)
+                    PartNum = table.Column<string>(type: "text", nullable: false),
+                    ColorId = table.Column<string>(type: "text", nullable: false),
+                    SetId = table.Column<string>(type: "text", nullable: false),
+                    Count = table.Column<int>(type: "integer", nullable: false),
+                    SpareCount = table.Column<int>(type: "integer", nullable: false),
+                    Stock = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -123,10 +123,10 @@ namespace LEGO_Inventory.Migrations
                 name: "SetMinifig",
                 columns: table => new
                 {
-                    MinifigId = table.Column<string>(type: "TEXT", nullable: false),
-                    SetId = table.Column<string>(type: "TEXT", nullable: false),
-                    Count = table.Column<int>(type: "INTEGER", nullable: false),
-                    Stock = table.Column<int>(type: "INTEGER", nullable: false)
+                    MinifigId = table.Column<string>(type: "text", nullable: false),
+                    SetId = table.Column<string>(type: "text", nullable: false),
+                    Count = table.Column<int>(type: "integer", nullable: false),
+                    Stock = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {

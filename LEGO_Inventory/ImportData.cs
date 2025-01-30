@@ -24,9 +24,9 @@ public class ImportData
                 
                 _logger.LogInformation($"DONE Importing All Data for set {setId}");
             }
-            catch
+            catch (Exception ex)
             {
-                _logger.LogError($"Failed to import All Data for set {setId}");
+                _logger.LogError($"Failed to import All Data for set {setId}" + Environment.NewLine + ex);
                 return false;
             }
         }
@@ -49,12 +49,12 @@ public class ImportData
             {
                 var set = setContext.First(s => s.SetId == setId);
 
-                if (set.DateModified >= DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()))
+                if (set.DateModified >= DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()).ToUniversalTime())
                 {
                     set.Name = setInfo!["name"]!.ToString();
                     set.SetImg = setInfo!["set_img_url"]!.ToString();
                     set.SetURL = setInfo!["set_url"]!.ToString();
-                    set.DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString());
+                    set.DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()).ToUniversalTime();
                     set.NumBricks = int.Parse(setInfo!["num_parts"]!.ToString());
                     set.ReleaseYear = int.Parse(setInfo!["year"]!.ToString());
                     set.ManualUrl =
@@ -69,7 +69,7 @@ public class ImportData
                     Name = setInfo!["name"]!.ToString(),
                     SetURL = setInfo["set_url"]?.ToString(),
                     SetImg = setInfo!["set_img_url"]?.ToString(),
-                    DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()),
+                    DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()).ToUniversalTime(),
                     NumBricks = int.Parse(setInfo!["num_parts"]!.ToString()),
                     ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
                     ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId.Split('-').First()}",

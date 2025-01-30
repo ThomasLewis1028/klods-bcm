@@ -309,7 +309,8 @@
 
             if (_setId != null)
             {
-                foreach (var setBrick in setBrickContext.Where(sb => sb.SetId == _setId))
+                var setBricks = setBrickContext.Where(sb => sb.SetId == _setId).ToList();
+                foreach (var setBrick in setBricks)
                 {
                     _setBrickInfo.Add(new SetBrickInfo
                     {
@@ -318,7 +319,8 @@
                     });
                 }
 
-                foreach (var setMinifig in setMinifigContext.Where(sm => sm.SetId == _setId))
+                var setMinifigs = setMinifigContext.Where(sm => sm.SetId == _setId).ToList();
+                foreach (var setMinifig in setMinifigs)
                 {
                     _setMinifigInfo.Add(new SetMinifigInfo
                     {
