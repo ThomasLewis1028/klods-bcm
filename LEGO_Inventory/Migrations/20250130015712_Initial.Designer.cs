@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LEGO_Inventory.Migrations
 {
     [DbContext(typeof(InventoryContext))]
-    [Migration("20250127023210_first")]
-    partial class first
+    [Migration("20250130015712_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -58,6 +58,27 @@ namespace LEGO_Inventory.Migrations
                     b.HasKey("PartNum", "ColorId");
 
                     b.ToTable("Bricks");
+                });
+
+            modelBuilder.Entity("LEGO_Inventory.Color", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Hex")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsTrans")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Colors");
                 });
 
             modelBuilder.Entity("LEGO_Inventory.Minifig", b =>

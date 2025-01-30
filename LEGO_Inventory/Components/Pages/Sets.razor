@@ -13,7 +13,7 @@
 
 <MudGrid>
     <MudItem xs="12">
-        <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId"></MudTextField>
+        <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true" OnKeyDown="OnKeyDown"/>
         <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportSet())">Import Set
         </MudButton>
     </MudItem>
@@ -124,6 +124,16 @@
         importData.ImportAll(setIdList);
 
         OnInitializedAsync();
+    }
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            ImportSet();
+            _setId = "";
+            OnInitializedAsync();
+        }
     }
 
     private bool SetFilterFunc(Set set) => SetFilter(set);
