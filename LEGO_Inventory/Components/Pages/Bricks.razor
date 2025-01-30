@@ -272,7 +272,26 @@
     void CommittedItemChanges(BrickInfo brick)
     {
         UpdateData updateData = new UpdateData();
+        
+        if (brick.Brick.Count < 0)
+        {
+            brick.Brick.Count = 0;
+            OpenErrorPopup("Cannot set inventory to less than 0");
+        }
+            
         updateData.UpdateBrick(brick.Brick);
+    }
+    
+    private Task OpenErrorPopup(string errorMessage)
+    {
+        var errorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ErrorPopup>
+        {
+            { x => x._errorMessage, errorMessage }
+        };
+
+        return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
     }
 
     private class BrickInfo

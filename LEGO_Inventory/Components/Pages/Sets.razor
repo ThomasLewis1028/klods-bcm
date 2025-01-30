@@ -157,7 +157,33 @@
     void CommittedItemChanges(Set set)
     {
         UpdateData updateData = new UpdateData();
+        
+        
+        if (set.OwnCount < 0)
+        {
+            set.OwnCount = 0;
+            OpenErrorPopup("Cannot set owned count to less than 0");
+        }
+        
+        if (set.BuildCount < 0)
+        {
+            set.BuildCount = 0;
+            OpenErrorPopup("Cannot set build count to less than 0");
+        }
+        
         updateData.UpdateSet(set);
+    }
+    
+    private Task OpenErrorPopup(string errorMessage)
+    {
+        var errorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ErrorPopup>
+        {
+            { x => x._errorMessage, errorMessage }
+        };
+
+        return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
     }
 
     // public class SetData : INotifyPropertyChanged
