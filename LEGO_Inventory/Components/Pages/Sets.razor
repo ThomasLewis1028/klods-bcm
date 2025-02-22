@@ -48,6 +48,7 @@
                 <PropertyColumn Property="x => x.OwnCount" Title="Owned"/>
                 <PropertyColumn Property="x => x.BuildCount" Title="Built"/>
                 <PropertyColumn Property="x => x.NumBricks" Title="Pieces" Editable="false"/>
+                <PropertyColumn Property="x => GetMissingPieceCount(x)" Title="Missing" Editable="false"></PropertyColumn>
                 <TemplateColumn Title="BoM" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
@@ -182,6 +183,16 @@
         }
         
         updateData.UpdateSet(set);
+    }
+
+    private int GetMissingPieceCount(Set set)
+    {
+        using (var context = new InventoryContext())
+        {
+            var setBrickContext = context.Set<SetBrick>();
+
+            return setBrickContext.Where(sb => sb.SetId == set.SetId).Sum(sb => sb.Count - sb.Stock);
+        }
     }
     
     private Task OpenErrorPopup(string errorMessage)

@@ -22,7 +22,7 @@
                    Variant="Variant.Outlined"
                    Dense="true"
                    ValueChanged="ChangeColor"
-                   >
+        >
             @foreach (var color in _colors.OrderBy(c => c.Name))
             {
                 <MudSelectItem Value="@color">
@@ -50,7 +50,8 @@
         </MudButton>
     </MudItem>
     <MudItem xs="2">
-        <MudButton Variant="Variant.Filled" OnClick="() => ImportColors()" Color="Color.Info">Import ALL Colors</MudButton>
+        <MudButton Variant="Variant.Filled" OnClick="() => ImportColors()" Color="Color.Info">Import ALL Colors
+        </MudButton>
     </MudItem>
 
     <MudItem xs="12">
@@ -62,6 +63,8 @@
                 <MudText Typo="Typo.h6">Total Bricks: @_brickInfos.Count</MudText>
                 <MudSpacer/>
                 <MudText Typo="Typo.h6">In Stock: @_brickInfos.Sum(bi => bi.Brick.Count)</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.h6">In Use: @_brickInfos.Sum(bi => bi.SetBricks.Sum(sb => sb.Stock))</MudText>
                 <MudSpacer/>
                 <MudText Typo="Typo.h6">Total Needed: @_brickInfos.Sum(bi => bi.SetBricks.Sum(sb => sb.Count))</MudText>
                 <MudSpacer/>
@@ -126,7 +129,7 @@
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>
-            
+
             <ChildRowContent Context="brickContext">
                 <MudCard>
                     <MudDataGrid T="Set" Items="GetSets(brickContext.Item.Sets).OrderBy(s => s.SetId)">
@@ -145,7 +148,20 @@
                             <TemplateColumn Title="Needed">
                                 <CellTemplate>
                                     <MudStack Row>
-                                        <MudText>@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                        @if (brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count <= brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock)
+                                        {
+                                            <MudText
+                                                Color="@Color.Success">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                        }
+                                        else if (brickContext.Item.SetBricks.First(sb =>
+                                                         sb.SetId == context.Item.SetId).Count - brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock <= brickContext.Item.Brick.Count)
+                                        {
+                                            <MudText Color="@Color.Warning">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText Color="@Color.Error">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                        }
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
@@ -272,16 +288,16 @@
     void CommittedItemChanges(BrickInfo brick)
     {
         UpdateData updateData = new UpdateData();
-        
+
         if (brick.Brick.Count < 0)
         {
             brick.Brick.Count = 0;
             OpenErrorPopup("Cannot set inventory to less than 0");
         }
-            
+
         updateData.UpdateBrick(brick.Brick);
     }
-    
+
     private Task OpenErrorPopup(string errorMessage)
     {
         var errorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
@@ -344,8 +360,8 @@
     private void ImportBrick()
     {
         ImportData importData = new ImportData();
-        
-        if(_brickId != null)
+
+        if (_brickId != null)
             importData.ImportBrick(_brickId, _color.Id);
 
         OnInitializedAsync();
