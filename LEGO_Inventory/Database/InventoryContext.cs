@@ -12,11 +12,7 @@ public class InventoryContext : DbContext
     public DbSet<SetMinifig> SetMinifigs { get; set; }
     public DbSet<MinifigBrick> MinifigBricks { get; set; }
     public DbSet<Color> Colors { get; set; }
-
-    public InventoryContext()
-    {
-        
-    }
+    public DbSet<SetOwned> SetsOwned { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
