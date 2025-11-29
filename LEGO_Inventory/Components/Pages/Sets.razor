@@ -13,9 +13,12 @@
 
 <MudGrid>
     <MudItem xs="12">
-        <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true"
-                      OnKeyDown="OnKeyDown"/>
-        <MudButton xs="6" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImportSet())">Import Set
+        <MudItem>
+            <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true"
+                          OnKeyDown="OnKeyDown"/>
+        </MudItem>
+        <MudButton xs="6" Style="margin-top: 10px" Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@(() => ImportSet())">Import Set
         </MudButton>
     </MudItem>
 
@@ -91,7 +94,8 @@
                             <TemplateColumn Title="BoM" Editable="false">
                                 <CellTemplate>
                                     <MudStack Row>
-                                        <MudIconButton href=@($"/bom/{context.Item.SetId}/{context.Item.SetIndex}") Icon="@Icons.Material.Filled.List"
+                                        <MudIconButton href=@($"/bom/{context.Item.SetId}/{context.Item.SetIndex}")
+                                                       Icon="@Icons.Material.Filled.List"
                                                        Variant="Variant.Filled" Color="Color.Primary"
                                                        Size="Size.Small"></MudIconButton>
                                     </MudStack>
@@ -112,7 +116,9 @@
                         </Columns>
                     </MudDataGrid>
                 </MudCard>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => AddOwnedSet(setContext.Item.Set.SetId)">Add Owned Set</MudButton>
+                <MudButton Style="margin-top: 10px" Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="() => AddOwnedSet(setContext.Item.Set.SetId)">Add Owned Set
+                </MudButton>
             </ChildRowContent>
 
             <PagerContent>
@@ -142,6 +148,7 @@
             var ownedSetContext = context.Set<SetOwned>();
 
             _sets = setContext.ToList();
+            _setInfos.Clear();
 
             foreach (Set set in setContext.ToList())
             {
@@ -159,7 +166,7 @@
         logger.LogTrace("Loading Sets Complete");
     }
 
-    private void ImportSet()
+    private async Task ImportSet()
     {
         ImportData importData = new ImportData();
 
@@ -169,25 +176,30 @@
 
         importData.ImportAll(setIdList);
 
-        OnInitializedAsync();
+        await OnInitializedAsync();
     }
 
-    private void AddOwnedSet(string setId)
+    private async Task AddOwnedSet(string setId)
     {
         ImportData importData = new ImportData();
 
         importData.AddOwnedSet(setId);
 
-        OnInitializedAsync();
+        using (var context = new InventoryContext())
+        {
+            var ownedSetContext = context.Set<SetOwned>();
+            var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
+            setInfo?.OwnedSets = ownedSetContext.Where(so => so.SetId == setId).ToList();
+        }
     }
 
-    private void OnKeyDown(KeyboardEventArgs args)
+    private async Task OnKeyDown(KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
         {
-            ImportSet();
+            await ImportSet();
             _setId = "";
-            OnInitializedAsync();
+            await OnInitializedAsync();
         }
     }
 
@@ -323,10 +335,10 @@
 
         var result = await dialog.Result;
 
-        if (result.Canceled)
-            OnInitializedAsync();
+        if (!result.Canceled)
+            await OnInitializedAsync();
     }
-    
+
     private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string setImgUrl)
     {
         var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
@@ -334,7 +346,7 @@
         var parameters = new DialogParameters<DeleteIndexPopup>
         {
             { x => x._id, setId },
-            {x => x._setIndex, setIndex},
+            { x => x._setIndex, setIndex },
             { x => x._name, setName },
             { x => x._imgUrl, setImgUrl }
         };
@@ -343,8 +355,19 @@
 
         var result = await dialog.Result;
 
-        if (result.Canceled)
-            OnInitializedAsync();
+        if (!result.Canceled)
+        {
+            var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
+
+            if (setInfo != null)
+            {
+                var removeSet = setInfo.OwnedSets.FirstOrDefault(os => os.SetId == setId && os.SetIndex == setIndex);
+                if(removeSet != null)
+                    setInfo.OwnedSets.Remove(removeSet);
+            }
+        }
+        
+        StateHasChanged();
     }
 
     private class SetInfo
