@@ -1,4 +1,5 @@
-﻿@page "/bom/{_setId?}"
+﻿@page "/bom/{_setId?}/{_setIndex?}"
+@page "/bom/{_setId?}"
 @page "/bom"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
@@ -17,16 +18,29 @@
 <h1>Bill of Materials</h1>
 
 <MudGrid>
-    <MudItem xs="12">
-        <MudSelect T="Set"
-                   Variant="Variant.Outlined"
-                   Dense="true"
-                   ValueChanged="ChangeSet">
-            @foreach (var set in _sets)
-            {
+    <MudItem xs="6">
+        <MudItem xs="6">
+            <MudSelect T="Set"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       ValueChanged="ChangeSet">
+                @foreach (var set in _sets)
+                 {
                 <MudSelectItem Value="@set">@set.SetId - @set.Name</MudSelectItem>
-            }
-        </MudSelect>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6">
+            <MudSelect T="SetOwned"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       ValueChanged="ChangeIndex">
+                @foreach (var set in _setsOwned)
+                {
+                    <MudSelectItem Value="@set">@set.SetId - @set.SetIndex</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
     </MudItem>
 
     @if (_set != null)
@@ -82,16 +96,14 @@
                                                 <MudChip
                                                     OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
                                                     class="mud-elevation-2"
-                                                    Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")"
-                                                >@context.Item.Brick.ColorName</MudChip>
+                                                    Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
                                             }
                                             else
                                             {
                                                 <MudChip
                                                     OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
                                                     class="mud-elevation-2"
-                                                    Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")"
-                                                >@context.Item.Brick.ColorName</MudChip>
+                                                    Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
                                             }
                                         }
                                         else
@@ -281,10 +293,12 @@
 
 @code {
     [Parameter] public string? _setId { get; set; }
+    [Parameter] public string? _setIndex { get; set; }
 
     private List<SetBrickInfo>? _setBrickInfo = new List<SetBrickInfo>();
     private List<SetMinifigInfo>? _setMinifigInfo = new List<SetMinifigInfo>();
-    private List<Set>? _sets = new List<Set>();
+    private List<Set>? _sets = new();
+    private List<SetOwned> _setsOwned = new();
     private Set? _set;
     private string searchString;
     private bool _showAllCount = false;
@@ -301,6 +315,7 @@
             var brickContext = context.Set<Brick>();
             var minifigContext = context.Set<Minifig>();
             var setMinifigContext = context.Set<SetMinifig>();
+            var setOwnedContext = context.Set<SetOwned>();
             var setContext = context.Set<Set>();
 
             _setBrickInfo.Clear();
@@ -309,33 +324,51 @@
 
             if (_setId != null)
             {
-                var setBricks = setBrickContext.Where(sb => sb.SetId == _setId).ToList();
-                foreach (var setBrick in setBricks)
+                var setsOwned = setOwnedContext.Where(so => so.SetId == _setId).ToList();
+                foreach (var setOwned in setsOwned)
                 {
-                    _setBrickInfo.Add(new SetBrickInfo
+                    _setsOwned.Add(new SetOwned
                     {
-                        Brick = brickContext.First(b => b.PartNum == setBrick.PartNum && b.ColorId == setBrick.ColorId),
-                        SetBrick = setBrick
+                        SetId = setOwned.SetId,
+                        SetIndex = setOwned.SetIndex
                     });
                 }
-
-                var setMinifigs = setMinifigContext.Where(sm => sm.SetId == _setId).ToList();
-                foreach (var setMinifig in setMinifigs)
+                
+                if(_setIndex != null)
                 {
-                    _setMinifigInfo.Add(new SetMinifigInfo
-                    {
-                        Minifig = minifigContext.First(m => m.MinifigId == setMinifig.MinifigId),
-                        SetMinifig = setMinifig
-                    });
-                }
+                    var setIndex = _setIndex != null ? int.Parse(_setIndex) : 0;
 
-                _set = setContext.First(s => s.SetId == _setId);
+                    var setBricks = setBrickContext.Where(sb => sb.SetId == _setId && sb.SetIndex == setIndex).ToList();
+                    foreach (var setBrick in setBricks)
+                    {
+                        _setBrickInfo.Add(new SetBrickInfo
+                        {
+                            Brick = brickContext.First(b => b.PartNum == setBrick.PartNum && b.ColorId == setBrick.ColorId),
+                            SetBrick = setBrick
+                        });
+                    }
+
+                    var setMinifigs = setMinifigContext.Where(sm => sm.SetId == _setId && sm.SetIndex == setIndex).ToList();
+                    foreach (var setMinifig in setMinifigs)
+                    {
+                        _setMinifigInfo.Add(new SetMinifigInfo
+                        {
+                            Minifig = minifigContext.First(m => m.MinifigId == setMinifig.MinifigId),
+                            SetMinifig = setMinifig
+                        });
+                    }
+
+                    _set = setContext.First(s => s.SetId == _setId);
+                }
             }
 
             _sets = setContext.ToList();
         }
 
-        navigationManager.NavigateTo($"/bom/{_setId}");
+        if (_setIndex == null)
+            navigationManager.NavigateTo($"/bom/{_setId}");
+        else
+            navigationManager.NavigateTo($"/bom/{_setId}/{_setIndex}");
 
         StateHasChanged();
         logger.LogTrace("Loading Sets Complete");
@@ -344,6 +377,15 @@
     private void ChangeSet(Set set)
     {
         _setId = set.SetId;
+        _setsOwned = new ();
+
+        _ = OnInitializedAsync();
+    }
+
+
+    private void ChangeIndex(SetOwned setOwned)
+    {
+        _setIndex = setOwned.SetIndex.ToString();
 
         _ = OnInitializedAsync();
     }
@@ -427,16 +469,16 @@
                 setBrickInfo.SetBrick.Stock = 0;
                 OpenErrorPopup("Cannot set stock to less than 0");
             }
-            
+
             if (setBrickInfo.Brick.Count < 0)
             {
                 setBrickInfo.Brick.Count = 0;
                 OpenErrorPopup("Cannot set inventory to less than 0");
             }
-            
+
             return;
         }
-        
+
         updateData.UpdateBrick(setBrickInfo.Brick);
         updateData.UpdateSetBrick(setBrickInfo.SetBrick);
 
@@ -448,7 +490,7 @@
         UpdateData updateData = new UpdateData();
         updateData.UpdateMinifig(setMinifigInfo.Minifig);
         updateData.UpdateSetMinifig(setMinifigInfo.SetMinifig);
-        
+
         OnInitializedAsync();
     }
 
@@ -456,12 +498,12 @@
     {
         if (dir == Direction.left)
         {
-            if(setBrickInfo.Brick.Count < setBrickInfo.MoveCount)
+            if (setBrickInfo.Brick.Count < setBrickInfo.MoveCount)
             {
                 OpenErrorPopup("Lacking set stock to move inventory");
                 return;
             }
-            
+
             setBrickInfo.Brick.Count -= setBrickInfo.MoveCount;
             setBrickInfo.SetBrick.Stock += setBrickInfo.MoveCount;
 
@@ -469,12 +511,12 @@
         }
         else if (dir == Direction.right)
         {
-            if(setBrickInfo.SetBrick.Stock < setBrickInfo.MoveCount)
+            if (setBrickInfo.SetBrick.Stock < setBrickInfo.MoveCount)
             {
                 OpenErrorPopup("Lacking inventory to move set stock");
                 return;
             }
-            
+
             setBrickInfo.Brick.Count += setBrickInfo.MoveCount;
             setBrickInfo.SetBrick.Stock -= setBrickInfo.MoveCount;
 
