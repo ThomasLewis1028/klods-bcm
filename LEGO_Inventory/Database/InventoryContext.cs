@@ -23,38 +23,47 @@ public class InventoryContext : DbContext
 
         // SET
         modelBuilder.Entity<Set>().HasKey(e => new { e.SetId });
+        
+        // OWNED SET
+        modelBuilder.Entity<SetOwned>().HasKey(e => new { e.SetId, e.SetIndex });
+
+        modelBuilder.Entity<SetOwned>()
+            .HasOne<Set>()
+            .WithMany()
+            .HasForeignKey(s => s.SetId)
+            .IsRequired();
 
         // SET BRICK
-        modelBuilder.Entity<SetBrick>().HasKey(e => new { e.PartNum, e.ColorId, e.SetId });
+        modelBuilder.Entity<SetBrick>().HasKey(e => new { e.PartNum, e.ColorId, e.SetId, e.SetIndex });
 
         modelBuilder.Entity<SetBrick>()
             .HasOne<Brick>()
             .WithMany()
             .HasForeignKey(s => new { s.PartNum, s.ColorId })
             .IsRequired();
-
+        
         modelBuilder.Entity<SetBrick>()
-            .HasOne<Set>()
+            .HasOne<SetOwned>()
             .WithMany()
-            .HasForeignKey(s => s.SetId)
+            .HasForeignKey(s => new {s.SetId, s.SetIndex})
             .IsRequired();
 
         // MINIFIG
         modelBuilder.Entity<Minifig>().HasKey(e => new { e.MinifigId });
 
         // SET MINIFIG
-        modelBuilder.Entity<SetMinifig>().HasKey(e => new { e.MinifigId, e.SetId });
+        modelBuilder.Entity<SetMinifig>().HasKey(e => new { e.MinifigId, e.SetId, e.SetIndex });
 
         modelBuilder.Entity<SetMinifig>()
             .HasOne<Minifig>()
             .WithMany()
             .HasForeignKey(s => s.MinifigId)
             .IsRequired();
-
+        
         modelBuilder.Entity<SetMinifig>()
-            .HasOne<Set>()
+            .HasOne<SetOwned>()
             .WithMany()
-            .HasForeignKey(s => s.SetId)
+            .HasForeignKey(s => new {s.SetId, s.SetIndex})
             .IsRequired();
 
         // MINIFIG BRICK

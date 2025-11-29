@@ -17,4 +17,4 @@ prereq: dotnet tool install --global dotnet-ef
 3. Run `dotnet ef database update`.
 
 # Remove datadase Migration
-1. Run `ef migrations remove <migrationName>`
+1. Run `dotnet ef migrations remove <migrationName>`

@@ -3,6 +3,7 @@ using System;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LEGO_Inventory.Migrations
 {
     [DbContext(typeof(InventoryContext))]
-    partial class InventoryContextModelSnapshot : ModelSnapshot
+    [Migration("20251129020234_AddSetIndexAsPK")]
+    partial class AddSetIndexAsPK
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -128,6 +131,9 @@ namespace LEGO_Inventory.Migrations
                     b.Property<string>("SetId")
                         .HasColumnType("text");
 
+                    b.Property<int>("BuildCount")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("DateModified")
                         .HasColumnType("timestamp with time zone");
 
@@ -140,6 +146,9 @@ namespace LEGO_Inventory.Migrations
                         .HasColumnType("text");
 
                     b.Property<int>("NumBricks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OwnCount")
                         .HasColumnType("integer");
 
                     b.Property<int>("ReleaseYear")

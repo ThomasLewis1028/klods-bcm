@@ -3,6 +3,7 @@ using System;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LEGO_Inventory.Migrations
 {
     [DbContext(typeof(InventoryContext))]
-    partial class InventoryContextModelSnapshot : ModelSnapshot
+    [Migration("20251102205207_AddedDBContext")]
+    partial class AddedDBContext
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -128,6 +131,9 @@ namespace LEGO_Inventory.Migrations
                     b.Property<string>("SetId")
                         .HasColumnType("text");
 
+                    b.Property<int>("BuildCount")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("DateModified")
                         .HasColumnType("timestamp with time zone");
 
@@ -140,6 +146,9 @@ namespace LEGO_Inventory.Migrations
                         .HasColumnType("text");
 
                     b.Property<int>("NumBricks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OwnCount")
                         .HasColumnType("integer");
 
                     b.Property<int>("ReleaseYear")
@@ -167,10 +176,14 @@ namespace LEGO_Inventory.Migrations
                     b.Property<string>("SetId")
                         .HasColumnType("text");
 
-                    b.Property<int>("SetIndex")
+                    b.Property<int>("Count")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Count")
+                    b.Property<string>("OwnedSetId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("OwnedSetIndex")
                         .HasColumnType("integer");
 
                     b.Property<int>("SpareCount")
@@ -179,9 +192,11 @@ namespace LEGO_Inventory.Migrations
                     b.Property<int>("Stock")
                         .HasColumnType("integer");
 
-                    b.HasKey("PartNum", "ColorId", "SetId", "SetIndex");
+                    b.HasKey("PartNum", "ColorId", "SetId");
 
-                    b.HasIndex("SetId", "SetIndex");
+                    b.HasIndex("SetId");
+
+                    b.HasIndex("OwnedSetId", "OwnedSetIndex");
 
                     b.ToTable("SetBricks");
                 });
@@ -194,31 +209,37 @@ namespace LEGO_Inventory.Migrations
                     b.Property<string>("SetId")
                         .HasColumnType("text");
 
-                    b.Property<int>("SetIndex")
+                    b.Property<int>("Count")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Count")
+                    b.Property<string>("OwnedSetId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("OwnedSetIndex")
                         .HasColumnType("integer");
 
                     b.Property<int>("Stock")
                         .HasColumnType("integer");
 
-                    b.HasKey("MinifigId", "SetId", "SetIndex");
+                    b.HasKey("MinifigId", "SetId");
 
-                    b.HasIndex("SetId", "SetIndex");
+                    b.HasIndex("SetId");
+
+                    b.HasIndex("OwnedSetId", "OwnedSetIndex");
 
                     b.ToTable("SetMinifig");
                 });
 
             modelBuilder.Entity("LEGO_Inventory.SetOwned", b =>
                 {
-                    b.Property<string>("SetId")
+                    b.Property<string>("OwnedSetId")
                         .HasColumnType("text");
 
-                    b.Property<int>("SetIndex")
+                    b.Property<int>("OwnedSetIndex")
                         .HasColumnType("integer");
 
-                    b.HasKey("SetId", "SetIndex");
+                    b.HasKey("OwnedSetId", "OwnedSetIndex");
 
                     b.ToTable("SetsOwned");
                 });
@@ -240,15 +261,21 @@ namespace LEGO_Inventory.Migrations
 
             modelBuilder.Entity("LEGO_Inventory.SetBrick", b =>
                 {
-                    b.HasOne("LEGO_Inventory.Brick", null)
+                    b.HasOne("LEGO_Inventory.Set", null)
                         .WithMany()
-                        .HasForeignKey("PartNum", "ColorId")
+                        .HasForeignKey("SetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("LEGO_Inventory.SetOwned", null)
                         .WithMany()
-                        .HasForeignKey("SetId", "SetIndex")
+                        .HasForeignKey("OwnedSetId", "OwnedSetIndex")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LEGO_Inventory.Brick", null)
+                        .WithMany()
+                        .HasForeignKey("PartNum", "ColorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -261,18 +288,15 @@ namespace LEGO_Inventory.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("LEGO_Inventory.SetOwned", null)
-                        .WithMany()
-                        .HasForeignKey("SetId", "SetIndex")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("LEGO_Inventory.SetOwned", b =>
-                {
                     b.HasOne("LEGO_Inventory.Set", null)
                         .WithMany()
                         .HasForeignKey("SetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LEGO_Inventory.SetOwned", null)
+                        .WithMany()
+                        .HasForeignKey("OwnedSetId", "OwnedSetIndex")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

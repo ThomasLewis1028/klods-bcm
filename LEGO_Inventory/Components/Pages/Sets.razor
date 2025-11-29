@@ -45,8 +45,6 @@
                 <PropertyColumn Property="x => x.SetId" Title="Id" Editable="false"/>
                 <PropertyColumn Property="x => x.Name" Title="Name" Editable="false"/>
                 <PropertyColumn Property="x => x.ReleaseYear" Title="Year" Editable="false"/>
-                <PropertyColumn Property="x => x.OwnCount" Title="Owned"/>
-                <PropertyColumn Property="x => x.BuildCount" Title="Built"/>
                 <PropertyColumn Property="x => x.NumBricks" Title="Pieces" Editable="false"/>
                 <PropertyColumn Property="x => GetMissingPieceCount(x)" Title="Missing" Editable="false"></PropertyColumn>
                 <TemplateColumn Title="BoM" Editable="false">
@@ -168,19 +166,6 @@
     void CommittedItemChanges(Set set)
     {
         UpdateData updateData = new UpdateData();
-        
-        
-        if (set.OwnCount < 0)
-        {
-            set.OwnCount = 0;
-            OpenErrorPopup("Cannot set owned count to less than 0");
-        }
-        
-        if (set.BuildCount < 0)
-        {
-            set.BuildCount = 0;
-            OpenErrorPopup("Cannot set build count to less than 0");
-        }
         
         updateData.UpdateSet(set);
     }

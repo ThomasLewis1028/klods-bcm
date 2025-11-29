@@ -7,5 +7,5 @@ public class SetOwned
 {
     public string SetId { get; set; }
     
-    public int Index { get; set; }
+    public int SetIndex { get; set; }
 }

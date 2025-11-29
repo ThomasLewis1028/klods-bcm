@@ -19,9 +19,5 @@ public class Set
     
     public DateTime DateModified { get; set; }
     
-    public int OwnCount { get; set; }
-    
-    public int BuildCount { get; set; }
-    
     public string ManualUrl { get; set; }
 }

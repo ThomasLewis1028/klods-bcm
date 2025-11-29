@@ -73,8 +73,6 @@ public class ImportData
                     NumBricks = int.Parse(setInfo!["num_parts"]!.ToString()),
                     ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
                     ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId.Split('-').First()}",
-                    OwnCount = 0,
-                    BuildCount = 0
                 };
 
                 setContext.Add(set);

@@ -9,6 +9,8 @@ public class SetMinifig
     
     public string SetId { get; set; }
     
+    public int SetIndex { get; set; }
+    
     public int Count { get; set; }
     
     public int Stock { get; set; }
