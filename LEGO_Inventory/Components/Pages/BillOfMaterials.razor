@@ -9,6 +9,7 @@
 @using System.Net
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
+@using MudBlazor.Extensions
 @using Color = MudBlazor.Color
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
@@ -94,6 +95,13 @@
                             <MudText Typo="Typo.body1">Missing
                                 Pieces: @_setBrickInfo.Sum(sb => sb.SetBrick.Count - sb.SetBrick.Stock)
                             </MudText>
+                            <MudSpacer/>
+                            <MudSwitch 
+                                @bind-Value="_showMissing" 
+                                UncheckedColor="Color.Default" 
+                                Color="Color.Error" 
+                                Label="Show Missing"
+                                LabelPlacement="Placement.Start"/>
                             <MudSpacer/>
 
                             <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
@@ -328,7 +336,7 @@
     private List<Set>? _sets = new();
     private List<SetOwned> _setsOwned = new();
     private string searchString;
-    private bool _showAllCount = false;
+    private bool _showMissing = false;
 
     private Set? _set;
 
@@ -433,6 +441,9 @@
 
     private bool SetBrickFilter(SetBrickInfo setBrickInfo)
     {
+        if (_showMissing && setBrickInfo.SetBrick.Count <= setBrickInfo.SetBrick.Stock)
+            return false;
+        
         if (string.IsNullOrWhiteSpace(searchString))
             return true;
         if (setBrickInfo.Brick.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase))
@@ -441,6 +452,7 @@
             return true;
         if (setBrickInfo.Brick.ColorName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
+        
 
         return false;
     }
