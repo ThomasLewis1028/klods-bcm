@@ -47,6 +47,45 @@ public class DeleteData
         }
     }
     
+    
+    public bool DeleteOwnedSetInfo(string? setId, int setIndex, bool moveStock = false)
+    {
+        
+        _logger.LogInformation($"Deleting All Data for set {setId} - {setIndex}");
+        
+        using (var context = new InventoryContext())
+        {
+            var setContext = context.Set<Set>();
+            var setOwnedContext = context.Set<SetOwned>();
+            var setBrickContext = context.Set<SetBrick>();
+            var brickContext = context.Set<Brick>();
+
+            if(moveStock)
+            {
+                _logger.LogInformation($"Moving stock back to inventory {setId}");
+                
+                foreach (var setBrick in setBrickContext.Where(sb => sb.SetId == setId))
+                {
+                    brickContext.First(b => b.PartNum == setBrick.PartNum 
+                                            && b.ColorId == setBrick.ColorId)
+                        .Count += setBrick.Stock;
+                }
+                
+                _logger.LogInformation($"Stock for set {setId} has been moved to inventory");
+            }
+            
+            setOwnedContext
+                .Where(s => s.SetId == setId && s.SetIndex == setIndex)
+                .ExecuteDelete();
+            
+            context.SaveChanges();
+            
+            _logger.LogInformation($"{setId} has been deleted");
+            
+            return !setContext.Any(s => s.SetId == setId);
+        }
+    }
+    
     public bool DeleteSetParts(string? setId)
     {
         using (var context = new InventoryContext())

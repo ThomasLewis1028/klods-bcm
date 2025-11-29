@@ -1,0 +1,54 @@
+﻿@using Color = MudBlazor.Color
+<MudDialog>
+    <TitleContent>
+        Deleting Set @_id - @_setIndex - @_name
+    </TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                <MudText>Would you like to return the stock to inventory?</MudText>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12">
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                    <MudText>No</MudText>
+                    <MudSwitch @bind-Value="MoveStock" Color="Color.Success" UncheckedColor="Color.Error"/>
+                    <MudText>Yes</MudText>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Filled">Close</MudButton>
+        <MudSpacer></MudSpacer>
+        <MudButton OnClick="() => DeleteSet(_id, _setIndex)" Color="Color.Error" Variant="Variant.Filled">DELETE</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public string _id { get; set; }
+
+    [Parameter] public string _name { get; set; }
+
+    [Parameter] public string _imgUrl { get; set; }
+    
+    [Parameter] public int _setIndex { get; set; }
+
+    public bool MoveStock { get; set; } = false;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void DeleteSet(string id, int setIndex)
+    {
+        DeleteData deleteData = new DeleteData();
+
+        deleteData.DeleteOwnedSetInfo(id, setIndex, MoveStock);
+
+        Cancel();
+        OnInitializedAsync();
+    }
+
+}

@@ -71,7 +71,7 @@ public class InventoryTests
             var importData = new ImportData();
             
             Assert.IsTrue(importData.ImportSetInfo("4502-1"));
-            Assert.IsTrue(importData.ImportSetParts("4502-1"));
+            Assert.IsTrue(importData.AddOwnedSet("4502-1"));
             
             var context = new InventoryContext();
             var setBrickContext = context.Set<SetBrick>();

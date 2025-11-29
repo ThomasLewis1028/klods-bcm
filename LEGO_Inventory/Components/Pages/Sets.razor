@@ -88,30 +88,31 @@
                             <PropertyColumn Title="Index" Property="x => x.SetIndex"/>
                             <PropertyColumn Title="Stock" Property="x => GetStockCount(x)"/>
                             <PropertyColumn Title="Missing" Property="x => GetMissingPieceCount(x)"/>
-                            @* <TemplateColumn Title="Manual" Editable="false"> *@
-                            @*     <CellTemplate> *@
-                            @*         <MudStack Row> *@
-                            @*             <MudImage @onclick="() => OpenBuildingInstructions(setContext.Item.Set.ManualUrl)" *@
-                            @*                       class="cursor-pointer rounded-2" Elevation="2" Height="30" *@
-                            @*                       Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/> *@
-                            @*         </MudStack> *@
-                            @*     </CellTemplate> *@
-                            @* </TemplateColumn> *@
-                            @* <TemplateColumn Title="Delete" Editable="false"> *@
-                            @*     <CellTemplate> *@
-                            @*         <MudStack Row> *@
-                            @*             <MudIconButton *@
-                            @*                 Icon="@Icons.Material.Filled.Delete" *@
-                            @*                 Variant="Variant.Filled" *@
-                            @*                 Color="Color.Error" *@
-                            @*                 Size="Size.Small" *@
-                            @*                 OnClick="() => DeleteSet(setContext.Item.SetId, setContext.Item.Name, setContext.Item.SetImg)"/> *@
-                            @*         </MudStack> *@
-                            @*     </CellTemplate> *@
-                            @* </TemplateColumn> *@
+                            <TemplateColumn Title="BoM" Editable="false">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        <MudIconButton href=@($"/bom/{context.Item.SetId}/{context.Item.SetIndex}") Icon="@Icons.Material.Filled.List"
+                                                       Variant="Variant.Filled" Color="Color.Primary"
+                                                       Size="Size.Small"></MudIconButton>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Delete" Editable="false">
+                                <CellTemplate>
+                                    <MudStack Row>
+                                        <MudIconButton
+                                            Icon="@Icons.Material.Filled.Delete"
+                                            Variant="Variant.Filled"
+                                            Color="Color.Error"
+                                            Size="Size.Small"
+                                            OnClick="() => DeleteOwnedSet(context.Item.SetId, context.Item.SetIndex, setContext.Item.Set.Name, setContext.Item.Set.SetImg)"/>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
                         </Columns>
                     </MudDataGrid>
                 </MudCard>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => AddOwnedSet(setContext.Item.Set.SetId)">Add Owned Set</MudButton>
             </ChildRowContent>
 
             <PagerContent>
@@ -167,6 +168,15 @@
         _importSize = setIdList.Count;
 
         importData.ImportAll(setIdList);
+
+        OnInitializedAsync();
+    }
+
+    private void AddOwnedSet(string setId)
+    {
+        ImportData importData = new ImportData();
+
+        importData.AddOwnedSet(setId);
 
         OnInitializedAsync();
     }
@@ -310,6 +320,26 @@
         };
 
         var dialog = DialogService.Show<DeletePopup>("Delete Popup", parameters, deletePopup);
+
+        var result = await dialog.Result;
+
+        if (result.Canceled)
+            OnInitializedAsync();
+    }
+    
+    private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string setImgUrl)
+    {
+        var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<DeleteIndexPopup>
+        {
+            { x => x._id, setId },
+            {x => x._setIndex, setIndex},
+            { x => x._name, setName },
+            { x => x._imgUrl, setImgUrl }
+        };
+
+        var dialog = DialogService.Show<DeleteIndexPopup>("Delete Popup", parameters, deletePopup);
 
         var result = await dialog.Result;
 
