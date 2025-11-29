@@ -1,7 +1,7 @@
 ﻿FROM mcr.microsoft.com/dotnet/sdk:10.0 AS base
-USER $APP_UID
 ENV PATH="${PATH}:/root/.dotnet/tools"
 RUN dotnet tool install --global dotnet-ef --create-manifest-if-needed
+USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
