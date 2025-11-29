@@ -27,4 +27,10 @@
       <Folder Include="Migrations\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Include="wwwroot\images\lit.ico" />
+      <None Include="wwwroot\images\lit.png" />
+      <None Include="wwwroot\images\lit.xcf" />
+    </ItemGroup>
+
 </Project>

@@ -7,7 +7,7 @@
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
 
-<PageTitle>Sets</PageTitle>
+<PageTitle>@_pageTitle</PageTitle>
 
 <h1>Sets</h1>
 
@@ -137,6 +137,7 @@
 
 @code {
     private string? _setId;
+    private string _pageTitle = "Sets";
     private List<Set>? _sets;
     private List<SetInfo>? _setInfos = [];
     private string searchString;
@@ -300,38 +301,7 @@
         return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
     }
 
-    // public class SetData : INotifyPropertyChanged
-    // {
-    //     private string setId { get; set; }
-    //
-    //     public string SetId
-    //     {
-    //         get => setId;
-    //         set
-    //         {
-    //             this.setId = value;
-    //             NotifyPropertyChanged("Set Id");
-    //         }
-    //     }
-    //     // public string currentSetId { get; set; }
-    //
-    //     public event PropertyChangedEventHandler PropertyChanged;
-    //
-    //     private void NotifyPropertyChanged(string propertyName)
-    //     {
-    //         if (PropertyChanged != null)
-    //         {
-    //             PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-    //         }
-    //     }
-    // }
-    //
-    // public async Task ChangeProgressBar()
-    // {
-    //     StateHasChanged();
-    // }
-
-    protected void OpenBuildingInstructions(string url)
+    private void OpenBuildingInstructions(string url)
     {
         JsRuntime.InvokeVoidAsync("open", url, "_blank");
     }

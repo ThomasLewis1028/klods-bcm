@@ -9,7 +9,7 @@
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
 
-<PageTitle>Bricks</PageTitle>
+<PageTitle>@_pageTitle</PageTitle>
 
 <h1>Bricks</h1>
 
@@ -194,6 +194,7 @@
 </MudGrid>
 
 @code {
+    private string _pageTitle = "Bricks";
     private string? _brickId;
     private BrickColor _color { get; set; }
     private List<BrickInfo>? _brickInfos = [];

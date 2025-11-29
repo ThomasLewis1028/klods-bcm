@@ -1,8 +1,6 @@
-using LEGO_Inventory;
 using LEGO_Inventory.Components;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,7 +15,7 @@ builder.Services.AddMudServices();
 
 builder.Services.AddHttpClient();
 
-builder.Services.AddScoped(sp =>
+builder.Services.AddScoped(_ =>
     new HttpClient
     {
         BaseAddress = new Uri("https://rebrickable.com/")

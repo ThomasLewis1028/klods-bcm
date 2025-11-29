@@ -13,7 +13,7 @@
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
 
-<PageTitle>Bill of Materials</PageTitle>
+<PageTitle>@_pageTitle</PageTitle>
 
 <h1>Bill of Materials</h1>
 
@@ -32,18 +32,21 @@
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12">
-                <MudSelect T="SetOwned"
-                           Variant="Variant.Outlined"
-                           Dense="true"
-                           Value="_setsOwned.First(so => so.SetIndex == (_setIndex != null ? int.Parse(_setIndex) : 0))"
-                           ValueChanged="ChangeIndex">
-                    @foreach (var set in _setsOwned)
-                    {
-                        <MudSelectItem Value="@set">@set.SetId - @set.SetIndex</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
+            @if (_set != null)
+            {
+                <MudItem xs="12">
+                    <MudSelect T="SetOwned"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Value="_setsOwned.First(so => so.SetIndex == (_setIndex != null ? int.Parse(_setIndex) : 0))"
+                               ValueChanged="ChangeIndex">
+                        @foreach (var set in _setsOwned)
+                        {
+                            <MudSelectItem Value="@set">@set.SetId - @set.SetIndex</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
         </MudGrid>
     </MudItem>
     @if (_set != null)
@@ -51,8 +54,8 @@
         <MudItem xs="9" Style="height: 100%">
             <MudGrid>
                 <MudItem xs="3">
-                    <MudImage class="cursor-pointer rounded-2" 
-                              Elevation="2" 
+                    <MudImage class="cursor-pointer rounded-2"
+                              Elevation="2"
                               Src="@_set.SetImg"
                               Style="height: 150px;"
                               ObjectFit="ObjectFit.Contain"
@@ -78,7 +81,7 @@
                 </MudItem>
             </MudGrid>
         </MudItem>
-        
+
         <MudItem xs="12">
             <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
                 @* Brick Tab *@
@@ -245,7 +248,7 @@
                             </TemplateColumn>
                             <PropertyColumn Property="x => x.Minifig.Stock" Title="Stock" Editable="true"/>
                         </Columns>
-                        
+
                         <ChildRowContent Context="minifigContext">
                             <MudCard>
                                 <MudDataGrid T="SetBrickInfo" Items="GetMinifigBricks(minifigContext.Item.Minifig)">
@@ -317,9 +320,11 @@
 @code {
     [Parameter] public string? _setId { get; set; }
     [Parameter] public string? _setIndex { get; set; }
+    
+    private string _pageTitle = "Bill of Materials";
 
-    private List<SetBrickInfo>? _setBrickInfo = new ();
-    private List<SetMinifigInfo>? _setMinifigInfo = new ();
+    private List<SetBrickInfo>? _setBrickInfo = new();
+    private List<SetMinifigInfo>? _setMinifigInfo = new();
     private List<Set>? _sets = new();
     private List<SetOwned> _setsOwned = new();
     private string searchString;
@@ -360,10 +365,18 @@
                     });
                 }
 
+                _pageTitle = $"{_setId} - Bill of Materials";
+                StateHasChanged();
+
+                if (_setIndex == null)
+                    _setIndex = "0";
+                
                 if (_setIndex != null)
                 {
                     var setIndex = _setIndex != null ? int.Parse(_setIndex) : 0;
 
+                    _pageTitle = $"{_setId}-{_setIndex} - Bill of Materials";
+                    StateHasChanged();
 
                     var setBricks = setBrickContext.Where(sb => sb.SetId == _setId && sb.SetIndex == setIndex).ToList();
                     foreach (var setBrick in setBricks)
@@ -400,7 +413,7 @@
     {
         _setId = set.SetId;
         _set = set;
-        
+
         navigationManager.NavigateTo($"/bom/{_setId}/0");
 
         _ = OnInitializedAsync();
@@ -412,7 +425,7 @@
         _setIndex = setOwned.SetIndex.ToString();
 
         navigationManager.NavigateTo($"/bom/{_setId}/{_setIndex}");
-        
+
         _ = OnInitializedAsync();
     }
 
