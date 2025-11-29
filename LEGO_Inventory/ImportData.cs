@@ -308,7 +308,7 @@ public class ImportData
             var setBrickContext = context.Set<SetBrick>();
             var minifigBrickContext = context.Set<MinifigBrick>();
 
-            if (!setMinifigContext.Any(sm => sm.MinifigId == minifigId && sm.SetId == setId))
+            if (!setMinifigContext.Any(sm => sm.MinifigId == minifigId && sm.SetId == setId && sm.SetIndex == setIndex))
             {
                 List<MinifigBrick> minifigBricks = minifigBrickContext.Where(mb => mb.MinifigID == minifigId).ToList();
 
