@@ -43,7 +43,7 @@
                                ValueChanged="ChangeIndex">
                         @foreach (var set in _setsOwned)
                         {
-                            <MudSelectItem Value="@set">@set.SetId - @set.SetIndex</MudSelectItem>
+                            <MudSelectItem Value="@set">Owned Set Index: @set.SetIndex</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>

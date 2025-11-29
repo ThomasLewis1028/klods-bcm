@@ -75,15 +75,16 @@
                 </TemplateColumn>
             </Columns>
 
+            @* Owned Set List *@
             <ChildRowContent Context="setContext">
                 <MudGrid Spacing="10" Class="d-flex">
-                    <MudItem xs="1" Style="height: 100%; display: flex">
+                    <MudItem xs="1" Style="display: flex; align-items: stretch;">
                             <MudButton
-                                FullWidth="true"
-                                Style="height: 100%"
+                                Style="height: 100%;"
                                 StartIcon="@Icons.Material.Filled.Add"
+                                IconSize="Size.Large"
                                 Variant="Variant.Filled"
-                                Color="Color.Primary"
+                                Color="Color.Info"
                                 OnClick="() => AddOwnedSet(setContext.Item.Set.SetId)"/>
                     </MudItem>
                     <MudItem xs="11">
