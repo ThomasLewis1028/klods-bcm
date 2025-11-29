@@ -309,6 +309,9 @@
     {
         var logger = LoggerFactory.CreateLogger<Minifig>();
         logger.LogTrace("Loading Bill of Materials");
+
+        _setsOwned = new List<SetOwned>();
+        
         using (var context = new InventoryContext())
         {
             var setBrickContext = context.Set<SetBrick>();
@@ -377,7 +380,6 @@
     private void ChangeSet(Set set)
     {
         _setId = set.SetId;
-        _setsOwned = new ();
 
         _ = OnInitializedAsync();
     }

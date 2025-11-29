@@ -173,7 +173,8 @@ public class ImportData
 
                     if (!setBrickContext.Any(sb => sb.PartNum == partNum
                                                    && sb.ColorId == colorId
-                                                   && sb.SetId == localSetId))
+                                                   && sb.SetId == localSetId
+                                                   && sb.SetIndex == setIndex))
                     {
                         SetBrick setBrick = new SetBrick
                         {
