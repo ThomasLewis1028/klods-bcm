@@ -38,3 +38,15 @@ So, my dad and I, having a bunch of free time while off work for the end of the 
 
 Download the app and run the Docker Compose. Eventually I'll make it even easier.
 
+### Future plans
+
+- Upload the Docker image somewhere
+- Add user authentication 
+- Allow users to upload and manage their own API key (and encrypt it)
+- Allow users to have and manage their own inventories 
+- Allow users to transfer stock between their inventories
+- Make a mobile app to connect to your instance 
+- Maybe offer a subscription for me to host it for you (maybe maybe not idk)
+- Make the UI more pretty and less stock MudBlazor-y
+- Change the name maybe
+- Allow substitution parts so if you want to build the Millennium Falcon with random colors, you could track that
