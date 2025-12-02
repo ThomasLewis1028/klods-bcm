@@ -62,18 +62,18 @@
             <ToolBarContent>
                 <MudText Typo="Typo.h6">Total Bricks: @_brickInfos.Count</MudText>
                 <MudSpacer/>
-                <MudText Typo="Typo.h6">In Stock: @_brickInfos.Sum(bi => bi.Brick.Count)</MudText>
+                <MudText Typo="Typo.h6">In Stock: @_inStock</MudText>
                 <MudSpacer/>
-                <MudText Typo="Typo.h6">In Use: @_brickInfos.Sum(bi => bi.SetBricks.Sum(sb => sb.Stock))</MudText>
+                <MudText Typo="Typo.h6">In Use: @_inUse</MudText>
                 <MudSpacer/>
-                <MudText Typo="Typo.h6">Total Needed: @_brickInfos.Sum(bi => bi.SetBricks.Sum(sb => sb.Count))</MudText>
+                <MudText Typo="Typo.h6">Total Needed: @_totalNeeded</MudText>
                 <MudSpacer/>
                 <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
                               Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
                               Class="mt-0"></MudTextField>
             </ToolBarContent>
             <Columns>
-                <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/>
+                <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.SetCount == 0)"/>
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
@@ -113,8 +113,8 @@
                     </CellTemplate>
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Brick.Count" Title="Stock"/>
-                <PropertyColumn Property="x => x.SetBricks.Sum(sb => sb.Count)" Title="Needed" Editable="false"/>
-                <PropertyColumn Property="x => x.Sets.Count" Title="Sets" Editable="false"/>
+                <PropertyColumn Property="x => x.TotalNeeded" Title="Needed" Editable="false"/>
+                <PropertyColumn Property="x => x.SetCount" Title="Sets" Editable="false"/>
                 <TemplateColumn Title="Delete" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
@@ -131,60 +131,76 @@
             </Columns>
 
             <ChildRowContent Context="brickContext">
-                <MudCard>
-                    <MudDataGrid T="Set" Items="GetSets(brickContext.Item.Sets).OrderBy(s => s.SetId)">
-                        <Columns>
-                            <TemplateColumn Title="Image">
-                                <CellTemplate>
-                                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
-                                        <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                  Src="@context.Item.SetImg" Height="50"
-                                                  @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>
-                                    </MudStack>
-                                </CellTemplate>
-                            </TemplateColumn>
-                            <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
-                            <PropertyColumn Title="Name" Property="x => x.Name"/>
-                            <TemplateColumn Title="Needed">
-                                <CellTemplate>
-                                    <MudStack Row>
-                                        @if (brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count <= brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock)
-                                        {
-                                            <MudText
-                                                Color="@Color.Success">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
-                                        }
-                                        else if (brickContext.Item.SetBricks.First(sb =>
-                                                         sb.SetId == context.Item.SetId).Count - brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock <= brickContext.Item.Brick.Count)
-                                        {
-                                            <MudText Color="@Color.Warning">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
-                                        }
-                                        else
-                                        {
-                                            <MudText Color="@Color.Error">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
-                                        }
-                                    </MudStack>
-                                </CellTemplate>
-                            </TemplateColumn>
-                            <TemplateColumn Title="Stock">
-                                <CellTemplate>
-                                    <MudStack Row>
-                                        <MudText>@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock</MudText>
-                                    </MudStack>
-                                </CellTemplate>
-                            </TemplateColumn>
-                            <TemplateColumn Title="BoM" Editable="false">
-                                <CellTemplate>
-                                    <MudStack Row>
-                                        <MudIconButton href=@($"/bom/{context.Item.SetId}")
-                                                       Icon="@Icons.Material.Filled.List"
-                                                       Variant="Variant.Filled" Color="Color.Primary"
-                                                       Size="Size.Small"></MudIconButton>
-                                    </MudStack>
-                                </CellTemplate>
-                            </TemplateColumn>
-                        </Columns>
-                    </MudDataGrid>
-                </MudCard>
+                @if (!brickContext.Item.IsLoaded)
+                {
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText>Loading sets...</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                    {
+                        _ = LoadSetBricksAsync(brickContext.Item);
+                    }
+                }
+                else if (brickContext.Item.SetBricks.Any())
+                {
+                    <MudCard>
+                        <MudDataGrid T="Set" Items="GetSets(brickContext.Item.Sets).OrderBy(s => s.SetId)">
+                            <Columns>
+                                <TemplateColumn Title="Image">
+                                    <CellTemplate>
+                                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                            <MudImage class="cursor-pointer rounded-3" Elevation="2"
+                                                      Src="@context.Item.SetImg" Height="50"
+                                                      @onclick="((e) => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg))"/>
+                                        </MudStack>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
+                                <PropertyColumn Title="Name" Property="x => x.Name"/>
+                                <TemplateColumn Title="Needed">
+                                    <CellTemplate>
+                                        <MudStack Row>
+                                            @if (brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count <= brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock)
+                                            {
+                                                <MudText
+                                                    Color="@Color.Success">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                            }
+                                            else if (brickContext.Item.SetBricks.First(sb =>
+                                                             sb.SetId == context.Item.SetId).Count - brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock <= brickContext.Item.Brick.Count)
+                                            {
+                                                <MudText
+                                                    Color="@Color.Warning">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                            }
+                                            else
+                                            {
+                                                <MudText
+                                                    Color="@Color.Error">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                            }
+                                        </MudStack>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <TemplateColumn Title="Stock">
+                                    <CellTemplate>
+                                        <MudStack Row>
+                                            <MudText>@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock</MudText>
+                                        </MudStack>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <TemplateColumn Title="BoM" Editable="false">
+                                    <CellTemplate>
+                                        <MudStack Row>
+                                            <MudIconButton href=@($"/bom/{context.Item.SetId}")
+                                                           Icon="@Icons.Material.Filled.List"
+                                                           Variant="Variant.Filled" Color="Color.Primary"
+                                                           Size="Size.Small"></MudIconButton>
+                                        </MudStack>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                            </Columns>
+                        </MudDataGrid>
+                    </MudCard>
+                }
             </ChildRowContent>
             <PagerContent>
                 <MudDataGridPager T="BrickInfo"/>
@@ -199,6 +215,9 @@
     private BrickColor _color { get; set; }
     private List<BrickInfo>? _brickInfos = [];
     private List<BrickColor>? _colors = [];
+    private int _totalNeeded = 0;
+    private int _inUse = 0;
+    private int _inStock = 0;
     private string searchString;
     MudForm form;
 
@@ -210,18 +229,44 @@
         {
             var brickContext = context.Set<Brick>();
             var colorContext = context.Set<BrickColor>();
+            var setBrickContext = context.Set<SetBrick>();
 
             _colors = colorContext.ToList();
+            var bricks = brickContext.ToList();
+
+            var setBrickAggregates = setBrickContext
+                .GroupBy(sb => new { sb.PartNum, sb.ColorId })
+                .Select(g => new
+                {
+                    g.Key.PartNum,
+                    g.Key.ColorId,
+                    TotalStock = g.Sum(sb => sb.Stock),
+                    TotalNeeded = g.Sum(sb => sb.Count),
+                    SetCount = g.Select(sb => sb.SetId).Distinct().Count()
+                })
+                .ToList();
+
+            var aggregateDict = setBrickAggregates.ToDictionary(
+                a => (a.PartNum, a.ColorId),
+                a => a
+            );
+
+            _inStock = bricks.Sum(b => b.Count);
+            _inUse = setBrickAggregates.Sum(a => a.TotalStock);
+            _totalNeeded = setBrickAggregates.Sum(a => a.TotalNeeded);
 
             foreach (Brick brick in brickContext.ToList())
             {
-                var setBricks = GetSetBricks(brick);
+                aggregateDict.TryGetValue((brick.PartNum, brick.ColorId), out var aggregate);
 
                 _brickInfos?.Add(new BrickInfo
                 {
                     Brick = brick,
-                    Sets = setBricks.Select(sb => sb.SetId).ToList(),
-                    SetBricks = setBricks,
+                    SetBricks = new List<SetBrick>(),
+                    Sets = new List<string>(),
+                    TotalNeeded = aggregate?.TotalNeeded ?? 0,
+                    SetCount = aggregate?.SetCount ?? 0,
+                    IsLoaded = false
                 });
             }
         }
@@ -230,27 +275,35 @@
         logger.LogTrace("Loading Bricks Complete");
     }
 
-    private List<Set> GetSets(List<string> setIds)
+    private async Task LoadSetBricksAsync(BrickInfo brickInfo)
     {
-        using (var context = new InventoryContext())
+        if (!brickInfo.IsLoaded)
         {
-            var setContext = context.Set<Set>();
-
-            return setContext.Where(s => setIds.Contains(s.SetId)).ToList();
+            brickInfo.SetBricks = await GetSetBricks(brickInfo.Brick);
+            brickInfo.Sets = brickInfo.SetBricks.Select(sb => sb.SetId).Distinct().ToList();
+            brickInfo.IsLoaded = true;
+            StateHasChanged();
         }
     }
 
-    private List<SetBrick> GetSetBricks(Brick brick)
-    {
-        using (var context = new InventoryContext())
-        {
-            var setBrickContext = context.Set<SetBrick>();
 
-            return setBrickContext.Where(sb =>
-                    sb.PartNum == brick.PartNum &&
-                    sb.ColorId == brick.ColorId)
-                .ToList();
-        }
+    private List<Set> GetSets(List<string> setIds)
+    {
+        using var context = new InventoryContext();
+        var setContext = context.Set<Set>();
+
+        return setContext.Where(s => setIds.Contains(s.SetId)).ToList();
+    }
+
+    private async Task<List<SetBrick>> GetSetBricks(Brick brick)
+    {
+        await using var context = new InventoryContext();
+        var setBrickContext = context.Set<SetBrick>();
+
+        return setBrickContext.Where(sb =>
+                sb.PartNum == brick.PartNum &&
+                sb.ColorId == brick.ColorId)
+            .ToList();
     }
 
     private bool BrickFilterFunc(BrickInfo brick) => BrickFilter(brick);
@@ -314,10 +367,11 @@
     private class BrickInfo
     {
         public Brick Brick { get; set; }
-
         public List<string> Sets { get; set; }
-
         public List<SetBrick> SetBricks { get; set; }
+        public int TotalNeeded { get; set; }
+        public int SetCount { get; set; }
+        public bool IsLoaded { get; set; }
     }
 
     private void DeleteBrick(Brick brick)

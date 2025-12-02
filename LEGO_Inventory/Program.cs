@@ -31,6 +31,34 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllers();
 
+// builder.Services.AddAuthentication(options =>
+//     {
+//         options.DefaultScheme =
+//             Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme;
+//         options.DefaultChallengeScheme = "GitHub";
+//     })
+//     .AddCookie()
+//     .AddMicrosoftAccount(options =>
+//     {
+//         options.ClientId = builder.Configuration["Authentication:MicrosoftAccount:ClientId"];
+//         options.ClientSecret = builder.Configuration["Authentication:MicrosoftAccount:ClientSecret"];
+//     })
+//     .AddGitHub(options =>
+//     {
+//         options.ClientId = builder.Configuration["Authentication:GitHub:ClientId"];
+//         options.ClientSecret = builder.Configuration["Authentication:GitHub:ClientSecret"];
+//     })
+//     .AddGoogle(options =>
+//     {
+//         options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
+//         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+//     })
+//     .AddDiscord(options =>
+//     {
+//         options.ClientId = builder.Configuration["Authentication:Discord:ClientId"];
+//         options.ClientSecret = builder.Configuration["Authentication:Discord:ClientSecret"];
+//     });
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
