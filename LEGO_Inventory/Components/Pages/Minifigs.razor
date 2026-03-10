@@ -1,71 +1,111 @@
-﻿@page "/minifigs"
+@page "/minifigs"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
+@using System.Drawing
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
 @rendermode InteractiveServer
 
 <PageTitle>@_pageTitle</PageTitle>
 
-<h1>Minifigs</h1>
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Minifigs</MudText>
 
 <MudGrid>
     <MudItem xs="12">
-        <MudDataGrid T="Minifig" Items="@_minifigs.OrderBy(b => b.MinifigId)"
+        <MudDataGrid T="MinifigInfo" Items="@_minifigInfos.OrderBy(m => m.Minifig.MinifigId)"
                      SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
                      QuickFilter="MinifigFilterFunc"
                      ReadOnly="false">
             <ToolBarContent>
-                <MudText Typo="Typo.h6">Minifigs</MudText>
+                <MudText Typo="Typo.h6">Total Minifigs: @_minifigInfos.Count</MudText>
                 <MudSpacer/>
                 <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
                               Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
-                              Class="mt-0"></MudTextField>
+                              Class="mt-0"/>
             </ToolBarContent>
             <Columns>
-                @* <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Sets.Count < 0)"/> *@
+                <HierarchyColumn T="MinifigInfo" ButtonDisabledFunc="@(info => info.PartCount == 0)"/>
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
-                            <MudImage class="cursor-pointer" Src="@context.Item.MinifigImgUrl" Height="50"
-                                      @onclick="((e) => OpenImagePopup(context.Item.MinifigId, context.Item.MinifigName, context.Item.MinifigImgUrl))"/>
+                            <MudImage class="cursor-pointer rounded-3" Elevation="2"
+                                      Src="@context.Item.Minifig.MinifigImgUrl" Height="50"
+                                      @onclick="() => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.MinifigName, context.Item.Minifig.MinifigImgUrl)"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
-                <PropertyColumn Property="x => x.MinifigId" Title="Set Id" Editable="false"/>
-                <PropertyColumn Property="x => x.MinifigName" Title="Name" Editable="false"/>
-                @* <TemplateColumn Title="Delete" Editable="false"> *@
-                @*     <CellTemplate> *@
-                @*         <MudStack Row> *@
-                @*             <MudIconButton *@
-                @*                 Icon="@Icons.Material.Filled.Delete" *@
-                @*                 Variant="Variant.Filled" *@
-                @*                 Color="Color.Error" *@
-                @*                 Size="Size.Small" *@
-                @*                 OnClick="() => DeleteSet(context.Item.SetId)"/> *@
-                @*         </MudStack> *@
-                @*     </CellTemplate> *@
-                @* </TemplateColumn> *@
+                <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Id" Editable="false"/>
+                <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name" Editable="false"/>
+                <PropertyColumn Property="x => x.Minifig.Stock" Title="Stock" Editable="false"/>
+                <PropertyColumn Property="x => x.PartCount" Title="Parts" Editable="false"/>
             </Columns>
-            @* <ChildRowContent> *@
-            @*     <MudCard> *@
-            @*         <MudGrid> *@
-            @*             @foreach (var set in context.Item.Sets) *@
-            @*             { *@
-            @*                 <MudItem xs="3"> *@
-            @*                     <MudPaper Class="d-flex align-center justify-center mud-width-full py-8"> *@
-            @*                         <MudItem> *@
-            @*                             <MudText Align="Align.Center">@set.Name</MudText> *@
-            @*                             <MudText Align="Align.Center">@set.SetId</MudText> *@
-            @*                         </MudItem> *@
-            @*                     </MudPaper> *@
-            @*                 </MudItem> *@
-            @*             } *@
-            @*         </MudGrid> *@
-            @*     </MudCard> *@
-            @* </ChildRowContent> *@
+
+            <ChildRowContent Context="minifigContext">
+                @if (!minifigContext.Item.IsLoaded)
+                {
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText>Loading parts...</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                    {
+                        _ = LoadMinifigBricksAsync(minifigContext.Item);
+                    }
+                }
+                else if (minifigContext.Item.Bricks.Any())
+                {
+                    <MudCard>
+                        <MudDataGrid T="BrickEntry" Items="minifigContext.Item.Bricks.OrderBy(b => b.Brick.PartNum)">
+                            <Columns>
+                                <TemplateColumn Title="Image" Editable="false">
+                                    <CellTemplate>
+                                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                            <MudImage class="cursor-pointer rounded-3" Elevation="2"
+                                                      Src="@context.Item.Brick.PartImg" Height="50"
+                                                      @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg)"/>
+                                        </MudStack>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <PropertyColumn Title="Part Id" Property="x => x.Brick.PartNum"/>
+                                <PropertyColumn Title="Name" Property="x => x.Brick.Name"/>
+                                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
+                                    <CellTemplate>
+                                        <MudStack Row>
+                                            @if (context.Item.Brick.HexColor != null)
+                                            {
+                                                @if (IsDark(context.Item.Brick.HexColor))
+                                                {
+                                                    <MudChip T="string"
+                                                        OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
+                                                        class="mud-elevation-2"
+                                                        Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                                }
+                                                else
+                                                {
+                                                    <MudChip T="string"
+                                                        OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
+                                                        class="mud-elevation-2"
+                                                        Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: #202020; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <MudChip T="string" Color="Color.Default">N/A</MudChip>
+                                            }
+                                        </MudStack>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <PropertyColumn Title="Quantity" Property="x => x.Quantity"/>
+                            </Columns>
+                        </MudDataGrid>
+                    </MudCard>
+                }
+            </ChildRowContent>
+
             <PagerContent>
-                <MudDataGridPager T="Minifig"/>
+                <MudDataGridPager T="MinifigInfo"/>
             </PagerContent>
         </MudDataGrid>
     </MudItem>
@@ -73,75 +113,127 @@
 
 @code {
     private string _pageTitle = "Minifigs";
-    private List<Minifig>? _minifigs;
+    private List<MinifigInfo> _minifigInfos = [];
     private string searchString;
-    MudForm form;
 
     protected override async Task OnInitializedAsync()
     {
-        var logger = LoggerFactory.CreateLogger<Minifig>();
+        var logger = LoggerFactory.CreateLogger<Minifigs>();
         logger.LogTrace("Loading Minifigs");
         using (var context = new InventoryContext())
         {
             var minifigContext = context.Set<Minifig>();
+            var minifigBrickContext = context.Set<MinifigBrick>();
 
-            _minifigs = minifigContext.ToList();
+            var partCounts = minifigBrickContext
+                .GroupBy(mb => mb.MinifigID)
+                .Select(g => new { MinifigId = g.Key, Count = g.Count() })
+                .ToDictionary(x => x.MinifigId, x => x.Count);
+
+            _minifigInfos.Clear();
+
+            foreach (var minifig in minifigContext.ToList())
+            {
+                partCounts.TryGetValue(minifig.MinifigId, out var count);
+                _minifigInfos.Add(new MinifigInfo
+                {
+                    Minifig = minifig,
+                    MinifigBricks = new List<MinifigBrick>(),
+                    Bricks = new List<BrickEntry>(),
+                    PartCount = count,
+                    IsLoaded = false
+                });
+            }
         }
 
         StateHasChanged();
-        logger.LogTrace("Loading Sets Complete");
+        logger.LogTrace("Loading Minifigs Complete");
     }
-    
 
-    private bool MinifigFilterFunc(Minifig minifig) => MinifigFilter(minifig);
+    private async Task LoadMinifigBricksAsync(MinifigInfo minifigInfo)
+    {
+        if (!minifigInfo.IsLoaded)
+        {
+            await using var context = new InventoryContext();
+            var minifigBrickContext = context.Set<MinifigBrick>();
+            var brickContext = context.Set<Brick>();
 
-    private bool MinifigFilter(Minifig minifig)
+            var minifigBricks = minifigBrickContext
+                .Where(mb => mb.MinifigID == minifigInfo.Minifig.MinifigId)
+                .ToList();
+
+            minifigInfo.MinifigBricks = minifigBricks;
+            minifigInfo.Bricks = minifigBricks
+                .Select(mb => new BrickEntry
+                {
+                    Brick = brickContext.FirstOrDefault(b => b.PartNum == mb.BrickID && b.ColorId == mb.ColorId),
+                    Quantity = mb.Quantity
+                })
+                .Where(be => be.Brick != null)
+                .ToList();
+
+            minifigInfo.IsLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private bool MinifigFilterFunc(MinifigInfo info) => MinifigFilter(info);
+
+    private bool MinifigFilter(MinifigInfo info)
     {
         if (string.IsNullOrWhiteSpace(searchString))
             return true;
-        if (minifig.MinifigId.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+        if (info.Minifig.MinifigId.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
-        if (minifig.MinifigName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+        if (info.Minifig.MinifigName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
         return false;
     }
 
-    private Task OpenImagePopup(string minifigId, string minifigName, string minifigImgUrl)
+    private Task OpenImagePopup(string id, string name, string? imgUrl)
     {
-        var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
-
+        var options = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
         var parameters = new DialogParameters<ImagePopup>
         {
-            { x => x._id, minifigId },
-            { x => x._name, minifigName },
-            { x => x._imgUrl, minifigImgUrl }
+            { x => x._id, id },
+            { x => x._name, name },
+            { x => x._imgUrl, imgUrl }
         };
-
-        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
+        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, options);
     }
 
-    // // events
-    // void CommittedItemChanges(Set set)
-    // {
-    //     using (var context = new InventoryContext())
-    //     {
-    //         var sets = context.Set<Set>();
-    //
-    //         Set temp = sets.First(s => s == set);
-    //
-    //         temp.OwnCount = set.OwnCount;
-    //         temp.BuildCount = set.BuildCount;
-    //
-    //         context.SaveChanges();
-    //     }
-    // }
+    private Task OpenColorPopup(string hex, string name)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+        var parameters = new DialogParameters<ColorPopup>
+        {
+            { x => x._hexColor, hex },
+            { x => x._name, name },
+        };
+        return DialogService.ShowAsync<ColorPopup>("Color Popup", parameters, options);
+    }
 
-    // private void DeleteSet(string setId)
-    // {
-    //     DeleteData deleteData = new DeleteData();
-    //
-    //     deleteData.DeleteSetInfo(setId);
-    //
-    //     OnInitializedAsync();
-    // }
+    public bool IsDark(string hex)
+    {
+        System.Drawing.Color color = ColorTranslator.FromHtml($"#{hex}");
+        int r = Convert.ToInt16(color.R);
+        int g = Convert.ToInt16(color.G);
+        int b = Convert.ToInt16(color.B);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+    }
+
+    private class MinifigInfo
+    {
+        public Minifig Minifig { get; set; }
+        public List<MinifigBrick> MinifigBricks { get; set; }
+        public List<BrickEntry> Bricks { get; set; }
+        public int PartCount { get; set; }
+        public bool IsLoaded { get; set; }
+    }
+
+    private class BrickEntry
+    {
+        public Brick Brick { get; set; }
+        public int Quantity { get; set; }
+    }
 }

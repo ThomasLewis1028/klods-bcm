@@ -1,22 +1,27 @@
 ﻿@inherits LayoutComponentBase
+@using Color = MudBlazor.Color
 
 <PageTitle>LEGO Inventory Tracker</PageTitle>
 
-
-<MudThemeProvider IsDarkMode="@_isDarkMode"/>
+<MudThemeProvider Theme="_theme" IsDarkMode="@_isDarkMode"/>
 <MudPopoverProvider/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
 
 <MudLayout>
-    <MudAppBar Elevation="1">
-        
+    <MudAppBar Elevation="2">
+        <MudText Typo="Typo.h6" Style="font-weight: 700; letter-spacing: 0.04em;">LEGO Inventory</MudText>
+        <MudSpacer/>
+        <MudTooltip Text="@(_isDarkMode ? "Light Mode" : "Dark Mode")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit" OnClick="@ToggleDarkMode"/>
+        </MudTooltip>
     </MudAppBar>
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
         <NavMenu/>
     </MudDrawer>
     <MudMainContent>
-        <MudContainer>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-6">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -28,11 +33,36 @@
     private bool _isDarkMode = true;
     private bool _drawerOpen = true;
 
+    private MudTheme _theme = new MudTheme()
+    {
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#DA291C",
+            Secondary = "#FFD700",
+            AppbarBackground = "#1C1C1E",
+            Background = "#121212",
+            Surface = "#1E1E1E",
+            DrawerBackground = "#1C1C1E",
+            DrawerText = "rgba(255,255,255,0.87)",
+            DrawerIcon = "rgba(255,255,255,0.87)",
+            Success = "#4CAF50",
+            Info = "#2196F3",
+        },
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#DA291C",
+            Secondary = "#E6B800",
+            AppbarBackground = "#DA291C",
+            AppbarText = "rgba(255,255,255,0.87)",
+        }
+    };
+
+    private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            // _isDarkMode = await _mudThemeProvider.GetSystemPreference();
             StateHasChanged();
         }
     }

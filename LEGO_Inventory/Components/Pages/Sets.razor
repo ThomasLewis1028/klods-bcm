@@ -9,17 +9,23 @@
 
 <PageTitle>@_pageTitle</PageTitle>
 
-<h1>Sets</h1>
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Sets</MudText>
 
 <MudGrid>
     <MudItem xs="12">
-        <MudItem>
-            <MudTextField xs="6" T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true"
-                          OnKeyDown="@OnKeyDown"/>
-        </MudItem>
-        <MudButton xs="6" Style="margin-top: 10px" Variant="Variant.Filled" Color="Color.Primary"
-                   OnClick="@(() => ImportSet())">Import Set
-        </MudButton>
+        <MudPaper Class="pa-4 mb-2" Elevation="2">
+            <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Wrap="Wrap.Wrap">
+                <MudTextField T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true"
+                              OnKeyDown="@OnKeyDown" Variant="Variant.Outlined"
+                              HelperText="Enter a set ID or multiple IDs separated by spaces"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Style="min-width: 280px;"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="@(() => ImportSet())" Size="Size.Large">Import Set
+                </MudButton>
+            </MudStack>
+        </MudPaper>
     </MudItem>
 
     @* <MudProgressLinear Value="@setData.Count" Max="@_importSize"/> *@
