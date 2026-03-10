@@ -4,6 +4,8 @@ namespace LEGO_Inventory.Services;
 
 public class ThemeService
 {
+    public const string DefaultPrimaryColor = "#DA291C";
+
     public bool IsDarkMode { get; private set; } = true;
 
     public MudTheme Theme { get; } = new MudTheme()
@@ -41,6 +43,14 @@ public class ThemeService
     public void SetDarkMode(bool isDark)
     {
         IsDarkMode = isDark;
+        OnChange?.Invoke();
+    }
+
+    public void SetPrimaryColor(string hex)
+    {
+        Theme.PaletteDark.Primary = hex;
+        Theme.PaletteLight.Primary = hex;
+        Theme.PaletteLight.AppbarBackground = hex;
         OnChange?.Invoke();
     }
 }

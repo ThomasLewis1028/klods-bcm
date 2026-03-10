@@ -20,7 +20,7 @@
 
 .landing-card:hover {
     transform: translateY(-6px);
-    box-shadow: 0 12px 32px rgba(218, 41, 28, 0.3) !important;
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--mud-palette-primary) 30%, transparent) !important;
 }
 
 /* Hide browser-native password reveal button (Edge/IE) */

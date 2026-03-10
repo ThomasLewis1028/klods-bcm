@@ -67,7 +67,7 @@
     protected override void OnInitialized()
     {
         ThemeService.OnChange += OnThemeChanged;
-        AuthService.OnChange += StateHasChanged;
+        AuthService.OnChange += OnAuthChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -93,10 +93,17 @@
         StateHasChanged();
     }
 
+    private void OnAuthChanged()
+    {
+        var color = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
+        ThemeService.SetPrimaryColor(color);
+        StateHasChanged();
+    }
+
     public void Dispose()
     {
         ThemeService.OnChange -= OnThemeChanged;
-        AuthService.OnChange -= StateHasChanged;
+        AuthService.OnChange -= OnAuthChanged;
     }
 
     private Task OpenLoginDialog()

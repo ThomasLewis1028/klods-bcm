@@ -88,6 +88,19 @@ public class AuthService
         return true;
     }
 
+    public void ChangeThemeColor(string? hex)
+    {
+        if (CurrentUser == null) return;
+
+        using var context = new InventoryContext();
+        var user = context.Users.First(u => u.UserId == CurrentUser.UserId);
+        user.PrimaryColor = hex;
+        context.SaveChanges();
+
+        CurrentUser.PrimaryColor = hex;
+        OnChange?.Invoke();
+    }
+
     public void ChangeProfilePicture(string? url)
     {
         if (CurrentUser == null) return;

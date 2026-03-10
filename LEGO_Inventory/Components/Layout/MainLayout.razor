@@ -95,7 +95,11 @@
 
                 var userId = await LocalStorage.GetAsync<int>("userId");
                 if (userId.Success)
+                {
                     AuthService.RestoreUser(userId.Value);
+                    var color = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
+                    ThemeService.SetPrimaryColor(color);
+                }
             }
             catch { /* storage unavailable or tampered */ }
 
@@ -116,9 +120,15 @@
         try
         {
             if (AuthService.CurrentUser != null)
+            {
                 await LocalStorage.SetAsync("userId", AuthService.CurrentUser.UserId);
+                ThemeService.SetPrimaryColor(AuthService.CurrentUser.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
+            }
             else
+            {
                 await LocalStorage.DeleteAsync("userId");
+                ThemeService.SetPrimaryColor(ThemeService.DefaultPrimaryColor);
+            }
         }
         catch { /* storage unavailable */ }
 
