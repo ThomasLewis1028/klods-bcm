@@ -166,7 +166,7 @@
     {
         using var context = new InventoryContext();
         _minifigs = context.Set<Minifig>()
-            .Where(m => m.MinifigImgUrl != null)
+            .Where(m => m.MinifigImgUrl != null && m.MinifigImgUrl != "")
             .OrderBy(m => m.MinifigName)
             .ToList();
         return Task.CompletedTask;

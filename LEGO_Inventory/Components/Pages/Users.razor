@@ -1,0 +1,58 @@
+@page "/users"
+@using LEGO_Inventory.Database
+@using Color = MudBlazor.Color
+@rendermode InteractiveServer
+
+<PageTitle>Users</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Users</MudText>
+
+<MudPaper Elevation="2">
+    <MudDataGrid T="User" Items="@_users" SortMode="SortMode.Multiple" QuickFilter="FilterFunc">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Users</MudText>
+            <MudSpacer/>
+            <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Immediate="true" Class="mt-0"/>
+        </ToolBarContent>
+        <Columns>
+            <TemplateColumn Title="Avatar" Sortable="false">
+                <CellTemplate>
+                    <MudAvatar Style="width: 36px; height: 36px;">
+                        @if (context.Item.ProfilePictureUrl != null)
+                        {
+                            <MudImage Src="@context.Item.ProfilePictureUrl" Style="width: 100%; height: 100%; object-fit: cover;"/>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Person"/>
+                        }
+                    </MudAvatar>
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="x => x.UserId" Title="ID"/>
+            <PropertyColumn Property="x => x.UserName" Title="Username"/>
+        </Columns>
+        <PagerContent>
+            <MudDataGridPager T="User"/>
+        </PagerContent>
+    </MudDataGrid>
+</MudPaper>
+
+@code {
+    private List<User> _users = [];
+    private string _search = string.Empty;
+
+    protected override Task OnInitializedAsync()
+    {
+        using var context = new InventoryContext();
+        _users = context.Users.OrderBy(u => u.UserName).ToList();
+        return Task.CompletedTask;
+    }
+
+    private bool FilterFunc(User user) =>
+        string.IsNullOrWhiteSpace(_search) ||
+        user.UserName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        user.UserId.ToString().Contains(_search);
+}
