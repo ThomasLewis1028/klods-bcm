@@ -14,6 +14,7 @@ public class InventoryContext : DbContext
     public DbSet<Color> Colors { get; set; }
     public DbSet<SetOwned> SetsOwned { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<UserExternalLogin> UserExternalLogins { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -84,6 +85,14 @@ public class InventoryContext : DbContext
         
         // COLOR
         modelBuilder.Entity<Color>().HasKey(e => new { e.Id });
+
+        // USER EXTERNAL LOGIN
+        modelBuilder.Entity<UserExternalLogin>().HasKey(e => new { e.Provider, e.ProviderKey });
+        modelBuilder.Entity<UserExternalLogin>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .IsRequired();
     }
     
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

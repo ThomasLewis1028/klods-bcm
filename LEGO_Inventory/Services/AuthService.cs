@@ -12,7 +12,7 @@ public class AuthService
     {
         using var context = new InventoryContext();
         var user = context.Users.FirstOrDefault(u => u.UserName == username);
-        if (user == null || !VerifyPassword(password, user.PasswordHash))
+        if (user == null || string.IsNullOrEmpty(user.PasswordHash) || !VerifyPassword(password, user.PasswordHash))
             return false;
 
         CurrentUser = user;
@@ -85,6 +85,35 @@ public class AuthService
         context.SaveChanges();
 
         CurrentUser.PasswordHash = user.PasswordHash;
+        return true;
+    }
+
+    public List<UserExternalLogin> GetLinkedLogins()
+    {
+        if (CurrentUser == null) return [];
+        using var context = new InventoryContext();
+        return context.UserExternalLogins
+            .Where(l => l.UserId == CurrentUser.UserId)
+            .ToList();
+    }
+
+    public bool UnlinkExternalLogin(string provider)
+    {
+        if (CurrentUser == null) return false;
+
+        using var context = new InventoryContext();
+        var logins = context.UserExternalLogins
+            .Where(l => l.UserId == CurrentUser.UserId)
+            .ToList();
+
+        var hasPassword = !string.IsNullOrEmpty(CurrentUser.PasswordHash);
+        if (!hasPassword && logins.Count <= 1) return false; // last auth method
+
+        var login = logins.FirstOrDefault(l => l.Provider == provider);
+        if (login == null) return false;
+
+        context.UserExternalLogins.Remove(login);
+        context.SaveChanges();
         return true;
     }
 

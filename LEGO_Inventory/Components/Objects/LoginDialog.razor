@@ -1,4 +1,6 @@
 @inject AuthService AuthService
+@inject PendingAuthService PendingAuth
+@inject NavigationManager Nav
 @inject IDialogService DialogService
 @using Color = MudBlazor.Color
 
@@ -14,6 +16,24 @@
             @if (_errorMessage != null)
             {
                 <MudAlert Severity="Severity.Error" Dense="true">@_errorMessage</MudAlert>
+            }
+
+            @if (!_isRegister && PendingAuth.EnabledProviders.Count > 0)
+            {
+                <MudStack Spacing="2">
+                    @foreach (var provider in PendingAuth.EnabledProviders)
+                    {
+                        var p = provider;
+                        <MudButton FullWidth="true" Variant="Variant.Outlined"
+                                   StartIcon="@ProviderIcon(p)"
+                                   OnClick="@(() => SignInWithProvider(p))">
+                            Continue with @p
+                        </MudButton>
+                    }
+                </MudStack>
+                <MudDivider>
+                    <MudText Typo="Typo.caption" Style="opacity: 0.5; padding: 0 8px;">or</MudText>
+                </MudDivider>
             }
 
             <MudTextField T="string" Label="Username" @bind-Value="_username"
@@ -92,4 +112,18 @@
     {
         if (args.Key == "Enter") Submit();
     }
+
+    private void SignInWithProvider(string provider)
+    {
+        MudDialog.Cancel();
+        Nav.NavigateTo($"/auth/challenge?provider={provider}", forceLoad: true);
+    }
+
+    private static string ProviderIcon(string provider) => provider switch
+    {
+        "Google"    => Icons.Custom.Brands.Google,
+        "Microsoft" => Icons.Custom.Brands.Microsoft,
+        "Discord"   => Icons.Material.Filled.Chat,
+        _           => Icons.Material.Filled.Login
+    };
 }

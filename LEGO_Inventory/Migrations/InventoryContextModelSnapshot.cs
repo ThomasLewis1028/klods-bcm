@@ -105,6 +105,24 @@ namespace LEGO_Inventory.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("LEGO_Inventory.Database.UserExternalLogin", b =>
+                {
+                    b.Property<string>("Provider")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProviderKey")
+                        .HasColumnType("text");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Provider", "ProviderKey");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserExternalLogins");
+                });
+
             modelBuilder.Entity("LEGO_Inventory.Minifig", b =>
                 {
                     b.Property<string>("MinifigId")
@@ -248,6 +266,15 @@ namespace LEGO_Inventory.Migrations
                     b.HasKey("SetId", "SetIndex");
 
                     b.ToTable("SetsOwned");
+                });
+
+            modelBuilder.Entity("LEGO_Inventory.Database.UserExternalLogin", b =>
+                {
+                    b.HasOne("LEGO_Inventory.Database.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LEGO_Inventory.MinifigBrick", b =>

@@ -1,6 +1,8 @@
 @page "/profile"
 @inject AuthService AuthService
 @inject ThemeService ThemeService
+@inject PendingAuthService PendingAuth
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @using LEGO_Inventory.Database
 @using Color = MudBlazor.Color
@@ -41,6 +43,46 @@
             </MudStack>
         </MudPaper>
     </MudItem>
+
+    @* ── Linked Accounts ── *@
+    @if (PendingAuth.EnabledProviders.Count > 0)
+    {
+        <MudItem xs="12">
+            <MudPaper Class="pa-6" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 700;">Linked Accounts</MudText>
+                <MudStack Spacing="2">
+                    @foreach (var provider in PendingAuth.EnabledProviders)
+                    {
+                        var p = provider;
+                        var linked = _linkedLogins.Any(l => l.Provider == p);
+                        var isLast = !_hasPassword && _linkedLogins.Count <= 1 && linked;
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                            <MudIcon Icon="@ProviderIcon(p)"/>
+                            <MudText Style="flex: 1;">@p</MudText>
+                            @if (linked)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small">Linked</MudChip>
+                                <MudTooltip Text="@(isLast ? "Can't unlink your only sign-in method" : "Unlink")">
+                                    <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
+                                                   Size="Size.Small"
+                                                   Disabled="@isLast"
+                                                   OnClick="@(() => Unlink(p))"/>
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Link"
+                                           OnClick="@(() => LinkProvider(p))">
+                                    Link
+                                </MudButton>
+                            }
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    }
 
     @* ── Change Username ── *@
     <MudItem xs="12" md="6">
@@ -184,6 +226,10 @@
 </MudGrid>
 
 @code {
+    // Linked accounts
+    private List<UserExternalLogin> _linkedLogins = [];
+    private bool _hasPassword;
+
     private record ColorSwatch(string Name, string Hex);
 
     private readonly List<ColorSwatch> _colorSwatches =
@@ -236,6 +282,16 @@
     protected override Task OnInitializedAsync()
     {
         _customColorHex = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
+        _linkedLogins   = AuthService.GetLinkedLogins();
+        _hasPassword    = !string.IsNullOrEmpty(AuthService.CurrentUser?.PasswordHash);
+
+        // Show feedback if we just came back from a link flow
+        var uri  = new Uri(Nav.Uri);
+        var qs   = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        if (qs["linked"] == "true")
+            Snackbar.Add("Account linked successfully.", Severity.Success);
+        else if (qs["link_error"] == "already_linked")
+            Snackbar.Add("That account is already linked to another user.", Severity.Error);
 
         using var context = new InventoryContext();
         _minifigs = context.Set<Minifig>()
@@ -280,6 +336,33 @@
         AuthService.ChangeProfilePicture(url);
         Snackbar.Add("Profile picture updated.", Severity.Success);
     }
+
+    private void LinkProvider(string provider)
+    {
+        var userId = AuthService.CurrentUser!.UserId;
+        Nav.NavigateTo($"/auth/challenge?provider={provider}&linkUserId={userId}", forceLoad: true);
+    }
+
+    private void Unlink(string provider)
+    {
+        if (AuthService.UnlinkExternalLogin(provider))
+        {
+            _linkedLogins = AuthService.GetLinkedLogins();
+            Snackbar.Add($"{provider} account unlinked.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Cannot unlink your only sign-in method.", Severity.Warning);
+        }
+    }
+
+    private static string ProviderIcon(string provider) => provider switch
+    {
+        "Google"    => Icons.Custom.Brands.Google,
+        "Microsoft" => Icons.Custom.Brands.Microsoft,
+        "Discord"   => Icons.Material.Filled.Chat,
+        _           => Icons.Material.Filled.Login
+    };
 
     private void ApplyCustomColor()
     {
