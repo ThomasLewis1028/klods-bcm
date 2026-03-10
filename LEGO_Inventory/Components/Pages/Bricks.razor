@@ -95,7 +95,7 @@
                                     <MudChip
                                         OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
                                         class="mud-elevation-2"
-                                        Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
+                                        Style="@($"background-color: {"#" + context.Item.Brick.HexColor}; color: white; width: -moz-available;")">@context.Item.Brick.ColorName</MudChip>
                                 }
                                 else
                                 {
@@ -131,6 +131,7 @@
             </Columns>
 
             <ChildRowContent Context="brickContext">
+                <div class="child-row-content">
                 @if (!brickContext.Item.IsLoaded)
                 {
                     <MudCard>
@@ -201,6 +202,7 @@
                         </MudDataGrid>
                     </MudCard>
                 }
+                </div>
             </ChildRowContent>
             <PagerContent>
                 <MudDataGridPager T="BrickInfo"/>
