@@ -2,12 +2,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LEGO_Inventory;
 
-[Table("SetMinifig")]
-public class SetMinifig
+[Table("MinifigOwned")]
+public class MinifigOwned
 {
-    public string SetId { get; set; }
+    public int UserId { get; set; }
 
     public string MinifigId { get; set; }
 
-    public int Count { get; set; }
+    public int Stock { get; set; }
 }

@@ -162,29 +162,17 @@
                                 <TemplateColumn Title="Needed">
                                     <CellTemplate>
                                         <MudStack Row>
-                                            @if (brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count <= brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock)
-                                            {
-                                                <MudText
-                                                    Color="@Color.Success">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                            @{
+                                                var needed = brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count;
                                             }
-                                            else if (brickContext.Item.SetBricks.First(sb =>
-                                                             sb.SetId == context.Item.SetId).Count - brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock <= brickContext.Item.Brick.Count)
+                                            @if (needed <= brickContext.Item.Brick.Count)
                                             {
-                                                <MudText
-                                                    Color="@Color.Warning">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                                <MudText Color="@Color.Success">@needed</MudText>
                                             }
                                             else
                                             {
-                                                <MudText
-                                                    Color="@Color.Error">@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Count</MudText>
+                                                <MudText Color="@Color.Error">@needed</MudText>
                                             }
-                                        </MudStack>
-                                    </CellTemplate>
-                                </TemplateColumn>
-                                <TemplateColumn Title="Stock">
-                                    <CellTemplate>
-                                        <MudStack Row>
-                                            <MudText>@brickContext.Item.SetBricks.First(sb => sb.SetId == context.Item.SetId).Stock</MudText>
                                         </MudStack>
                                     </CellTemplate>
                                 </TemplateColumn>
@@ -236,17 +224,23 @@
             _colors = colorContext.ToList();
             var bricks = brickContext.ToList();
 
+            var setBrickOwnedContext = context.Set<SetBrickOwned>();
+
             var setBrickAggregates = setBrickContext
                 .GroupBy(sb => new { sb.PartNum, sb.ColorId })
                 .Select(g => new
                 {
                     g.Key.PartNum,
                     g.Key.ColorId,
-                    TotalStock = g.Sum(sb => sb.Stock),
                     TotalNeeded = g.Sum(sb => sb.Count),
                     SetCount = g.Select(sb => sb.SetId).Distinct().Count()
                 })
                 .ToList();
+
+            var ownedStockDict = setBrickOwnedContext
+                .GroupBy(sbo => new { sbo.PartNum, sbo.ColorId })
+                .Select(g => new { g.Key.PartNum, g.Key.ColorId, TotalStock = g.Sum(sbo => sbo.Stock) })
+                .ToDictionary(a => (a.PartNum, a.ColorId), a => a.TotalStock);
 
             var aggregateDict = setBrickAggregates.ToDictionary(
                 a => (a.PartNum, a.ColorId),
@@ -254,7 +248,7 @@
             );
 
             _inStock = bricks.Sum(b => b.Count);
-            _inUse = setBrickAggregates.Sum(a => a.TotalStock);
+            _inUse = ownedStockDict.Values.Sum();
             _totalNeeded = setBrickAggregates.Sum(a => a.TotalNeeded);
 
             foreach (Brick brick in brickContext.ToList())

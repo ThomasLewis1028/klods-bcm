@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,126 +7,98 @@ public class DeleteData
 {
     private readonly ILogger<ImportData> _logger =
         LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<ImportData>();
-    
+
     public bool DeleteSetInfo(string? setId, bool moveStock = false)
     {
-        
         _logger.LogInformation($"Deleting All Data for set {setId}");
-        
-        using (var context = new InventoryContext())
-        {
-            var setContext = context.Set<Set>();
-            var setBrickContext = context.Set<SetBrick>();
-            var brickContext = context.Set<Brick>();
 
-            if(moveStock)
-            {
-                _logger.LogInformation($"Moving stock back to inventory {setId}");
-                
-                foreach (var setBrick in setBrickContext.Where(sb => sb.SetId == setId))
-                {
-                    brickContext.First(b => b.PartNum == setBrick.PartNum 
-                                            && b.ColorId == setBrick.ColorId)
-                        .Count += setBrick.Stock;
-                }
-                
-                _logger.LogInformation($"Stock for set {setId} has been moved to inventory");
-            }
-            
-            setContext
-                .Where(s => s.SetId == setId)
-                .ExecuteDelete();
-            
-            context.SaveChanges();
-            
-            
-            _logger.LogInformation($"{setId} has been deleted");
-            
-            return !setContext.Any(s => s.SetId == setId);
-        }
+        using var context = new InventoryContext();
+
+        // Delete SetBrickOwned for all instances of this set first (FK constraint order)
+        context.Set<SetBrickOwned>()
+            .Where(sbo => sbo.SetId == setId)
+            .ExecuteDelete();
+
+        // Delete SetOwned instances
+        context.Set<SetOwned>()
+            .Where(s => s.SetId == setId)
+            .ExecuteDelete();
+
+        // Delete SetBrick BOM entries
+        context.Set<SetBrick>()
+            .Where(sb => sb.SetId == setId)
+            .ExecuteDelete();
+
+        // Delete SetMinifig BOM entries
+        context.Set<SetMinifig>()
+            .Where(sm => sm.SetId == setId)
+            .ExecuteDelete();
+
+        // Delete the set itself
+        context.Set<Set>()
+            .Where(s => s.SetId == setId)
+            .ExecuteDelete();
+
+        context.SaveChanges();
+        _logger.LogInformation($"{setId} has been deleted");
+
+        return !context.Set<Set>().Any(s => s.SetId == setId);
     }
-    
-    
-    public bool DeleteOwnedSetInfo(string? setId, int setIndex, bool moveStock = false)
+
+    public bool DeleteOwnedSetInfo(int userId, string? setId, int setIndex, bool moveStock = false)
     {
-        
-        _logger.LogInformation($"Deleting All Data for set {setId} - {setIndex}");
-        
-        using (var context = new InventoryContext())
-        {
-            var setContext = context.Set<Set>();
-            var setOwnedContext = context.Set<SetOwned>();
-            var setBrickContext = context.Set<SetBrick>();
-            var brickContext = context.Set<Brick>();
+        _logger.LogInformation($"Deleting All Data for set {setId} - {setIndex} (user {userId})");
 
-            if(moveStock)
-            {
-                _logger.LogInformation($"Moving stock back to inventory {setId}");
-                
-                foreach (var setBrick in setBrickContext.Where(sb => sb.SetId == setId))
-                {
-                    brickContext.First(b => b.PartNum == setBrick.PartNum 
-                                            && b.ColorId == setBrick.ColorId)
-                        .Count += setBrick.Stock;
-                }
-                
-                _logger.LogInformation($"Stock for set {setId} has been moved to inventory");
-            }
-            
-            setOwnedContext
-                .Where(s => s.SetId == setId && s.SetIndex == setIndex)
-                .ExecuteDelete();
-            
-            context.SaveChanges();
-            
-            _logger.LogInformation($"{setId} has been deleted");
-            
-            return !setContext.Any(s => s.SetId == setId);
-        }
+        using var context = new InventoryContext();
+
+        // Delete SetBrickOwned entries for this specific set copy
+        context.Set<SetBrickOwned>()
+            .Where(sbo => sbo.UserId == userId && sbo.SetId == setId && sbo.SetIndex == setIndex)
+            .ExecuteDelete();
+
+        // Delete the SetOwned record
+        context.Set<SetOwned>()
+            .Where(s => s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex)
+            .ExecuteDelete();
+
+        context.SaveChanges();
+        _logger.LogInformation($"{setId}-{setIndex} has been deleted");
+
+        return !context.Set<SetOwned>().Any(s => s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex);
     }
-    
+
     public bool DeleteSetParts(string? setId)
     {
-        using (var context = new InventoryContext())
-        {
-            var setContext = context.Set<Set>();
+        using var context = new InventoryContext();
 
-            if (setContext.Any(s => s.SetId == setId))
-            {
-                var set = setContext.First(s => s.SetId == setId);
-                
-                var setBrickContext = context.Set<SetBrick>();
+        if (!context.Set<Set>().Any(s => s.SetId == setId))
+            return false;
 
-                setBrickContext
-                    .Where(sb => sb.SetId == setId)
-                    .ExecuteDelete();
+        // Delete SetBrickOwned first (references SetBrick)
+        context.Set<SetBrickOwned>()
+            .Where(sbo => sbo.SetId == setId)
+            .ExecuteDelete();
 
-                context.SaveChanges();
+        context.Set<SetBrick>()
+            .Where(sb => sb.SetId == setId)
+            .ExecuteDelete();
 
-                return !setBrickContext.Any(sb => sb.SetId == setId);
-            }
-        }
-        
-        return false;
+        context.SaveChanges();
+        return !context.Set<SetBrick>().Any(sb => sb.SetId == setId);
     }
 
     public bool DeleteBricks(string? brickId, string? colorId)
     {
-        using (var context = new InventoryContext())
-        {
-            var brickContext = context.Set<Brick>();
-            var setBrickContext = context.Set<SetBrick>();
+        using var context = new InventoryContext();
 
-            if (setBrickContext.Any(sb => sb.PartNum == brickId && sb.ColorId == colorId))
-                return false;
-            
-            brickContext
-                .Where(b => b.ColorId == colorId && b.PartNum == brickId)
-                .ExecuteDelete();
-            
-            context.SaveChanges();
-            
-            return !brickContext.Any(b => b.ColorId == colorId && b.PartNum == brickId);
-        }
+        if (context.Set<SetBrick>().Any(sb => sb.PartNum == brickId && sb.ColorId == colorId))
+            return false;
+
+        context.Set<Brick>()
+            .Where(b => b.ColorId == colorId && b.PartNum == brickId)
+            .ExecuteDelete();
+
+        context.SaveChanges();
+        return !context.Set<Brick>().Any(b => b.ColorId == colorId && b.PartNum == brickId);
     }
 }

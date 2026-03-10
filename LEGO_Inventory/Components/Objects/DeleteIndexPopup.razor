@@ -34,8 +34,10 @@
     [Parameter] public string _name { get; set; }
 
     [Parameter] public string _imgUrl { get; set; }
-    
+
     [Parameter] public int _setIndex { get; set; }
+
+    [Parameter] public int _userId { get; set; }
 
     public bool MoveStock { get; set; } = false;
 
@@ -45,7 +47,7 @@
     {
         DeleteData deleteData = new DeleteData();
 
-        deleteData.DeleteOwnedSetInfo(id, setIndex, MoveStock);
+        deleteData.DeleteOwnedSetInfo(_userId, id, setIndex, MoveStock);
 
         MudDialog.Close();
     }

@@ -2,8 +2,10 @@
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
+@inject AuthService AuthService
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
+@using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
 
@@ -167,12 +169,15 @@
             _sets = setContext.ToList();
             _setInfos.Clear();
 
+            var userId = AuthService.CurrentUser?.UserId;
             foreach (Set set in setContext.ToList())
             {
                 _setInfos?.Add(new SetInfo
                 {
                     Set = set,
-                    OwnedSets = ownedSetContext.Where(so => so.SetId == set.SetId).ToList()
+                    OwnedSets = userId.HasValue
+                        ? ownedSetContext.Where(so => so.SetId == set.SetId && so.UserId == userId.Value).ToList()
+                        : new List<SetOwned>()
                 });
             }
         }
@@ -205,13 +210,15 @@
         StateHasChanged();
 
         ImportData importData = new ImportData();
-        importData.AddOwnedSet(setId);
+        importData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
 
         using (var context = new InventoryContext())
         {
             var ownedSetContext = context.Set<SetOwned>();
+            var userId = AuthService.CurrentUser?.UserId;
             var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
-            setInfo?.OwnedSets = ownedSetContext.Where(so => so.SetId == setId).ToList();
+            if (setInfo != null && userId.HasValue)
+                setInfo.OwnedSets = ownedSetContext.Where(so => so.SetId == setId && so.UserId == userId.Value).ToList();
         }
 
         _isLoading = false;
@@ -265,26 +272,22 @@
 
     private int GetMissingPieceCount(SetOwned setOwned)
     {
-        using (var context = new InventoryContext())
-        {
-            var setBrickContext = context.Set<SetBrick>();
-
-            return setBrickContext
-                .Where(sb => sb.SetId == setOwned.SetId && sb.SetIndex == setOwned.SetIndex)
-                .Sum(sb => sb.Count - sb.Stock);
-        }
+        using var context = new InventoryContext();
+        var totalNeeded = context.Set<SetBrick>()
+            .Where(sb => sb.SetId == setOwned.SetId)
+            .Sum(sb => sb.Count);
+        var totalStock = context.Set<SetBrickOwned>()
+            .Where(sbo => sbo.SetId == setOwned.SetId && sbo.SetIndex == setOwned.SetIndex)
+            .Sum(sbo => sbo.Stock);
+        return Math.Max(0, totalNeeded - totalStock);
     }
 
     private int GetStockCount(SetOwned setOwned)
     {
-        using (var context = new InventoryContext())
-        {
-            var setBrickContext = context.Set<SetBrick>();
-
-            return setBrickContext
-                .Where(sb => sb.SetId == setOwned.SetId && sb.SetIndex == setOwned.SetIndex)
-                .Sum(sb => sb.Stock);
-        }
+        using var context = new InventoryContext();
+        return context.Set<SetBrickOwned>()
+            .Where(sbo => sbo.SetId == setOwned.SetId && sbo.SetIndex == setOwned.SetIndex)
+            .Sum(sbo => sbo.Stock);
     }
 
     private int GetSetCount(Set set)
@@ -342,7 +345,8 @@
             { x => x._id, setId },
             { x => x._setIndex, setIndex },
             { x => x._name, setName },
-            { x => x._imgUrl, setImgUrl }
+            { x => x._imgUrl, setImgUrl },
+            { x => x._userId, AuthService.CurrentUser?.UserId ?? 0 }
         };
 
         var dialog = DialogService.Show<DeleteIndexPopup>("Delete Popup", parameters, deletePopup);

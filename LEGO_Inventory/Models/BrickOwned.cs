@@ -2,16 +2,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LEGO_Inventory;
 
-[Table("SetBricks")]
-public class SetBrick
+[Table("BrickOwned")]
+public class BrickOwned
 {
-    public string SetId { get; set; }
+    public int UserId { get; set; }
 
     public string PartNum { get; set; }
 
     public string ColorId { get; set; }
 
-    public int Count { get; set; }
-
-    public int SpareCount { get; set; }
+    public int Stock { get; set; }
 }
