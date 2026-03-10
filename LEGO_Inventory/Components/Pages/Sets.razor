@@ -14,7 +14,7 @@
 <MudGrid>
     <MudItem xs="12">
         <MudPaper Class="pa-4 mb-2" Elevation="2">
-            <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Wrap="Wrap.Wrap">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
                 <MudTextField T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true"
                               OnKeyDown="@OnKeyDown" Variant="Variant.Outlined"
                               HelperText="Enter a set ID or multiple IDs separated by spaces"
@@ -22,7 +22,8 @@
                               Style="min-width: 280px;"/>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.Download"
-                           OnClick="@(() => ImportSet())" Size="Size.Large">Import Set
+                           OnClick="@(() => ImportSet())" Size="Size.Large"
+                           Style="margin-top: -20px;">Import Set
                 </MudButton>
             </MudStack>
         </MudPaper>
