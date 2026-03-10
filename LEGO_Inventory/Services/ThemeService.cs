@@ -37,4 +37,10 @@ public class ThemeService
         IsDarkMode = !IsDarkMode;
         OnChange?.Invoke();
     }
+
+    public void SetDarkMode(bool isDark)
+    {
+        IsDarkMode = isDark;
+        OnChange?.Invoke();
+    }
 }

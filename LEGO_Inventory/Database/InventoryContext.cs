@@ -13,6 +13,7 @@ public class InventoryContext : DbContext
     public DbSet<MinifigBrick> MinifigBricks { get; set; }
     public DbSet<Color> Colors { get; set; }
     public DbSet<SetOwned> SetsOwned { get; set; }
+    public DbSet<User> Users { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

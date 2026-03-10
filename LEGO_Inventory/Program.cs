@@ -14,6 +14,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<AuthService>();
 
 builder.Services.AddHttpClient();
 
