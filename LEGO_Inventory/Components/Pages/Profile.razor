@@ -18,22 +18,22 @@
     return;
 }
 
-<MudText Typo="Typo.h4" Class="mb-6" Style="font-weight: 700;">Profile</MudText>
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Profile</MudText>
 
-<MudGrid Spacing="4">
+<MudGrid Spacing="3">
 
     @* ── Profile header ── *@
     <MudItem xs="12">
-        <MudPaper Class="pa-6" Elevation="2">
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="4">
-                <MudAvatar Style="width: 80px; height: 80px;">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                <MudAvatar Style="width: 64px; height: 64px;">
                     @if (AuthService.CurrentUser.ProfilePictureUrl != null)
                     {
                         <MudImage Src="@AuthService.CurrentUser.ProfilePictureUrl" Alt="avatar" Style="width: 100%; height: 100%; object-fit: cover;"/>
                     }
                     else
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.Person" Style="font-size: 2.5rem;"/>
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Style="font-size: 2rem;"/>
                     }
                 </MudAvatar>
                 <MudStack Spacing="0">
@@ -44,50 +44,10 @@
         </MudPaper>
     </MudItem>
 
-    @* ── Linked Accounts ── *@
-    @if (PendingAuth.EnabledProviders.Count > 0)
-    {
-        <MudItem xs="12">
-            <MudPaper Class="pa-6" Elevation="2">
-                <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 700;">Linked Accounts</MudText>
-                <MudStack Spacing="2">
-                    @foreach (var provider in PendingAuth.EnabledProviders)
-                    {
-                        var p = provider;
-                        var linked = _linkedLogins.Any(l => l.Provider == p);
-                        var isLast = !_hasPassword && _linkedLogins.Count <= 1 && linked;
-                        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
-                            <MudIcon Icon="@ProviderIcon(p)"/>
-                            <MudText Style="flex: 1;">@p</MudText>
-                            @if (linked)
-                            {
-                                <MudChip T="string" Color="Color.Success" Size="Size.Small">Linked</MudChip>
-                                <MudTooltip Text="@(isLast ? "Can't unlink your only sign-in method" : "Unlink")">
-                                    <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
-                                                   Size="Size.Small"
-                                                   Disabled="@isLast"
-                                                   OnClick="@(() => Unlink(p))"/>
-                                </MudTooltip>
-                            }
-                            else
-                            {
-                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                                           StartIcon="@Icons.Material.Filled.Link"
-                                           OnClick="@(() => LinkProvider(p))">
-                                    Link
-                                </MudButton>
-                            }
-                        </MudStack>
-                    }
-                </MudStack>
-            </MudPaper>
-        </MudItem>
-    }
-
     @* ── Change Username ── *@
-    <MudItem xs="12" md="6">
-        <MudPaper Class="pa-6" Elevation="2" Style="height: 100%;">
-            <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 700;">Change Username</MudText>
+    <MudItem xs="12" md="4">
+        <MudPaper Class="pa-4" Elevation="2" Style="height: 100%;">
+            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Change Username</MudText>
             <MudStack Spacing="3">
                 <MudTextField T="string" Label="New Username" @bind-Value="_newUsername"
                               Variant="Variant.Outlined"
@@ -103,9 +63,9 @@
     </MudItem>
 
     @* ── Change Password ── *@
-    <MudItem xs="12" md="6">
-        <MudPaper Class="pa-6" Elevation="2" Style="height: 100%;">
-            <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 700;">Change Password</MudText>
+    <MudItem xs="12" md="4">
+        <MudPaper Class="pa-4" Elevation="2" Style="height: 100%;">
+            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Change Password</MudText>
             <MudStack Spacing="3">
                 <MudTextField T="string" Label="Current Password" @bind-Value="_currentPassword"
                               Variant="Variant.Outlined"
@@ -137,9 +97,49 @@
         </MudPaper>
     </MudItem>
 
+    @* ── Linked Accounts ── *@
+    @if (PendingAuth.EnabledProviders.Count > 0)
+    {
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4" Elevation="2" Style="height: 100%;">
+                <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Linked Accounts</MudText>
+                <MudStack Spacing="2">
+                    @foreach (var provider in PendingAuth.EnabledProviders)
+                    {
+                        var p = provider;
+                        var linked = _linkedLogins.Any(l => l.Provider == p);
+                        var isLast = !_hasPassword && _linkedLogins.Count <= 1 && linked;
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@ProviderIcon(p)" Size="Size.Small"/>
+                            <MudText Style="flex: 1;">@p</MudText>
+                            @if (linked)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small">Linked</MudChip>
+                                <MudTooltip Text="@(isLast ? "Can't unlink your only sign-in method" : "Unlink")">
+                                    <MudIconButton Icon="@Icons.Material.Filled.LinkOff"
+                                                   Size="Size.Small"
+                                                   Disabled="@isLast"
+                                                   OnClick="@(() => Unlink(p))"/>
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Link"
+                                           OnClick="@(() => LinkProvider(p))">
+                                    Link
+                                </MudButton>
+                            }
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    }
+
     @* ── Theme Color ── *@
     <MudItem xs="12">
-        <MudPaper Class="pa-6" Elevation="2">
+        <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 700;">Theme Color</MudText>
             <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.55;">Choose your primary accent color.</MudText>
             <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
@@ -182,7 +182,7 @@
 
     @* ── Profile Picture ── *@
     <MudItem xs="12">
-        <MudPaper Class="pa-6" Elevation="2">
+        <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 700;">Profile Picture</MudText>
             <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.55;">Choose a minifigure from your collection.</MudText>
 
