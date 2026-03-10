@@ -17,7 +17,14 @@
     <MudGrid Justify="Justify.Center" Style="max-width: 1100px; width: 100%;">
         <MudItem xs="12" sm="6" lg="3">
             <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/sets")'>
-                <MudCardMedia Image="@_setImg" Height="220"/>
+                <div class="card-image-wrapper" style="position: relative;">
+                    <MudCardMedia Image="@_setImg" Height="220"/>
+                    @if (_setName != null)
+                    {
+                        <div class="card-info-badge">?</div>
+                        <div class="card-name-label">@_setName</div>
+                    }
+                </div>
                 <MudCardContent>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.ViewModule" Color="Color.Primary"/>
@@ -30,7 +37,14 @@
 
         <MudItem xs="12" sm="6" lg="3">
             <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bricks")'>
-                <MudCardMedia Image="@_brickImg" Height="220"/>
+                <div class="card-image-wrapper" style="position: relative;">
+                    <MudCardMedia Image="@_brickImg" Height="220"/>
+                    @if (_brickName != null)
+                    {
+                        <div class="card-info-badge">?</div>
+                        <div class="card-name-label">@_brickName</div>
+                    }
+                </div>
                 <MudCardContent>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.Category" Color="Color.Primary"/>
@@ -43,7 +57,14 @@
 
         <MudItem xs="12" sm="6" lg="3">
             <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/minifigs")'>
-                <MudCardMedia Image="@_minifigImg" Height="220"/>
+                <div class="card-image-wrapper" style="position: relative;">
+                    <MudCardMedia Image="@_minifigImg" Height="220"/>
+                    @if (_minifigName != null)
+                    {
+                        <div class="card-info-badge">?</div>
+                        <div class="card-name-label">@_minifigName</div>
+                    }
+                </div>
                 <MudCardContent>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary"/>
@@ -56,7 +77,14 @@
 
         <MudItem xs="12" sm="6" lg="3">
             <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bom")'>
-                <MudCardMedia Image="@_bomImg" Height="220"/>
+                <div class="card-image-wrapper" style="position: relative;">
+                    <MudCardMedia Image="@_bomImg" Height="220"/>
+                    @if (_bomName != null)
+                    {
+                        <div class="card-info-badge">?</div>
+                        <div class="card-name-label">@_bomName</div>
+                    }
+                </div>
                 <MudCardContent>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.FormatListBulleted" Color="Color.Primary"/>
@@ -71,9 +99,13 @@
 
 @code {
     private string? _setImg;
+    private string? _setName;
     private string? _brickImg;
+    private string? _brickName;
     private string? _minifigImg;
+    private string? _minifigName;
     private string? _bomImg;
+    private string? _bomName;
 
     protected override Task OnInitializedAsync()
     {
@@ -82,17 +114,30 @@
         var sets = context.Set<Set>().Where(s => s.SetImg != null).ToList();
         if (sets.Count > 0)
         {
-            _setImg = sets[Random.Shared.Next(sets.Count)].SetImg;
-            _bomImg = sets[Random.Shared.Next(sets.Count)].SetImg;
+            var setPick = sets[Random.Shared.Next(sets.Count)];
+            _setImg = setPick.SetImg;
+            _setName = setPick.Name;
+
+            var bomPick = sets[Random.Shared.Next(sets.Count)];
+            _bomImg = bomPick.SetImg;
+            _bomName = bomPick.Name;
         }
 
         var bricks = context.Set<Brick>().Where(b => b.PartImg != null).ToList();
         if (bricks.Count > 0)
-            _brickImg = bricks[Random.Shared.Next(bricks.Count)].PartImg;
+        {
+            var brickPick = bricks[Random.Shared.Next(bricks.Count)];
+            _brickImg = brickPick.PartImg;
+            _brickName = brickPick.Name;
+        }
 
         var minifigs = context.Set<Minifig>().Where(m => m.MinifigImgUrl != null).ToList();
         if (minifigs.Count > 0)
-            _minifigImg = minifigs[Random.Shared.Next(minifigs.Count)].MinifigImgUrl;
+        {
+            var minifigPick = minifigs[Random.Shared.Next(minifigs.Count)];
+            _minifigImg = minifigPick.MinifigImgUrl;
+            _minifigName = minifigPick.MinifigName;
+        }
 
         return Task.CompletedTask;
     }
