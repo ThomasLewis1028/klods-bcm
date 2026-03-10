@@ -1,5 +1,6 @@
 using LEGO_Inventory.Components;
 using LEGO_Inventory.Database;
+using LEGO_Inventory.Services;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
@@ -12,6 +13,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddMudServices();
+builder.Services.AddScoped<ThemeService>();
 
 builder.Services.AddHttpClient();
 
