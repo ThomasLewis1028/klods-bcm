@@ -1,51 +1,99 @@
-﻿@page "/"
+@page "/"
+@layout FullPageLayout
+@inject NavigationManager Nav
 @using LEGO_Inventory.Database
-@using MudBlazor.Extensions
-@inject ILoggerFactory LoggerFactory
-@inject NavigationManager navigationManager;
+@using LEGO_Inventory.Components.Layout
+@using Color = MudBlazor.Color
+@rendermode InteractiveServer
 
-<PageTitle>LEGO Inventory Tool</PageTitle>
+<PageTitle>LEGO Inventory</PageTitle>
 
-<h1>This is tool 4 ur legos</h1>
+<div class="landing-page">
+    <div class="landing-hero">
+        <MudText Typo="Typo.h2" Style="font-weight: 800; letter-spacing: -0.02em;">LEGO Inventory</MudText>
+        <MudText Typo="Typo.h6" Style="opacity: 0.55; margin-top: 0.5rem; font-weight: 400;">Your personal collection manager</MudText>
+    </div>
 
-Put ur bricks in here
+    <MudGrid Justify="Justify.Center" Style="max-width: 1100px; width: 100%;">
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/sets")'>
+                <MudCardMedia Image="@_setImg" Height="220"/>
+                <MudCardContent>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.ViewModule" Color="Color.Primary"/>
+                        <MudText Typo="Typo.h6" Style="font-weight: 700;">Sets</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Browse and manage your LEGO sets</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
 
-@* <MudGrid> *@
-@*     <MudItem sm="12" md="6"> *@
-@*         <MudPaper Height="500px"> *@
-@*             <MudImage Class="align-content-center" ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@setUrl"/> *@
-@*         </MudPaper> *@
-@*     </MudItem> *@
-@*     <MudItem sm="12" md="6"> *@
-@*         <MudPaper Height="500px"> *@
-@*             <MudImage Class="align-content-center" ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@brickUrl"/> *@
-@*         </MudPaper> *@
-@*     </MudItem> *@
-@*     <MudItem sm="12" md="6"> *@
-@*         <MudPaper Height="500px"> *@
-@*             <MudImage ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@minifigUrl"/> *@
-@*         </MudPaper> *@
-@*     </MudItem> *@
-@*     <MudItem sm="12" md="6"> *@
-@*         <MudPaper Height="500px"> *@
-@*             <MudImage ObjectPosition="ObjectPosition.Center" Style="padding: 10px" ObjectFit="ObjectFit.Contain" Fluid="true" Src="@bomUrl"/> *@
-@*         </MudPaper> *@
-@*     </MudItem> *@
-@* </MudGrid> *@
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bricks")'>
+                <MudCardMedia Image="@_brickImg" Height="220"/>
+                <MudCardContent>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.Category" Color="Color.Primary"/>
+                        <MudText Typo="Typo.h6" Style="font-weight: 700;">Bricks</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Track your individual brick inventory</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
 
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/minifigs")'>
+                <MudCardMedia Image="@_minifigImg" Height="220"/>
+                <MudCardContent>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary"/>
+                        <MudText Typo="Typo.h6" Style="font-weight: 700;">Minifigs</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Manage your minifigure collection</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
 
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bom")'>
+                <MudCardMedia Image="@_bomImg" Height="220"/>
+                <MudCardContent>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.FormatListBulleted" Color="Color.Primary"/>
+                        <MudText Typo="Typo.h6" Style="font-weight: 700;">Bill of Materials</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">View missing pieces across your sets</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</div>
 
-@code{
-    string setUrl = "https://cdn.rebrickable.com/media/thumbs/sets/5610-1/123928.jpg/1000x800p.jpg?1736446814.0387728";
-    string brickUrl = "https://cdn.rebrickable.com/media/thumbs/parts/elements/300321.jpg/250x250p.jpg?1658339205.0528646";
-    string minifigUrl = "https://rebrickable.com/static/img/nil_mf.jpg";
-    string bomUrl;
-    
-    protected override async Task OnInitializedAsync()
+@code {
+    private string? _setImg;
+    private string? _brickImg;
+    private string? _minifigImg;
+    private string? _bomImg;
+
+    protected override Task OnInitializedAsync()
     {
-        
-        navigationManager.NavigateTo($"/sets/", forceLoad:true);
-        
-        StateHasChanged();
+        using var context = new InventoryContext();
+
+        var sets = context.Set<Set>().Where(s => s.SetImg != null).ToList();
+        if (sets.Count > 0)
+        {
+            _setImg = sets[Random.Shared.Next(sets.Count)].SetImg;
+            _bomImg = sets[Random.Shared.Next(sets.Count)].SetImg;
+        }
+
+        var bricks = context.Set<Brick>().Where(b => b.PartImg != null).ToList();
+        if (bricks.Count > 0)
+            _brickImg = bricks[Random.Shared.Next(bricks.Count)].PartImg;
+
+        var minifigs = context.Set<Minifig>().Where(m => m.MinifigImgUrl != null).ToList();
+        if (minifigs.Count > 0)
+            _minifigImg = minifigs[Random.Shared.Next(minifigs.Count)].MinifigImgUrl;
+
+        return Task.CompletedTask;
     }
 }
