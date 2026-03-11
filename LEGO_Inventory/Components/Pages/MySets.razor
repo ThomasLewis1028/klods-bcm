@@ -1,0 +1,382 @@
+@page "/my/sets"
+@inject ILoggerFactory LoggerFactory
+@inject IDialogService DialogService
+@inject IJSRuntime JsRuntime
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@using LEGO_Inventory.Components.Objects
+@using LEGO_Inventory.Database
+@using LEGO_Inventory.Services
+@using Color = MudBlazor.Color
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>My Sets</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Sets</MudText>
+
+<MudGrid>
+    <MudItem xs="12">
+        <MudPaper Class="pa-4 mb-2" Elevation="2">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudTextField T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true"
+                              OnKeyDown="@OnKeyDown" Variant="Variant.Outlined"
+                              HelperText="Enter a set ID or multiple IDs separated by spaces"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Style="min-width: 280px;"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="@(() => ImportSet())" Size="Size.Large"
+                           Style="margin-top: -20px;">Import Set
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" Style="position: relative;">
+        <MudDataGrid T="SetInfo" Items="@_setInfos.OrderBy(b => b.Set.SetId)"
+                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
+                     CommittedItemChanges="@CommittedItemChanges" QuickFilter="SetFilterFunc"
+                     ReadOnly="false">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">My Sets</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                              Class="mt-0"></MudTextField>
+            </ToolBarContent>
+            <Columns>
+                <HierarchyColumn T="SetInfo" ButtonDisabledFunc="@(info => info.OwnedSets.Count < 0)"/>
+                <TemplateColumn Title="Image" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                            <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.Set.SetImg"
+                                      Height="50"
+                                      @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, context.Item.Set.SetImg)"/>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.Set.SetId" Title="Id" Editable="false"/>
+                <PropertyColumn Property="x => x.Set.Name" Title="Name" Editable="false"/>
+                <PropertyColumn Property="x => x.Set.ReleaseYear" Title="Year" Editable="false"/>
+                <PropertyColumn Property="x => x.OwnedSets.Count" Title="Count" Editable="false"/>
+                <PropertyColumn Property="x => x.Set.NumBricks" Title="Pieces" Editable="false"/>
+                <TemplateColumn Title="Delete" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudIconButton
+                                Icon="@Icons.Material.Filled.Delete"
+                                Variant="Variant.Filled"
+                                Color="Color.Error"
+                                Size="Size.Small"
+                                OnClick="() => DeleteSet(context.Item.Set.SetId, context.Item.Set.Name, context.Item.Set.SetImg)"/>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Manual" Editable="false">
+                    <CellTemplate>
+                        <MudStack Row>
+                            <MudImage @onclick="() => OpenBuildingInstructions(context.Item.Set.ManualUrl)"
+                                      class="cursor-pointer rounded-2" Elevation="2" Height="30"
+                                      Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
+                        </MudStack>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+
+            @* Owned Set List *@
+            <ChildRowContent Context="setContext">
+                <div class="child-row-content">
+                <MudGrid Spacing="10" Class="d-flex">
+                    <MudItem xs="1" Style="display: flex; align-items: stretch;">
+                            <MudButton
+                                Style="height: 100%;"
+                                StartIcon="@Icons.Material.Filled.Add"
+                                IconSize="Size.Large"
+                                Variant="Variant.Filled"
+                                Color="Color.Info"
+                                OnClick="() => AddOwnedSet(setContext.Item.Set.SetId)"/>
+                    </MudItem>
+                    <MudItem xs="11">
+                        @if (setContext.Item.OwnedSets.Count > 0)
+                        {
+                            <MudCard>
+                                <MudDataGrid T="SetOwned" Items="setContext.Item.OwnedSets">
+                                    <Columns>
+                                        <PropertyColumn Title="Index" Property="x => x.SetIndex"/>
+                                        <PropertyColumn Title="Stock" Property="x => GetStockCount(x)"/>
+                                        <PropertyColumn Title="Missing" Property="x => GetMissingPieceCount(x)"/>
+                                        <TemplateColumn Title="BoM" Editable="false">
+                                            <CellTemplate>
+                                                <MudStack Row>
+                                                    <MudIconButton
+                                                        href=@($"/bom/{context.Item.SetId}/{context.Item.SetIndex}")
+                                                        Icon="@Icons.Material.Filled.List"
+                                                        Variant="Variant.Filled" Color="Color.Primary"
+                                                        Size="Size.Small"></MudIconButton>
+                                                </MudStack>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+                                        <TemplateColumn Title="Delete" Editable="false">
+                                            <CellTemplate>
+                                                <MudStack Row>
+                                                    <MudIconButton
+                                                        Icon="@Icons.Material.Filled.Delete"
+                                                        Variant="Variant.Filled"
+                                                        Color="Color.Error"
+                                                        Size="Size.Small"
+                                                        OnClick="() => DeleteOwnedSet(context.Item.SetId, context.Item.SetIndex, setContext.Item.Set.Name, setContext.Item.Set.SetImg)"/>
+                                                </MudStack>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+                                    </Columns>
+                                </MudDataGrid>
+                            </MudCard>
+                        }
+                    </MudItem>
+                </MudGrid>
+                </div>
+            </ChildRowContent>
+
+            <PagerContent>
+                <MudDataGridPager T="SetInfo"/>
+            </PagerContent>
+        </MudDataGrid>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string? _setId;
+    private string _pageTitle = "My Sets";
+    private List<Set>? _sets;
+    private List<SetInfo>? _setInfos = [];
+    private string searchString;
+    private int _importSize = 0;
+    private bool _isLoading = false;
+    MudForm form;
+
+    protected override void OnInitialized()
+    {
+        AuthService.SessionRestored += OnSessionRestored;
+        if (AuthService.IsSessionRestored) CheckAuth();
+    }
+
+    private void OnSessionRestored() => InvokeAsync(CheckAuth);
+
+    private void CheckAuth()
+    {
+        if (AuthService.CurrentUser == null)
+            Nav.NavigateTo("/not-authorized");
+    }
+
+    public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var logger = LoggerFactory.CreateLogger<MySets>();
+        logger.LogTrace("Loading My Sets");
+        using (var context = new InventoryContext())
+        {
+            var setContext = context.Set<Set>();
+            var ownedSetContext = context.Set<SetOwned>();
+
+            var userId = AuthService.CurrentUser?.UserId;
+
+            _sets = setContext.ToList();
+            _setInfos.Clear();
+
+            foreach (Set set in setContext.ToList())
+            {
+                var ownedSets = userId.HasValue
+                    ? ownedSetContext.Where(so => so.SetId == set.SetId && so.UserId == userId.Value).ToList()
+                    : new List<SetOwned>();
+
+                if (userId.HasValue && ownedSets.Count == 0) continue;
+
+                _setInfos?.Add(new SetInfo
+                {
+                    Set = set,
+                    OwnedSets = ownedSets
+                });
+            }
+        }
+
+        _setId = "";
+
+        StateHasChanged();
+        logger.LogTrace("Loading My Sets Complete");
+    }
+
+    private async Task ImportSet()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        ImportData importData = new ImportData();
+
+        List<string> setIdList = _setId.Split(null).ToList();
+        _importSize = setIdList.Count;
+
+        importData.ImportAll(setIdList);
+
+        _isLoading = false;
+        await OnInitializedAsync();
+    }
+
+    private async Task AddOwnedSet(string setId)
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        ImportData importData = new ImportData();
+        importData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
+
+        using (var context = new InventoryContext())
+        {
+            var ownedSetContext = context.Set<SetOwned>();
+            var userId = AuthService.CurrentUser?.UserId;
+            var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
+            if (setInfo != null && userId.HasValue)
+                setInfo.OwnedSets = ownedSetContext.Where(so => so.SetId == setId && so.UserId == userId.Value).ToList();
+        }
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await ImportSet();
+            _setId = "";
+            await OnInitializedAsync();
+        }
+    }
+
+    private bool SetFilterFunc(SetInfo setInfo) => SetFilter(setInfo);
+
+    private bool SetFilter(SetInfo setInfo)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (setInfo.Set.SetId.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (setInfo.Set.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
+    private Task OpenImagePopup(string setId, string setName, string? setImgUrl)
+    {
+        var imagePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ImagePopup>
+        {
+            { x => x._id, setId },
+            { x => x._name, setName },
+            { x => x._imgUrl, setImgUrl }
+        };
+
+        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters, imagePopup);
+    }
+
+    void CommittedItemChanges(SetInfo setInfo) { }
+
+    private int GetMissingPieceCount(SetOwned setOwned)
+    {
+        using var context = new InventoryContext();
+        var totalNeeded = context.Set<SetBrick>()
+            .Where(sb => sb.SetId == setOwned.SetId)
+            .Sum(sb => sb.Count);
+        var totalStock = context.Set<SetBrickOwned>()
+            .Where(sbo => sbo.UserId == setOwned.UserId && sbo.SetId == setOwned.SetId && sbo.SetIndex == setOwned.SetIndex)
+            .Sum(sbo => sbo.Stock);
+        return Math.Max(0, totalNeeded - totalStock);
+    }
+
+    private int GetStockCount(SetOwned setOwned)
+    {
+        using var context = new InventoryContext();
+        return context.Set<SetBrickOwned>()
+            .Where(sbo => sbo.UserId == setOwned.UserId && sbo.SetId == setOwned.SetId && sbo.SetIndex == setOwned.SetIndex)
+            .Sum(sbo => sbo.Stock);
+    }
+
+    private Task OpenErrorPopup(string errorMessage)
+    {
+        var errorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<ErrorPopup>
+        {
+            { x => x._errorMessage, errorMessage }
+        };
+
+        return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
+    }
+
+    private void OpenBuildingInstructions(string url)
+    {
+        JsRuntime.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private async Task DeleteSet(string setId, string setName, string setImgUrl)
+    {
+        var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<DeletePopup>
+        {
+            { x => x._id, setId },
+            { x => x._name, setName },
+            { x => x._imgUrl, setImgUrl }
+        };
+
+        var dialog = DialogService.Show<DeletePopup>("Delete Popup", parameters, deletePopup);
+
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+            await OnInitializedAsync();
+    }
+
+    private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string setImgUrl)
+    {
+        var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
+
+        var parameters = new DialogParameters<DeleteIndexPopup>
+        {
+            { x => x._id, setId },
+            { x => x._setIndex, setIndex },
+            { x => x._name, setName },
+            { x => x._imgUrl, setImgUrl },
+            { x => x._userId, AuthService.CurrentUser?.UserId ?? 0 }
+        };
+
+        var dialog = DialogService.Show<DeleteIndexPopup>("Delete Popup", parameters, deletePopup);
+
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
+
+            if (setInfo != null)
+            {
+                var removeSet = setInfo.OwnedSets.FirstOrDefault(os => os.SetId == setId && os.SetIndex == setIndex);
+                if (removeSet != null)
+                    setInfo.OwnedSets.Remove(removeSet);
+
+                if (setInfo.OwnedSets.Count == 0)
+                    _setInfos.Remove(setInfo);
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private class SetInfo
+    {
+        public Set Set { get; set; }
+        public List<SetOwned> OwnedSets { get; set; }
+    }
+}

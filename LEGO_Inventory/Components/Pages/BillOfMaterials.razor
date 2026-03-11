@@ -4,6 +4,7 @@
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
 @inject NavigationManager navigationManager
+@inject NavigationManager Nav
 @inject IJSRuntime JSRuntime
 @inject AuthService AuthService
 @using System.Drawing
@@ -13,6 +14,7 @@
 @using Color = MudBlazor.Color
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
+@implements IDisposable
 
 <PageTitle>@_pageTitle</PageTitle>
 
@@ -278,6 +280,22 @@
 @code {
     [Parameter] public string? _setId { get; set; }
     [Parameter] public string? _setIndex { get; set; }
+
+    protected override void OnInitialized()
+    {
+        AuthService.SessionRestored += OnSessionRestored;
+        if (AuthService.IsSessionRestored) CheckAuth();
+    }
+
+    private void OnSessionRestored() => InvokeAsync(CheckAuth);
+
+    private void CheckAuth()
+    {
+        if (AuthService.CurrentUser == null)
+            Nav.NavigateTo("/not-authorized");
+    }
+
+    public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
 
     private string _pageTitle = "Bill of Materials";
 

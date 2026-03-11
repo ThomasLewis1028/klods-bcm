@@ -1,21 +1,38 @@
-﻿@using Color = MudBlazor.Color
+@using Color = MudBlazor.Color
+@using LEGO_Inventory.Services
+@inject AuthService AuthService
+@implements IDisposable
 <MudDrawer Open="true" Anchor="Anchor.Start" Width="250px" Height="100%" Class="py-3" Elevation="0"
            Variant="DrawerVariant.Persistent">
     <MudNavMenu Bordered="true" Class="mud-width-full" Rounded="true" Color="Color.Primary">
-        <MudNavLink Href="/sets" Icon="@Icons.Material.Filled.ViewModule">Sets</MudNavLink>
-        <MudNavLink Href="/bricks" Icon="@Icons.Material.Filled.Category">Bricks</MudNavLink>
-        <MudNavLink Href="/minifigs" Icon="@Icons.Material.Filled.Person">Minifigs</MudNavLink>
-        <MudNavLink Href="/bom" Icon="@Icons.Material.Filled.FormatListBulleted">Bill of Materials</MudNavLink>
+
+        <MudNavGroup Title="Catalog" Icon="@Icons.Material.Filled.Public" Expanded="true">
+            <MudNavLink Href="/sets" Icon="@Icons.Material.Filled.ViewModule">Sets</MudNavLink>
+            <MudNavLink Href="/bricks" Icon="@Icons.Material.Filled.Category">Bricks</MudNavLink>
+            <MudNavLink Href="/minifigs" Icon="@Icons.Material.Filled.Person">Minifigs</MudNavLink>
+        </MudNavGroup>
+
+        <MudNavGroup Title="My Collection" Icon="@Icons.Material.Filled.CollectionsBookmark" Expanded="true"
+                     @attributes="_collectionAttrs">
+            <MudNavLink Href="/my/sets" Icon="@Icons.Material.Filled.ViewModule" Disabled="_signedOut">My Sets</MudNavLink>
+            <MudNavLink Href="/my/bricks" Icon="@Icons.Material.Filled.Category" Disabled="_signedOut">My Bricks</MudNavLink>
+            <MudNavLink Href="/my/minifigs" Icon="@Icons.Material.Filled.Person" Disabled="_signedOut">My Minifigs</MudNavLink>
+            <MudNavLink Href="/bom" Icon="@Icons.Material.Filled.FormatListBulleted" Disabled="_signedOut">My Bill of Materials</MudNavLink>
+        </MudNavGroup>
+
         <MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">Users</MudNavLink>
+
     </MudNavMenu>
 </MudDrawer>
 
 @code {
-    private bool _collapseNavMenu = true;
-    private bool _open = true;
-    private string _universeName = "";
-    private string _universeId = "";
+    private bool _signedOut => AuthService.CurrentUser == null;
 
-    private string? NavMenuCssClass => _collapseNavMenu ? "collapse" : null;
-   
+    private Dictionary<string, object> _collectionAttrs => _signedOut
+        ? new() { ["style"] = "opacity: 0.45;" }
+        : new();
+
+    protected override void OnInitialized() => AuthService.OnChange += OnAuthChanged;
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => AuthService.OnChange -= OnAuthChanged;
 }

@@ -102,6 +102,7 @@
                 }
             }
             catch { /* storage unavailable or tampered */ }
+            finally { AuthService.MarkSessionRestored(); }
 
             _sessionRestored = true;
             StateHasChanged();

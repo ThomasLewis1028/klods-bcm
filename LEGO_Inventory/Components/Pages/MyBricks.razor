@@ -1,0 +1,313 @@
+@page "/my/bricks"
+@inject ILoggerFactory LoggerFactory
+@inject IDialogService DialogService
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@using System.Drawing
+@using LEGO_Inventory.Components.Objects
+@using LEGO_Inventory.Database
+@using LEGO_Inventory.Services
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>My Bricks</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Bricks</MudText>
+
+<MudGrid>
+    <MudItem xs="12">
+        <MudDataGrid T="MyBrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
+                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
+                     CommittedItemChanges="CommittedItemChanges" QuickFilter="BrickFilterFunc"
+                     ReadOnly="false">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">My Bricks: @_brickInfos.Count</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.h6">In Stock: @_brickInfos.Sum(b => b.BrickOwned.Stock)</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.h6">Needed: @_brickInfos.Sum(b => b.UserNeeded)</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
+                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
+                              IconSize="Size.Medium" Class="mt-0"/>
+            </ToolBarContent>
+            <Columns>
+                <HierarchyColumn T="MyBrickInfo" ButtonDisabledFunc="@(info => info.UserSetCount == 0)"/>
+                <TemplateColumn Title="Image" Editable="false">
+                    <CellTemplate>
+                        <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.Brick.PartImg"
+                                  Height="50"
+                                  @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg)"/>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.Brick.PartNum" Title="Id" Editable="false"/>
+                <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
+                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
+                    <CellTemplate>
+                        @if (context.Item.Brick.HexColor != null)
+                        {
+                            <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
+                                     class="mud-elevation-2"
+                                     Style="@ColorChipStyle(context.Item.Brick.HexColor)">
+                                @context.Item.Brick.ColorName
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip Color="default">N/A</MudChip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="My Stock" Editable="true" SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
+                    <CellTemplate>
+                        <MudText>@context.Item.BrickOwned.Stock</MudText>
+                    </CellTemplate>
+                    <EditTemplate>
+                        <MudNumericField @bind-Value="context.Item.BrickOwned.Stock" Min="0"/>
+                    </EditTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.UserNeeded" Title="Needed" Editable="false"/>
+                <PropertyColumn Property="x => x.UserSetCount" Title="Sets" Editable="false"/>
+            </Columns>
+
+            <ChildRowContent Context="brickContext">
+                <div class="child-row-content">
+                @if (!brickContext.Item.IsLoaded)
+                {
+                    <MudText>Loading sets...</MudText>
+                    { _ = LoadSetBricksAsync(brickContext.Item); }
+                }
+                else if (brickContext.Item.SetBricks.Any())
+                {
+                    <MudCard>
+                        <MudDataGrid T="Set" Items="GetUserSets(brickContext.Item.UserOwnedSetIds).OrderBy(s => s.SetId)">
+                            <Columns>
+                                <TemplateColumn Title="Image">
+                                    <CellTemplate>
+                                        <MudImage class="cursor-pointer rounded-3" Elevation="2"
+                                                  Src="@context.Item.SetImg" Height="50"
+                                                  @onclick="() => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg)"/>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
+                                <PropertyColumn Title="Name" Property="x => x.Name"/>
+                                <TemplateColumn Title="Needed">
+                                    <CellTemplate>
+                                        @{
+                                            var needed = brickContext.Item.SetBricks
+                                                .FirstOrDefault(sb => sb.SetId == context.Item.SetId)?.Count ?? 0;
+                                            var copies = brickContext.Item.UserSetCopies.GetValueOrDefault(context.Item.SetId, 1);
+                                        }
+                                        <MudText>@needed × @copies = @(needed * copies)</MudText>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <TemplateColumn Title="BoM">
+                                    <CellTemplate>
+                                        <MudIconButton href="@($"/bom/{context.Item.SetId}")"
+                                                       Icon="@Icons.Material.Filled.List"
+                                                       Variant="Variant.Filled" Color="Color.Primary"
+                                                       Size="Size.Small"/>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                            </Columns>
+                        </MudDataGrid>
+                    </MudCard>
+                }
+                </div>
+            </ChildRowContent>
+
+            <PagerContent>
+                <MudDataGridPager T="MyBrickInfo"/>
+            </PagerContent>
+        </MudDataGrid>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<MyBrickInfo> _brickInfos = [];
+    private string _search = "";
+
+    protected override void OnInitialized()
+    {
+        AuthService.SessionRestored += OnSessionRestored;
+        if (AuthService.IsSessionRestored) InvokeAsync(LoadDataAsync);
+    }
+
+    private void OnSessionRestored() => InvokeAsync(async () =>
+    {
+        if (AuthService.CurrentUser == null)
+            Nav.NavigateTo("/not-authorized");
+        else
+        {
+            await LoadDataAsync();
+            StateHasChanged();
+        }
+    });
+
+    public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
+
+    protected override async Task OnInitializedAsync() => await LoadDataAsync();
+
+    private async Task LoadDataAsync()
+    {
+        if (AuthService.CurrentUser == null) return;
+        var userId = AuthService.CurrentUser.UserId;
+
+        using var context = new InventoryContext();
+
+        // Count how many copies the user owns of each set
+        var userSetCopies = context.Set<SetOwned>()
+            .Where(so => so.UserId == userId)
+            .GroupBy(so => so.SetId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var userSetIds = userSetCopies.Keys.ToList();
+
+        // BOM entries for the user's sets
+        var setBricks = context.Set<SetBrick>()
+            .Where(sb => userSetIds.Contains(sb.SetId))
+            .ToList();
+
+        // Needed per brick weighted by copies owned
+        var neededDict = setBricks
+            .GroupBy(sb => (sb.PartNum, sb.ColorId))
+            .ToDictionary(
+                g => g.Key,
+                g => g.Sum(sb => sb.Count * userSetCopies.GetValueOrDefault(sb.SetId, 1)));
+
+        // Distinct sets per brick (from user's owned sets)
+        var setCountDict = setBricks
+            .GroupBy(sb => (sb.PartNum, sb.ColorId))
+            .ToDictionary(g => g.Key, g => g.Select(sb => sb.SetId).Distinct().Count());
+
+        // User's personal BrickOwned
+        var brickOwnedDict = context.Set<BrickOwned>()
+            .Where(bo => bo.UserId == userId)
+            .ToList()
+            .ToDictionary(bo => (bo.PartNum, bo.ColorId));
+
+        // All relevant brick keys (in set BOMs or in personal inventory)
+        var allKeys = neededDict.Keys.Union(brickOwnedDict.Keys).ToHashSet();
+
+        var allBricks = context.Set<Brick>().ToList()
+            .Where(b => allKeys.Contains((b.PartNum, b.ColorId)))
+            .ToList();
+
+        _brickInfos = allBricks.Select(b =>
+        {
+            var key = (b.PartNum, b.ColorId);
+            brickOwnedDict.TryGetValue(key, out var bo);
+            return new MyBrickInfo
+            {
+                Brick = b,
+                BrickOwned = bo ?? new BrickOwned { UserId = userId, PartNum = b.PartNum, ColorId = b.ColorId!, Stock = 0 },
+                IsNewBrickOwned = bo == null,
+                UserNeeded = neededDict.GetValueOrDefault(key, 0),
+                UserSetCount = setCountDict.GetValueOrDefault(key, 0)
+            };
+        }).ToList();
+
+        StateHasChanged();
+    }
+
+    private async Task LoadSetBricksAsync(MyBrickInfo info)
+    {
+        if (info.IsLoaded || AuthService.CurrentUser == null) return;
+        var userId = AuthService.CurrentUser.UserId;
+
+        await using var context = new InventoryContext();
+
+        var userSetCopies = context.Set<SetOwned>()
+            .Where(so => so.UserId == userId)
+            .GroupBy(so => so.SetId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        info.SetBricks = context.Set<SetBrick>()
+            .Where(sb => sb.PartNum == info.Brick.PartNum && sb.ColorId == info.Brick.ColorId
+                         && userSetCopies.Keys.Contains(sb.SetId))
+            .ToList();
+
+        info.UserOwnedSetIds = info.SetBricks.Select(sb => sb.SetId).Distinct().ToList();
+        info.UserSetCopies = userSetCopies;
+        info.IsLoaded = true;
+        StateHasChanged();
+    }
+
+    private List<Set> GetUserSets(List<string> setIds)
+    {
+        using var context = new InventoryContext();
+        return context.Set<Set>().Where(s => setIds.Contains(s.SetId)).ToList();
+    }
+
+    private void CommittedItemChanges(MyBrickInfo info)
+    {
+        if (info.BrickOwned.Stock < 0)
+        {
+            info.BrickOwned.Stock = 0;
+            return;
+        }
+        using var context = new InventoryContext();
+        if (info.IsNewBrickOwned)
+        {
+            context.Set<BrickOwned>().Add(info.BrickOwned);
+            context.SaveChanges();
+            info.IsNewBrickOwned = false;
+        }
+        else
+        {
+            new UpdateData().UpdateBrickOwned(info.BrickOwned);
+        }
+    }
+
+    private bool BrickFilterFunc(MyBrickInfo b)
+    {
+        if (string.IsNullOrWhiteSpace(_search)) return true;
+        if (b.Brick.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Brick.PartNum.Contains(_search, StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Brick.ColorName?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true) return true;
+        return false;
+    }
+
+    private Task OpenImagePopup(string id, string name, string? imgUrl) =>
+        DialogService.ShowAsync<ImagePopup>("Image Popup",
+            new DialogParameters<ImagePopup>
+            {
+                { x => x._id, id }, { x => x._name, name }, { x => x._imgUrl, imgUrl }
+            },
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+
+    private Task OpenColorPopup(string hex, string name) =>
+        DialogService.ShowAsync<ColorPopup>("Color Popup",
+            new DialogParameters<ColorPopup>
+            {
+                { x => x._hexColor, hex }, { x => x._name, name }
+            },
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+
+    private string ColorChipStyle(string hex)
+    {
+        var fg = IsDark(hex) ? "color: white;" : "color: #202020;";
+        return $"background-color: #{hex}; {fg} width: -moz-available;";
+    }
+
+    private bool IsDark(string hex)
+    {
+        var c = ColorTranslator.FromHtml($"#{hex}");
+        return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B < 128;
+    }
+
+    private class MyBrickInfo
+    {
+        public Brick Brick { get; set; }
+        public BrickOwned BrickOwned { get; set; }
+        public bool IsNewBrickOwned { get; set; }
+        public int UserNeeded { get; set; }
+        public int UserSetCount { get; set; }
+        public bool IsLoaded { get; set; }
+        public List<SetBrick> SetBricks { get; set; } = [];
+        public List<string> UserOwnedSetIds { get; set; } = [];
+        public Dictionary<string, int> UserSetCopies { get; set; } = new();
+    }
+}

@@ -1,0 +1,39 @@
+@page "/not-authorized"
+@layout FullPageLayout
+@inject NavigationManager Nav
+@inject IDialogService DialogService
+@using LEGO_Inventory.Components.Layout
+@using LEGO_Inventory.Components.Objects
+@using Color = MudBlazor.Color
+
+<PageTitle>Sign In Required</PageTitle>
+
+<div class="landing-page">
+    <MudStack AlignItems="AlignItems.Center" Spacing="4" Style="text-align: center; max-width: 480px;">
+        <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size: 4rem; opacity: 0.25;"/>
+        <div>
+            <MudText Typo="Typo.h4" Style="font-weight: 800;">Sign in required</MudText>
+            <MudText Typo="Typo.body1" Style="opacity: 0.55; margin-top: 0.5rem;">
+                This page is part of your personal collection. You need to sign in to view it.
+            </MudText>
+        </div>
+        <MudStack Row Spacing="2">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Home"
+                       OnClick='() => Nav.NavigateTo("/")'>Go Home</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Login"
+                       OnClick="OpenLoginDialog">Sign In</MudButton>
+        </MudStack>
+    </MudStack>
+</div>
+
+@code {
+    private Task OpenLoginDialog() =>
+        DialogService.ShowAsync<LoginDialog>("Login", new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            BackdropClick = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        });
+}

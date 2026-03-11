@@ -8,7 +8,7 @@
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Users</MudText>
 
 <MudPaper Elevation="2">
-    <MudDataGrid T="User" Items="@_users" SortMode="SortMode.Multiple" QuickFilter="FilterFunc">
+    <MudDataGrid T="UserRow" Items="@_rows" SortMode="SortMode.Multiple" QuickFilter="FilterFunc">
         <ToolBarContent>
             <MudText Typo="Typo.h6">Users</MudText>
             <MudSpacer/>
@@ -20,9 +20,9 @@
             <TemplateColumn Title="Avatar" Sortable="false">
                 <CellTemplate>
                     <MudAvatar Style="width: 36px; height: 36px;">
-                        @if (context.Item.ProfilePictureUrl != null)
+                        @if (context.Item.User.ProfilePictureUrl != null)
                         {
-                            <MudImage Src="@context.Item.ProfilePictureUrl" Style="width: 100%; height: 100%; object-fit: cover;"/>
+                            <MudImage Src="@context.Item.User.ProfilePictureUrl" Style="width: 100%; height: 100%; object-fit: cover;"/>
                         }
                         else
                         {
@@ -31,28 +31,84 @@
                     </MudAvatar>
                 </CellTemplate>
             </TemplateColumn>
-            <PropertyColumn Property="x => x.UserId" Title="ID"/>
-            <PropertyColumn Property="x => x.UserName" Title="Username"/>
+            <PropertyColumn Property="x => x.User.UserId" Title="ID"/>
+            <PropertyColumn Property="x => x.User.UserName" Title="Username"/>
+            <TemplateColumn Title="Sets" SortBy="x => x.OwnedSets">
+                <CellTemplate>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.ViewModule" Size="Size.Small" Style="opacity: 0.5;"/>
+                        <MudText>@context.Item.OwnedSets</MudText>
+                    </MudStack>
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Bricks" SortBy="x => x.OwnedBricks">
+                <CellTemplate>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Style="opacity: 0.5;"/>
+                        <MudText>@context.Item.OwnedBricks</MudText>
+                    </MudStack>
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Minifigs" SortBy="x => x.OwnedMinifigs">
+                <CellTemplate>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Style="opacity: 0.5;"/>
+                        <MudText>@context.Item.OwnedMinifigs</MudText>
+                    </MudStack>
+                </CellTemplate>
+            </TemplateColumn>
         </Columns>
         <PagerContent>
-            <MudDataGridPager T="User"/>
+            <MudDataGridPager T="UserRow"/>
         </PagerContent>
     </MudDataGrid>
 </MudPaper>
 
 @code {
-    private List<User> _users = [];
+    private List<UserRow> _rows = [];
     private string _search = string.Empty;
 
     protected override Task OnInitializedAsync()
     {
         using var context = new InventoryContext();
-        _users = context.Users.OrderBy(u => u.UserName).ToList();
+
+        var setCounts = context.Set<SetOwned>()
+            .GroupBy(so => so.UserId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var brickCounts = context.Set<BrickOwned>()
+            .GroupBy(bo => bo.UserId)
+            .ToDictionary(g => g.Key, g => g.Sum(bo => bo.Stock));
+
+        var minifigCounts = context.Set<MinifigOwned>()
+            .GroupBy(mo => mo.UserId)
+            .ToDictionary(g => g.Key, g => g.Sum(mo => mo.Stock));
+
+        _rows = context.Users
+            .OrderBy(u => u.UserName)
+            .ToList()
+            .Select(u => new UserRow
+            {
+                User = u,
+                OwnedSets    = setCounts.GetValueOrDefault(u.UserId, 0),
+                OwnedBricks  = brickCounts.GetValueOrDefault(u.UserId, 0),
+                OwnedMinifigs = minifigCounts.GetValueOrDefault(u.UserId, 0)
+            })
+            .ToList();
+
         return Task.CompletedTask;
     }
 
-    private bool FilterFunc(User user) =>
+    private bool FilterFunc(UserRow row) =>
         string.IsNullOrWhiteSpace(_search) ||
-        user.UserName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-        user.UserId.ToString().Contains(_search);
+        row.User.UserName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        row.User.UserId.ToString().Contains(_search);
+
+    private class UserRow
+    {
+        public User User { get; set; }
+        public int OwnedSets { get; set; }
+        public int OwnedBricks { get; set; }
+        public int OwnedMinifigs { get; set; }
+    }
 }

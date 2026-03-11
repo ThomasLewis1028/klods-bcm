@@ -1,0 +1,31 @@
+@page "/my/minifigs"
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@using LEGO_Inventory.Services
+@using Color = MudBlazor.Color
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>My Minifigs</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Minifigs</MudText>
+
+<MudText Typo="Typo.body1" Color="Color.Secondary">Coming soon — minifigs you own or that are part of your sets will appear here.</MudText>
+
+@code {
+    protected override void OnInitialized()
+    {
+        AuthService.SessionRestored += OnSessionRestored;
+        if (AuthService.IsSessionRestored) CheckAuth();
+    }
+
+    private void OnSessionRestored() => InvokeAsync(CheckAuth);
+
+    private void CheckAuth()
+    {
+        if (AuthService.CurrentUser == null)
+            Nav.NavigateTo("/not-authorized");
+    }
+
+    public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
+}

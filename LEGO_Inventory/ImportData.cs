@@ -73,6 +73,7 @@ public class ImportData
             ImportSetMinifigBOM(setId);
 
             CreateSetBrickOwned(userId.Value, setId, index);
+            EnsureBrickOwnedForSet(userId.Value, setId);
 
             _logger.LogInformation($"DONE Adding Owned Set for {setId}");
             return true;
@@ -117,6 +118,43 @@ public class ImportData
         }
 
         return context.SaveChanges() > 0;
+    }
+
+    /// <summary>
+    /// Ensures a BrickOwned(Stock=0) row exists for every brick in a set's BOM for the given user.
+    /// Called when a user adds a set so My Bricks shows all relevant bricks immediately.
+    /// </summary>
+    public void EnsureBrickOwnedForSet(int userId, string setId)
+    {
+        using var context = new InventoryContext();
+
+        var bomPartKeys = context.Set<SetBrick>()
+            .Where(sb => sb.SetId == setId)
+            .Select(sb => new { sb.PartNum, sb.ColorId })
+            .ToList();
+
+        var existingKeys = context.Set<BrickOwned>()
+            .Where(bo => bo.UserId == userId)
+            .Select(bo => new { bo.PartNum, bo.ColorId })
+            .ToList()
+            .Select(k => (k.PartNum, k.ColorId))
+            .ToHashSet();
+
+        foreach (var key in bomPartKeys)
+        {
+            if (!existingKeys.Contains((key.PartNum, key.ColorId)))
+            {
+                context.Set<BrickOwned>().Add(new BrickOwned
+                {
+                    UserId = userId,
+                    PartNum = key.PartNum,
+                    ColorId = key.ColorId,
+                    Stock = 0
+                });
+            }
+        }
+
+        context.SaveChanges();
     }
 
     public bool ImportSetInfo(string? setId)

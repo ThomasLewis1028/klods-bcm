@@ -6,7 +6,15 @@ namespace LEGO_Inventory.Services;
 public class AuthService
 {
     public User? CurrentUser { get; private set; }
+    public bool IsSessionRestored { get; private set; }
     public event Action? OnChange;
+    public event Action? SessionRestored;
+
+    public void MarkSessionRestored()
+    {
+        IsSessionRestored = true;
+        SessionRestored?.Invoke();
+    }
 
     public bool Login(string username, string password)
     {
