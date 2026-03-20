@@ -3,6 +3,7 @@ using System;
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LEGO_Inventory.Migrations
 {
     [DbContext(typeof(InventoryContext))]
-    partial class InventoryContextModelSnapshot : ModelSnapshot
+    [Migration("20260320173040_AddPerformanceIndexes")]
+    partial class AddPerformanceIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -32,6 +35,9 @@ namespace LEGO_Inventory.Migrations
 
                     b.Property<string>("ColorName")
                         .HasColumnType("text");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
 
                     b.Property<string>("HexColor")
                         .HasColumnType("text");
@@ -159,6 +165,9 @@ namespace LEGO_Inventory.Migrations
                     b.Property<string>("MinifigUrl")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("Stock")
+                        .HasColumnType("integer");
 
                     b.HasKey("MinifigId");
 

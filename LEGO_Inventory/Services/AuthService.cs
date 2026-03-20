@@ -5,6 +5,7 @@ namespace LEGO_Inventory.Services;
 
 public class AuthService
 {
+    private const int PasswordHashIterations = 100_000;
     public User? CurrentUser { get; private set; }
     public bool IsSessionRestored { get; private set; }
     public event Action? OnChange;
@@ -154,7 +155,7 @@ public class AuthService
     private static string HashPassword(string password)
     {
         var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100_000, HashAlgorithmName.SHA256, 32);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordHashIterations, HashAlgorithmName.SHA256, 32);
         return $"{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
     }
 
@@ -165,7 +166,7 @@ public class AuthService
 
         var salt = Convert.FromBase64String(parts[0]);
         var expectedHash = Convert.FromBase64String(parts[1]);
-        var actualHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100_000, HashAlgorithmName.SHA256, 32);
+        var actualHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordHashIterations, HashAlgorithmName.SHA256, 32);
 
         return CryptographicOperations.FixedTimeEquals(expectedHash, actualHash);
     }

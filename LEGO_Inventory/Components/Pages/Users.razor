@@ -73,18 +73,22 @@
         using var context = new InventoryContext();
 
         var setCounts = context.Set<SetOwned>()
+            .AsNoTracking()
             .GroupBy(so => so.UserId)
             .ToDictionary(g => g.Key, g => g.Count());
 
         var brickCounts = context.Set<BrickOwned>()
+            .AsNoTracking()
             .GroupBy(bo => bo.UserId)
             .ToDictionary(g => g.Key, g => g.Sum(bo => bo.Stock));
 
         var minifigCounts = context.Set<MinifigOwned>()
+            .AsNoTracking()
             .GroupBy(mo => mo.UserId)
             .ToDictionary(g => g.Key, g => g.Sum(mo => mo.Stock));
 
         _rows = context.Users
+            .AsNoTracking()
             .OrderBy(u => u.UserName)
             .ToList()
             .Select(u => new UserRow

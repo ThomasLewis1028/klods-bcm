@@ -13,8 +13,6 @@ public class Brick
 
     public string? PartImg { get; set; }
 
-    public int Count { get; set; }
-    
     public string? ColorId { get; set; }
     
     public string? ColorName { get; set; }

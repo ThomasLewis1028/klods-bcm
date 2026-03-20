@@ -140,8 +140,14 @@ public class InventoryContext : DbContext
         // COLOR
         modelBuilder.Entity<Color>().HasKey(e => new { e.Id });
 
+        // USER — unique index on UserName for login/uniqueness-check lookups
+        modelBuilder.Entity<User>()
+            .HasIndex(e => e.UserName)
+            .IsUnique();
+
         // USER EXTERNAL LOGIN
         modelBuilder.Entity<UserExternalLogin>().HasKey(e => new { e.Provider, e.ProviderKey });
+
         modelBuilder.Entity<UserExternalLogin>()
             .HasOne<User>()
             .WithMany()

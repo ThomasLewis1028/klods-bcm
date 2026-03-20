@@ -18,6 +18,7 @@ builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri("https://
 
 // ── OAuth (External cookie scheme + optional providers) ────────────────────
 const string ExternalScheme = "External";
+const int ExternalCookieExpiryMinutes = 10;
 
 var auth = builder.Services.AddAuthentication(options =>
 {
@@ -26,7 +27,7 @@ var auth = builder.Services.AddAuthentication(options =>
 {
     options.Cookie.Name    = "ExternalLogin";
     options.Cookie.SameSite = SameSiteMode.Lax;
-    options.ExpireTimeSpan  = TimeSpan.FromMinutes(10);
+    options.ExpireTimeSpan  = TimeSpan.FromMinutes(ExternalCookieExpiryMinutes);
 });
 
 var enabledProviders = new List<string>();

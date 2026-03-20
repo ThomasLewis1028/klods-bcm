@@ -141,7 +141,7 @@
         if (AuthService.CurrentUser == null) return;
 
         var importData = new ImportData();
-        importData.AddOwnedSet(row.Set.SetId, AuthService.CurrentUser.UserId);
+        await importData.AddOwnedSet(row.Set.SetId, AuthService.CurrentUser.UserId);
 
         row.UserOwnedCount++;
         _totalOwnedInstances++;

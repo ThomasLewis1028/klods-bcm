@@ -217,7 +217,7 @@
         List<string> setIdList = _setId.Split(null).ToList();
         _importSize = setIdList.Count;
 
-        importData.ImportAll(setIdList);
+        await importData.ImportAll(setIdList);
 
         _isLoading = false;
         await OnInitializedAsync();
@@ -229,7 +229,7 @@
         StateHasChanged();
 
         ImportData importData = new ImportData();
-        importData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
+        await importData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
 
         using (var context = new InventoryContext())
         {

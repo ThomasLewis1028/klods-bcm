@@ -128,7 +128,7 @@
                                     <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                                         @if (context.Item.Brick.HexColor != null)
                                         {
-                                            @if (IsDark(context.Item.Brick.HexColor))
+                                            @if (ColorHelper.IsDark(context.Item.Brick.HexColor))
                                             {
                                                 <MudChip
                                                     OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
@@ -161,7 +161,7 @@
                                         {
                                             <MudText Color="@Color.Success">@context.Item.SetBrick.Count</MudText>
                                         }
-                                        else if (context.Item.SetBrick.Count - stock <= context.Item.Brick.Count)
+                                        else if (context.Item.SetBrick.Count - stock <= (context.Item.BrickOwned?.Stock ?? 0))
                                         {
                                             <MudText Color="@Color.Warning">@context.Item.SetBrick.Count</MudText>
                                         }
@@ -198,7 +198,22 @@
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <PropertyColumn Property="x => x.Brick.Count" Title="Stock" Editable="true"/>
+                            <TemplateColumn Title="My Stock" Editable="true"
+                                            SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
+                                <CellTemplate>
+                                    <MudText>@(context.Item.BrickOwned?.Stock ?? 0)</MudText>
+                                </CellTemplate>
+                                <EditTemplate>
+                                    @if (context.Item.BrickOwned != null)
+                                    {
+                                        <MudNumericField @bind-Value="context.Item.BrickOwned!.Stock" Min="0"/>
+                                    }
+                                    else
+                                    {
+                                        <MudText>0</MudText>
+                                    }
+                                </EditTemplate>
+                            </TemplateColumn>
                         </Columns>
                         <PagerContent>
                             <MudDataGridPager T="SetBrickInfo"/>
@@ -233,7 +248,22 @@
                             <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Minifig Id" Editable="false"/>
                             <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name" Editable="false"/>
                             <PropertyColumn Property="x => x.SetMinifig.Count" Title="Needed" Editable="false"/>
-                            <PropertyColumn Property="x => x.Minifig.Stock" Title="Global Stock" Editable="true"/>
+                            <TemplateColumn Title="My Stock" Editable="true"
+                                            SortBy="x => x.MinifigOwned == null ? 0 : x.MinifigOwned.Stock">
+                                <CellTemplate>
+                                    <MudText>@(context.Item.MinifigOwned?.Stock ?? 0)</MudText>
+                                </CellTemplate>
+                                <EditTemplate>
+                                    @if (context.Item.MinifigOwned != null)
+                                    {
+                                        <MudNumericField @bind-Value="context.Item.MinifigOwned!.Stock" Min="0"/>
+                                    }
+                                    else
+                                    {
+                                        <MudText>0</MudText>
+                                    }
+                                </EditTemplate>
+                            </TemplateColumn>
                         </Columns>
 
                         <ChildRowContent Context="minifigContext">
@@ -303,6 +333,7 @@
     private List<SetMinifigInfo> _setMinifigInfo = new();
     private List<Set> _sets = new();
     private List<SetOwned> _setsOwned = new();
+    private Dictionary<(string PartNum, string ColorId), BrickOwned> _brickOwnedDict = new();
     private string searchString;
     private bool _showMissing = false;
 
@@ -351,25 +382,41 @@
                     .Where(sbo => sbo.UserId == userId.Value && sbo.SetId == _setId && sbo.SetIndex == setIndex)
                     .ToDictionary(sbo => (sbo.PartNum, sbo.ColorId))
                 : new Dictionary<(string, string), SetBrickOwned>();
+            // Load personal loose brick inventory for this user
+            _brickOwnedDict = userId.HasValue
+                ? context.Set<BrickOwned>()
+                    .Where(bo => bo.UserId == userId.Value)
+                    .ToDictionary(bo => (bo.PartNum, bo.ColorId))
+                : new Dictionary<(string, string), BrickOwned>();
 
             foreach (var setBrick in setBricks)
             {
                 ownedStock.TryGetValue((setBrick.PartNum, setBrick.ColorId), out var sbo);
+                _brickOwnedDict.TryGetValue((setBrick.PartNum, setBrick.ColorId), out var bo);
                 _setBrickInfo.Add(new SetBrickInfo
                 {
                     Brick = brickContext.First(b => b.PartNum == setBrick.PartNum && b.ColorId == setBrick.ColorId),
                     SetBrick = setBrick,
-                    SetBrickOwned = sbo
+                    SetBrickOwned = sbo,
+                    BrickOwned = bo
                 });
             }
+
+            var minifigOwnedDict = userId.HasValue
+                ? context.Set<MinifigOwned>()
+                    .Where(mo => mo.UserId == userId.Value)
+                    .ToDictionary(mo => mo.MinifigId)
+                : new Dictionary<string, MinifigOwned>();
 
             var setMinifigs = setMinifigContext.Where(sm => sm.SetId == _setId).ToList();
             foreach (var setMinifig in setMinifigs)
             {
+                minifigOwnedDict.TryGetValue(setMinifig.MinifigId, out var mo);
                 _setMinifigInfo.Add(new SetMinifigInfo
                 {
                     Minifig = minifigContext.First(m => m.MinifigId == setMinifig.MinifigId),
-                    SetMinifig = setMinifig
+                    SetMinifig = setMinifig,
+                    MinifigOwned = mo
                 });
             }
 
@@ -385,19 +432,19 @@
         logger.LogTrace("Loading Sets Complete");
     }
 
-    private void ChangeSet(Set set)
+    private async Task ChangeSet(Set set)
     {
         _setId = set.SetId;
         _set = set;
         navigationManager.NavigateTo($"/bom/{_setId}/0");
-        _ = OnInitializedAsync();
+        await OnInitializedAsync();
     }
 
-    private void ChangeIndex(SetOwned setOwned)
+    private async Task ChangeIndex(SetOwned setOwned)
     {
         _setIndex = setOwned.SetIndex.ToString();
         navigationManager.NavigateTo($"/bom/{_setId}/{_setIndex}");
-        _ = OnInitializedAsync();
+        await OnInitializedAsync();
     }
 
     private bool SetBrickFilterFunc(SetBrickInfo setBrickInfo) => SetBrickFilter(setBrickInfo);
@@ -469,46 +516,49 @@
     {
         var updateData = new UpdateData();
 
-        if (setBrickInfo.Brick.Count < 0)
+        if (setBrickInfo.BrickOwned != null && setBrickInfo.BrickOwned.Stock < 0)
         {
-            setBrickInfo.Brick.Count = 0;
-            OpenErrorPopup("Cannot set inventory to less than 0");
+            setBrickInfo.BrickOwned.Stock = 0;
+            OpenErrorPopup("Cannot set personal stock to less than 0");
             return;
         }
 
         if (setBrickInfo.SetBrickOwned != null && setBrickInfo.SetBrickOwned.Stock < 0)
         {
             setBrickInfo.SetBrickOwned.Stock = 0;
-            OpenErrorPopup("Cannot set stock to less than 0");
+            OpenErrorPopup("Cannot set stock used to less than 0");
             return;
         }
 
-        updateData.UpdateBrick(setBrickInfo.Brick);
+        var userId = AuthService.CurrentUser?.UserId ?? 0;
+        if (setBrickInfo.BrickOwned != null)
+            updateData.UpdateBrickOwned(setBrickInfo.BrickOwned, userId);
         if (setBrickInfo.SetBrickOwned != null)
-            updateData.UpdateSetBrickOwned(setBrickInfo.SetBrickOwned);
+            updateData.UpdateSetBrickOwned(setBrickInfo.SetBrickOwned, userId);
 
         StateHasChanged();
     }
 
     void UpdateMinifig(SetMinifigInfo setMinifigInfo)
     {
+        if (setMinifigInfo.MinifigOwned == null) return;
         var updateData = new UpdateData();
-        updateData.UpdateMinifig(setMinifigInfo.Minifig);
+        updateData.UpdateMinifigOwned(setMinifigInfo.MinifigOwned, AuthService.CurrentUser?.UserId ?? 0);
         StateHasChanged();
     }
 
     void MoveBrickStock(Direction dir, SetBrickInfo setBrickInfo)
     {
-        if (setBrickInfo.SetBrickOwned == null) return;
+        if (setBrickInfo.SetBrickOwned == null || setBrickInfo.BrickOwned == null) return;
 
         if (dir == Direction.left)
         {
-            if (setBrickInfo.Brick.Count < setBrickInfo.MoveCount)
+            if (setBrickInfo.BrickOwned.Stock < setBrickInfo.MoveCount)
             {
-                OpenErrorPopup("Lacking set stock to move inventory");
+                OpenErrorPopup("Not enough personal inventory to move to set");
                 return;
             }
-            setBrickInfo.Brick.Count -= setBrickInfo.MoveCount;
+            setBrickInfo.BrickOwned.Stock -= setBrickInfo.MoveCount;
             setBrickInfo.SetBrickOwned.Stock += setBrickInfo.MoveCount;
             UpdateBrick(setBrickInfo);
         }
@@ -516,25 +566,17 @@
         {
             if (setBrickInfo.SetBrickOwned.Stock < setBrickInfo.MoveCount)
             {
-                OpenErrorPopup("Lacking inventory to move set stock");
+                OpenErrorPopup("Not enough set stock to return to personal inventory");
                 return;
             }
-            setBrickInfo.Brick.Count += setBrickInfo.MoveCount;
             setBrickInfo.SetBrickOwned.Stock -= setBrickInfo.MoveCount;
+            setBrickInfo.BrickOwned.Stock += setBrickInfo.MoveCount;
             UpdateBrick(setBrickInfo);
         }
     }
 
     enum Direction { left, right }
 
-    public bool IsDark(string hex)
-    {
-        System.Drawing.Color color = ColorTranslator.FromHtml($"#{hex}");
-        int r = Convert.ToInt16(color.R);
-        int g = Convert.ToInt16(color.G);
-        int b = Convert.ToInt16(color.B);
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
-    }
 
     protected void OpenBuildingInstructions(string url)
     {
@@ -570,11 +612,13 @@
 
             ownedStock.TryGetValue((minifigBrick.BrickID, minifigBrick.ColorId), out var sbo);
 
+            _brickOwnedDict.TryGetValue((minifigBrick.BrickID, minifigBrick.ColorId), out var bo);
             result.Add(new SetBrickInfo
             {
                 Brick = brickContext.First(b => b.PartNum == minifigBrick.BrickID && b.ColorId == minifigBrick.ColorId),
                 SetBrick = bom,
-                SetBrickOwned = sbo
+                SetBrickOwned = sbo,
+                BrickOwned = bo
             });
         }
 
@@ -585,6 +629,7 @@
     {
         public SetBrick SetBrick { get; set; }
         public SetBrickOwned? SetBrickOwned { get; set; }
+        public BrickOwned? BrickOwned { get; set; }
         public Brick Brick { get; set; }
         public int MoveCount { get; set; } = 0;
     }
@@ -593,5 +638,6 @@
     {
         public Minifig Minifig { get; set; }
         public SetMinifig SetMinifig { get; set; }
+        public MinifigOwned? MinifigOwned { get; set; }
     }
 }

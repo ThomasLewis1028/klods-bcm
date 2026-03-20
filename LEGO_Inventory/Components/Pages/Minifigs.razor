@@ -38,7 +38,6 @@
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Id" Editable="false"/>
                 <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name" Editable="false"/>
-                <PropertyColumn Property="x => x.Minifig.Stock" Title="Stock" Editable="false"/>
                 <PropertyColumn Property="x => x.PartCount" Title="Parts" Editable="false"/>
             </Columns>
 
@@ -76,7 +75,7 @@
                                         <MudStack Row>
                                             @if (context.Item.Brick.HexColor != null)
                                             {
-                                                @if (IsDark(context.Item.Brick.HexColor))
+                                                @if (ColorHelper.IsDark(context.Item.Brick.HexColor))
                                                 {
                                                     <MudChip T="string"
                                                         OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
@@ -160,18 +159,18 @@
             var minifigBrickContext = context.Set<MinifigBrick>();
             var brickContext = context.Set<Brick>();
 
-            var minifigBricks = minifigBrickContext
+            var joined = minifigBrickContext
+                .AsNoTracking()
                 .Where(mb => mb.MinifigID == minifigInfo.Minifig.MinifigId)
+                .Join(brickContext.AsNoTracking(),
+                    mb => new { PartNum = mb.BrickID, mb.ColorId },
+                    b  => new { b.PartNum, b.ColorId },
+                    (mb, b) => new { MinifigBrick = mb, Brick = b, mb.Quantity })
                 .ToList();
 
-            minifigInfo.MinifigBricks = minifigBricks;
-            minifigInfo.Bricks = minifigBricks
-                .Select(mb => new BrickEntry
-                {
-                    Brick = brickContext.FirstOrDefault(b => b.PartNum == mb.BrickID && b.ColorId == mb.ColorId),
-                    Quantity = mb.Quantity
-                })
-                .Where(be => be.Brick != null)
+            minifigInfo.MinifigBricks = joined.Select(e => e.MinifigBrick).ToList();
+            minifigInfo.Bricks = joined
+                .Select(e => new BrickEntry { Brick = e.Brick, Quantity = e.Quantity })
                 .ToList();
 
             minifigInfo.IsLoaded = true;
@@ -215,14 +214,6 @@
         return DialogService.ShowAsync<ColorPopup>("Color Popup", parameters, options);
     }
 
-    public bool IsDark(string hex)
-    {
-        System.Drawing.Color color = ColorTranslator.FromHtml($"#{hex}");
-        int r = Convert.ToInt16(color.R);
-        int g = Convert.ToInt16(color.G);
-        int b = Convert.ToInt16(color.B);
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
-    }
 
     private class MinifigInfo
     {

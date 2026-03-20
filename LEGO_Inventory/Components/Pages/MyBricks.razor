@@ -50,7 +50,7 @@
                         {
                             <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
                                      class="mud-elevation-2"
-                                     Style="@ColorChipStyle(context.Item.Brick.HexColor)">
+                                     Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
                                 @context.Item.Brick.ColorName
                             </MudChip>
                         }
@@ -159,6 +159,7 @@
 
         // Count how many copies the user owns of each set
         var userSetCopies = context.Set<SetOwned>()
+            .AsNoTracking()
             .Where(so => so.UserId == userId)
             .GroupBy(so => so.SetId)
             .ToDictionary(g => g.Key, g => g.Count());
@@ -167,6 +168,7 @@
 
         // BOM entries for the user's sets
         var setBricks = context.Set<SetBrick>()
+            .AsNoTracking()
             .Where(sb => userSetIds.Contains(sb.SetId))
             .ToList();
 
@@ -184,14 +186,18 @@
 
         // User's personal BrickOwned
         var brickOwnedDict = context.Set<BrickOwned>()
+            .AsNoTracking()
             .Where(bo => bo.UserId == userId)
-            .ToList()
             .ToDictionary(bo => (bo.PartNum, bo.ColorId));
 
         // All relevant brick keys (in set BOMs or in personal inventory)
         var allKeys = neededDict.Keys.Union(brickOwnedDict.Keys).ToHashSet();
+        var allPartNums = allKeys.Select(k => k.PartNum).ToList();
 
-        var allBricks = context.Set<Brick>().ToList()
+        var allBricks = context.Set<Brick>()
+            .AsNoTracking()
+            .Where(b => allPartNums.Contains(b.PartNum))
+            .ToList()
             .Where(b => allKeys.Contains((b.PartNum, b.ColorId)))
             .ToList();
 
@@ -257,7 +263,7 @@
         }
         else
         {
-            new UpdateData().UpdateBrickOwned(info.BrickOwned);
+            new UpdateData().UpdateBrickOwned(info.BrickOwned, AuthService.CurrentUser?.UserId ?? 0);
         }
     }
 
@@ -286,17 +292,6 @@
             },
             new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
 
-    private string ColorChipStyle(string hex)
-    {
-        var fg = IsDark(hex) ? "color: white;" : "color: #202020;";
-        return $"background-color: #{hex}; {fg} width: -moz-available;";
-    }
-
-    private bool IsDark(string hex)
-    {
-        var c = ColorTranslator.FromHtml($"#{hex}");
-        return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B < 128;
-    }
 
     private class MyBrickInfo
     {
