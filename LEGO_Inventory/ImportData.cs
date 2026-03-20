@@ -41,7 +41,7 @@ public class ImportData
     /// <summary>
     /// Adds an owned set instance for a user. Creates SetOwned + SetBrickOwned rows.
     /// </summary>
-    public async Task<bool> AddOwnedSet(string setId, int? userId = null)
+    public async Task<bool> AddOwnedSet(string setId, int? userId = null, bool applyBricks = false)
     {
         try
         {
@@ -72,7 +72,7 @@ public class ImportData
             await ImportSetBOM(setId);
             await ImportSetMinifigBOM(setId);
 
-            CreateSetBrickOwned(userId.Value, setId, index);
+            CreateSetBrickOwned(userId.Value, setId, index, applyBricks);
             EnsureBrickOwnedForSet(userId.Value, setId);
             EnsureMinifigOwnedForSet(userId.Value, setId);
 
@@ -90,7 +90,7 @@ public class ImportData
     /// Creates SetBrickOwned rows (Stock = 0) for a specific owned set instance,
     /// based on the existing SetBrick BOM entries for that set.
     /// </summary>
-    public bool CreateSetBrickOwned(int userId, string setId, int setIndex)
+    public bool CreateSetBrickOwned(int userId, string setId, int setIndex, bool applyBricks = false)
     {
         _logger.LogInformation($"Creating SetBrickOwned for user {userId}, {setId}-{setIndex}");
 
@@ -118,7 +118,7 @@ public class ImportData
                     SetIndex = setIndex,
                     PartNum = bom.PartNum,
                     ColorId = bom.ColorId,
-                    Stock = 0
+                    Stock = applyBricks ? bom.Count : 0
                 });
             }
         }

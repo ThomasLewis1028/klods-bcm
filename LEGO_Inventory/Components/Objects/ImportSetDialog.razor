@@ -1,0 +1,112 @@
+@inject AuthService AuthService
+@using LEGO_Inventory.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Import Sets</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @for (int i = 0; i < _entries.Count; i++)
+            {
+                var entry = _entries[i];
+                var idx = i;
+                <MudPaper Elevation="1" Class="pa-3">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                        <MudTextField @bind-Value="entry.SetId" Label="Set ID" Variant="Variant.Outlined"
+                                      Immediate="true" Style="flex: 1; min-width: 130px;" Disabled="_isLoading"/>
+                        <MudNumericField @bind-Value="entry.Owned" Label="Owned" Variant="Variant.Outlined"
+                                         Min="0" Style="max-width: 90px;" Disabled="_isLoading"/>
+                        <MudTooltip Text="Mark all bricks in this set as already in your inventory">
+                            <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.caption" Style="white-space: nowrap;">Full Stock</MudText>
+                                <MudSwitch @bind-Value="entry.ApplyBricks" Color="Color.Primary"
+                                           Disabled="@(_isLoading || entry.Owned == 0)"/>
+                            </MudStack>
+                        </MudTooltip>
+                        @if (_entries.Count > 1)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                           OnClick="() => RemoveEntry(idx)" Disabled="_isLoading"/>
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+
+            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddEntry"
+                       Variant="Variant.Text" Disabled="_isLoading">
+                Add another
+            </MudButton>
+
+            @if (_isLoading)
+            {
+                <MudDivider/>
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
+                <MudText Typo="Typo.caption" Align="Align.Center">@_statusMessage</MudText>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Filled" Disabled="_isLoading">Cancel</MudButton>
+        <MudSpacer/>
+        <MudButton OnClick="Import" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(_isLoading || !_entries.Any(e => !string.IsNullOrWhiteSpace(e.SetId)))">
+            Import
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    private List<SetImportEntry> _entries = [new SetImportEntry()];
+    private bool _isLoading;
+    private string _statusMessage = "";
+
+    private void AddEntry() => _entries.Add(new SetImportEntry());
+
+    private void RemoveEntry(int index) => _entries.RemoveAt(index);
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Import()
+    {
+        var validEntries = _entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.SetId))
+            .Select(e => new SetImportEntry { SetId = e.SetId.Trim(), Owned = e.Owned, ApplyBricks = e.ApplyBricks })
+            .ToList();
+
+        if (!validEntries.Any()) return;
+
+        _isLoading = true;
+        StateHasChanged();
+
+        var importData = new ImportData();
+        var userId = AuthService.CurrentUser?.UserId;
+
+        foreach (var entry in validEntries)
+        {
+            _statusMessage = $"Importing catalog for {entry.SetId}...";
+            StateHasChanged();
+            await importData.ImportAll([entry.SetId]);
+
+            for (int i = 0; i < entry.Owned; i++)
+            {
+                _statusMessage = $"Adding copy {i + 1} of {entry.Owned} for {entry.SetId}...";
+                StateHasChanged();
+                await importData.AddOwnedSet(entry.SetId, userId, entry.ApplyBricks);
+            }
+        }
+
+        _isLoading = false;
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private class SetImportEntry
+    {
+        public string SetId { get; set; } = "";
+        public int Owned { get; set; } = 0;
+        public bool ApplyBricks { get; set; } = false;
+    }
+}

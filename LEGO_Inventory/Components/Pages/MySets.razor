@@ -16,23 +16,6 @@
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Sets</MudText>
 
 <MudGrid>
-    <MudItem xs="12">
-        <MudPaper Class="pa-4 mb-2" Elevation="2">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
-                <MudTextField T="String" Label="Set ID" Required="true" @bind-Value="_setId" Immediate="true"
-                              OnKeyDown="@OnKeyDown" Variant="Variant.Outlined"
-                              HelperText="Enter a set ID or multiple IDs separated by spaces"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Style="min-width: 280px;"/>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Download"
-                           OnClick="@(() => ImportSet())" Size="Size.Large"
-                           Style="margin-top: -20px;">Import Set
-                </MudButton>
-            </MudStack>
-        </MudPaper>
-    </MudItem>
-
     <MudItem xs="12" Style="position: relative;">
         <MudDataGrid T="SetInfo" Items="@_setInfos.OrderBy(b => b.Set.SetId)"
                      SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
@@ -43,7 +26,15 @@
                 <MudSpacer/>
                 <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
                               Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
-                              Class="mt-0"></MudTextField>
+                              Class="mt-0 me-3"></MudTextField>
+                <MudTooltip Text="@(AuthService.CurrentUser == null ? "You must be logged in to import sets" : "Import Sets")">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Download)"
+                               Disabled="@(AuthService.CurrentUser == null)"
+                               OnClick="OpenImportDialog">
+                        Import
+                    </MudButton>
+                </MudTooltip>
             </ToolBarContent>
             <Columns>
                 <HierarchyColumn T="SetInfo" ButtonDisabledFunc="@(info => info.OwnedSets.Count < 0)"/>
@@ -146,14 +137,10 @@
 </MudGrid>
 
 @code {
-    private string? _setId;
     private string _pageTitle = "My Sets";
     private List<Set>? _sets;
     private List<SetInfo>? _setInfos = [];
     private string searchString;
-    private int _importSize = 0;
-    private bool _isLoading = false;
-    MudForm form;
 
     protected override void OnInitialized()
     {
@@ -201,33 +188,21 @@
             }
         }
 
-        _setId = "";
-
         StateHasChanged();
         logger.LogTrace("Loading My Sets Complete");
     }
 
-    private async Task ImportSet()
+    private async Task OpenImportDialog()
     {
-        _isLoading = true;
-        StateHasChanged();
-
-        ImportData importData = new ImportData();
-
-        List<string> setIdList = _setId.Split(null).ToList();
-        _importSize = setIdList.Count;
-
-        await importData.ImportAll(setIdList);
-
-        _isLoading = false;
-        await OnInitializedAsync();
+        var dialog = await DialogService.ShowAsync<ImportSetDialog>("Import Sets",
+            new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+            await OnInitializedAsync();
     }
 
     private async Task AddOwnedSet(string setId)
     {
-        _isLoading = true;
-        StateHasChanged();
-
         ImportData importData = new ImportData();
         await importData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
 
@@ -240,18 +215,7 @@
                 setInfo.OwnedSets = ownedSetContext.Where(so => so.SetId == setId && so.UserId == userId.Value).ToList();
         }
 
-        _isLoading = false;
         StateHasChanged();
-    }
-
-    private async Task OnKeyDown(KeyboardEventArgs args)
-    {
-        if (args.Key == "Enter")
-        {
-            await ImportSet();
-            _setId = "";
-            await OnInitializedAsync();
-        }
     }
 
     private bool SetFilterFunc(SetInfo setInfo) => SetFilter(setInfo);
