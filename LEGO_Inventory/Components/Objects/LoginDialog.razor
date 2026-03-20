@@ -1,0 +1,129 @@
+@inject AuthService AuthService
+@inject PendingAuthService PendingAuth
+@inject NavigationManager Nav
+@inject IDialogService DialogService
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Class="mr-2" Style="vertical-align: middle;"/>
+            @(_isRegister ? "Create Account" : "Sign In")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (_errorMessage != null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_errorMessage</MudAlert>
+            }
+
+            @if (!_isRegister && PendingAuth.EnabledProviders.Count > 0)
+            {
+                <MudStack Spacing="2">
+                    @foreach (var provider in PendingAuth.EnabledProviders)
+                    {
+                        var p = provider;
+                        <MudButton FullWidth="true" Variant="Variant.Outlined"
+                                   StartIcon="@ProviderIcon(p)"
+                                   OnClick="@(() => SignInWithProvider(p))">
+                            Continue with @p
+                        </MudButton>
+                    }
+                </MudStack>
+                <MudDivider>
+                    <MudText Typo="Typo.caption" Style="opacity: 0.5; padding: 0 8px;">or</MudText>
+                </MudDivider>
+            }
+
+            <MudTextField T="string" Label="Username" @bind-Value="_username"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Person"
+                          Immediate="true" OnKeyDown="OnKeyDown"/>
+
+            <MudTextField T="string" Label="Password" @bind-Value="_password"
+                          Variant="Variant.Outlined"
+                          InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="() => _showPassword = !_showPassword"
+                          Immediate="true" OnKeyDown="OnKeyDown"/>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudStack Row="true" Justify="Justify.SpaceBetween" Style="width: 100%; padding: 0 8px 8px 8px;">
+            <MudButton Variant="Variant.Text" OnClick="ToggleMode" Color="Color.Secondary">
+                @(_isRegister ? "Already have an account?" : "Create an account")
+            </MudButton>
+            <MudStack Row="true" Spacing="1">
+                <MudButton OnClick="Cancel">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit">
+                    @(_isRegister ? "Register" : "Login")
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private bool _showPassword = false;
+    private bool _isRegister = false;
+    private string? _errorMessage;
+
+    private void Submit()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Username and password are required.";
+            return;
+        }
+
+        if (_isRegister)
+        {
+            if (!AuthService.Register(_username, _password))
+                _errorMessage = "Username already taken.";
+            else
+                MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            if (!AuthService.Login(_username, _password))
+                _errorMessage = "Invalid username or password.";
+            else
+                MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void ToggleMode()
+    {
+        _isRegister = !_isRegister;
+        _errorMessage = null;
+    }
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter") Submit();
+    }
+
+    private void SignInWithProvider(string provider)
+    {
+        MudDialog.Cancel();
+        Nav.NavigateTo($"/auth/challenge?provider={provider}", forceLoad: true);
+    }
+
+    private static string ProviderIcon(string provider) => provider switch
+    {
+        "Google"    => Icons.Custom.Brands.Google,
+        "Microsoft" => Icons.Custom.Brands.Microsoft,
+        "Discord"   => Icons.Material.Filled.Chat,
+        _           => Icons.Material.Filled.Login
+    };
+}

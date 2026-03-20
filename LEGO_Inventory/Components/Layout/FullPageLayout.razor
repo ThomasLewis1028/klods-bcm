@@ -1,6 +1,11 @@
 @inherits LayoutComponentBase
 @using Color = MudBlazor.Color
+@using LEGO_Inventory.Components.Objects
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject ThemeService ThemeService
+@inject AuthService AuthService
+@inject IDialogService DialogService
+@inject ProtectedLocalStorage LocalStorage
 @implements IDisposable
 
 <MudThemeProvider Theme="ThemeService.Theme" IsDarkMode="@ThemeService.IsDarkMode"/>
@@ -16,6 +21,42 @@
             <MudIconButton Icon="@(ThemeService.IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                            Color="Color.Inherit" OnClick="@ThemeService.ToggleDarkMode"/>
         </MudTooltip>
+
+        @if (AuthService.CurrentUser != null)
+        {
+            <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <MudTooltip Text="@AuthService.CurrentUser.UserName">
+                        <MudIconButton Color="Color.Inherit">
+                            @if (AuthService.CurrentUser.ProfilePictureUrl != null)
+                            {
+                                <MudAvatar Style="width: 32px; height: 32px;">
+                                    <MudImage Src="@AuthService.CurrentUser.ProfilePictureUrl" Style="width: 100%; height: 100%; object-fit: cover;"/>
+                                </MudAvatar>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.AccountCircle"/>
+                            }
+                        </MudIconButton>
+                    </MudTooltip>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Disabled="true">
+                        <MudText Typo="Typo.body2" Style="opacity: 0.7;">Signed in as <strong>@AuthService.CurrentUser.UserName</strong></MudText>
+                    </MudMenuItem>
+                    <MudDivider/>
+                    <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts" Href="/profile">Profile</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOut">Sign Out</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        }
+        else
+        {
+            <MudTooltip Text="Sign In">
+                <MudIconButton Icon="@Icons.Material.Outlined.AccountCircle" Color="Color.Inherit" OnClick="OpenLoginDialog"/>
+            </MudTooltip>
+        }
     </MudAppBar>
     <MudMainContent>
         @Body
@@ -25,11 +66,59 @@
 @code {
     protected override void OnInitialized()
     {
-        ThemeService.OnChange += StateHasChanged;
+        ThemeService.OnChange += OnThemeChanged;
+        AuthService.OnChange += OnAuthChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var darkMode = await LocalStorage.GetAsync<bool>("darkMode");
+                if (darkMode.Success)
+                    ThemeService.SetDarkMode(darkMode.Value);
+            }
+            catch { /* storage unavailable or tampered */ }
+
+            StateHasChanged();
+        }
+    }
+
+    private async void OnThemeChanged()
+    {
+        try { await LocalStorage.SetAsync("darkMode", ThemeService.IsDarkMode); }
+        catch { /* storage unavailable */ }
+        StateHasChanged();
+    }
+
+    private void OnAuthChanged()
+    {
+        var color = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
+        ThemeService.SetPrimaryColor(color);
+        StateHasChanged();
     }
 
     public void Dispose()
     {
-        ThemeService.OnChange -= StateHasChanged;
+        ThemeService.OnChange -= OnThemeChanged;
+        AuthService.OnChange -= OnAuthChanged;
+    }
+
+    private Task OpenLoginDialog()
+    {
+        return DialogService.ShowAsync<LoginDialog>("Login", new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            BackdropClick = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        });
+    }
+
+    private void SignOut()
+    {
+        AuthService.Logout();
     }
 }

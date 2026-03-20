@@ -1,0 +1,33 @@
+@page "/auth/complete"
+@inject AuthService AuthService
+@inject ThemeService ThemeService
+@inject PendingAuthService PendingAuth
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage LocalStorage
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@* Silent handoff page — restores the session after an OAuth redirect. *@
+
+@code {
+    [SupplyParameterFromQuery] private string? Token  { get; set; }
+    [SupplyParameterFromQuery] private bool    Linked { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Token is null) return;
+
+        var userId = PendingAuth.Consume(Token);
+        if (userId.HasValue)
+        {
+            AuthService.RestoreUser(userId.Value);
+            try { await LocalStorage.SetAsync("userId", userId.Value); } catch { }
+
+            var color = AuthService.CurrentUser?.PrimaryColor;
+            if (color != null)
+                ThemeService.SetPrimaryColor(color);
+        }
+
+        Nav.NavigateTo(Linked ? "/profile?linked=true" : "/");
+    }
+}

@@ -1,10 +1,15 @@
 @page "/"
 @layout FullPageLayout
 @inject NavigationManager Nav
+@inject AuthService AuthService
+@inject IDialogService DialogService
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Components.Layout
+@using LEGO_Inventory.Components.Objects
+@using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
+@implements IDisposable
 
 <PageTitle>LEGO Inventory</PageTitle>
 
@@ -15,65 +20,222 @@
     </div>
 
     <MudGrid Justify="Justify.Center" Style="max-width: 1100px; width: 100%;">
-        <MudItem xs="12" sm="6" lg="3">
+
+        @* ── Catalog section ── *@
+        <MudItem xs="12">
+            <div class="landing-section-label">
+                <MudIcon Icon="@Icons.Material.Filled.Public" Color="Color.Primary" Size="Size.Small"/>
+                <MudText Typo="Typo.overline" Style="font-weight: 700; letter-spacing: 0.12em;">Catalog</MudText>
+            </div>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" lg="4">
             <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/sets")'>
-                <MudCardMedia Image="@_setImg" Height="220"/>
+                <div class="card-image-wrapper" style="position: relative;">
+                    <MudCardMedia Image="@_catalogSetImg" Height="180"/>
+                    @if (_catalogSetName != null)
+                    {
+                        <div class="card-info-badge">?</div>
+                        <div class="card-name-label">@_catalogSetName</div>
+                    }
+                </div>
                 <MudCardContent>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.ViewModule" Color="Color.Primary"/>
                         <MudText Typo="Typo.h6" Style="font-weight: 700;">Sets</MudText>
                     </MudStack>
-                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Browse and manage your LEGO sets</MudText>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">All sets in the system</MudText>
                 </MudCardContent>
             </MudCard>
         </MudItem>
 
-        <MudItem xs="12" sm="6" lg="3">
+        <MudItem xs="12" sm="6" lg="4">
             <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bricks")'>
-                <MudCardMedia Image="@_brickImg" Height="220"/>
+                <div class="card-image-wrapper" style="position: relative;">
+                    <MudCardMedia Image="@_catalogBrickImg" Height="180"/>
+                    @if (_catalogBrickName != null)
+                    {
+                        <div class="card-info-badge">?</div>
+                        <div class="card-name-label">@_catalogBrickName</div>
+                    }
+                </div>
                 <MudCardContent>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.Category" Color="Color.Primary"/>
                         <MudText Typo="Typo.h6" Style="font-weight: 700;">Bricks</MudText>
                     </MudStack>
-                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Track your individual brick inventory</MudText>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">All bricks in the system</MudText>
                 </MudCardContent>
             </MudCard>
         </MudItem>
 
-        <MudItem xs="12" sm="6" lg="3">
+        <MudItem xs="12" sm="6" lg="4">
             <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/minifigs")'>
-                <MudCardMedia Image="@_minifigImg" Height="220"/>
+                <div class="card-image-wrapper" style="position: relative;">
+                    <MudCardMedia Image="@_catalogMinifigImg" Height="180"/>
+                    @if (_catalogMinifigName != null)
+                    {
+                        <div class="card-info-badge">?</div>
+                        <div class="card-name-label">@_catalogMinifigName</div>
+                    }
+                </div>
                 <MudCardContent>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary"/>
                         <MudText Typo="Typo.h6" Style="font-weight: 700;">Minifigs</MudText>
                     </MudStack>
-                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Manage your minifigure collection</MudText>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">All minifigs in the system</MudText>
                 </MudCardContent>
             </MudCard>
         </MudItem>
 
-        <MudItem xs="12" sm="6" lg="3">
-            <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bom")'>
-                <MudCardMedia Image="@_bomImg" Height="220"/>
-                <MudCardContent>
-                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                        <MudIcon Icon="@Icons.Material.Filled.FormatListBulleted" Color="Color.Primary"/>
-                        <MudText Typo="Typo.h6" Style="font-weight: 700;">Bill of Materials</MudText>
-                    </MudStack>
-                    <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">View missing pieces across your sets</MudText>
-                </MudCardContent>
-            </MudCard>
+        @* ── My Collection section ── *@
+        <MudItem xs="12">
+            <div class="landing-section-label">
+                <MudIcon Icon="@Icons.Material.Filled.CollectionsBookmark" Color="Color.Primary" Size="Size.Small"/>
+                <MudText Typo="Typo.overline" Style="font-weight: 700; letter-spacing: 0.12em;">My Collection</MudText>
+            </div>
         </MudItem>
+
+        <MudItem xs="12" style="position: relative;">
+            <MudGrid Justify="Justify.Center"
+                     Style="@(_locked ? "filter: blur(5px); pointer-events: none; user-select: none;" : "")">
+                <MudItem xs="12" sm="6" lg="3">
+                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/sets")'>
+                        <div class="card-image-wrapper" style="position: relative;">
+                            <MudCardMedia Image="@_mySetImg" Height="180"/>
+                            @if (_mySetName != null)
+                            {
+                                <div class="card-info-badge">?</div>
+                                <div class="card-name-label">@_mySetName</div>
+                            }
+                        </div>
+                        <MudCardContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.ViewModule" Color="Color.Primary"/>
+                                <MudText Typo="Typo.h6" Style="font-weight: 700;">My Sets</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Manage your owned sets</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" lg="3">
+                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/bricks")'>
+                        <div class="card-image-wrapper" style="position: relative;">
+                            <MudCardMedia Image="@_myBrickImg" Height="180"/>
+                            @if (_myBrickName != null)
+                            {
+                                <div class="card-info-badge">?</div>
+                                <div class="card-name-label">@_myBrickName</div>
+                            }
+                        </div>
+                        <MudCardContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Category" Color="Color.Primary"/>
+                                <MudText Typo="Typo.h6" Style="font-weight: 700;">My Bricks</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Your brick inventory</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" lg="3">
+                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/minifigs")'>
+                        <div class="card-image-wrapper" style="position: relative;">
+                            <MudCardMedia Image="@_myMinifigImg" Height="180"/>
+                            @if (_myMinifigName != null)
+                            {
+                                <div class="card-info-badge">?</div>
+                                <div class="card-name-label">@_myMinifigName</div>
+                            }
+                        </div>
+                        <MudCardContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary"/>
+                                <MudText Typo="Typo.h6" Style="font-weight: 700;">My Minifigs</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Your minifig collection</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" lg="3">
+                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bom")'>
+                        <div class="card-image-wrapper" style="position: relative;">
+                            <MudCardMedia Image="@_myBomImg" Height="180"/>
+                            @if (_myBomName != null)
+                            {
+                                <div class="card-info-badge">?</div>
+                                <div class="card-name-label">@_myBomName</div>
+                            }
+                        </div>
+                        <MudCardContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.FormatListBulleted" Color="Color.Primary"/>
+                                <MudText Typo="Typo.h6" Style="font-weight: 700;">My Bill of Materials</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Missing pieces across your sets</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+
+            @if (_locked)
+            {
+                <div class="collection-lock-overlay">
+                    <div style="background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-radius: 16px; padding: 28px 40px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size: 2.5rem; color: white; opacity: 0.8;"/>
+                        <MudText Typo="Typo.body1" Style="font-weight: 600; color: white;">Sign in to view your collection</MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Login"
+                                   OnClick="OpenLoginDialog">Sign In</MudButton>
+                    </div>
+                </div>
+            }
+        </MudItem>
+
     </MudGrid>
 </div>
 
 @code {
-    private string? _setImg;
-    private string? _brickImg;
-    private string? _minifigImg;
-    private string? _bomImg;
+    private bool _locked => AuthService.CurrentUser == null;
+
+    // Catalog
+    private string? _catalogSetImg;
+    private string? _catalogSetName;
+    private string? _catalogBrickImg;
+    private string? _catalogBrickName;
+    private string? _catalogMinifigImg;
+    private string? _catalogMinifigName;
+
+    // My Collection
+    private string? _mySetImg;
+    private string? _mySetName;
+    private string? _myBrickImg;
+    private string? _myBrickName;
+    private string? _myMinifigImg;
+    private string? _myMinifigName;
+    private string? _myBomImg;
+    private string? _myBomName;
+
+    protected override void OnInitialized()
+    {
+        AuthService.OnChange += OnAuthChanged;
+    }
+
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => AuthService.OnChange -= OnAuthChanged;
+
+    private Task OpenLoginDialog() =>
+        DialogService.ShowAsync<LoginDialog>("Login", new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            BackdropClick = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        });
 
     protected override Task OnInitializedAsync()
     {
@@ -82,18 +244,42 @@
         var sets = context.Set<Set>().Where(s => s.SetImg != null).ToList();
         if (sets.Count > 0)
         {
-            _setImg = sets[Random.Shared.Next(sets.Count)].SetImg;
-            _bomImg = sets[Random.Shared.Next(sets.Count)].SetImg;
+            var picks = PickDistinct(sets, 4);
+            (_catalogSetImg, _catalogSetName) = (picks[0].SetImg, picks[0].Name);
+            (_mySetImg, _mySetName)           = (picks[1].SetImg, picks[1].Name);
+            (_myBomImg, _myBomName)           = (picks[2].SetImg, picks[2].Name);
         }
 
         var bricks = context.Set<Brick>().Where(b => b.PartImg != null).ToList();
         if (bricks.Count > 0)
-            _brickImg = bricks[Random.Shared.Next(bricks.Count)].PartImg;
+        {
+            var picks = PickDistinct(bricks, 2);
+            (_catalogBrickImg, _catalogBrickName) = (picks[0].PartImg, picks[0].Name);
+            (_myBrickImg, _myBrickName)           = (picks[1].PartImg, picks[1].Name);
+        }
 
         var minifigs = context.Set<Minifig>().Where(m => m.MinifigImgUrl != null).ToList();
         if (minifigs.Count > 0)
-            _minifigImg = minifigs[Random.Shared.Next(minifigs.Count)].MinifigImgUrl;
+        {
+            var picks = PickDistinct(minifigs, 2);
+            (_catalogMinifigImg, _catalogMinifigName) = (picks[0].MinifigImgUrl, picks[0].MinifigName);
+            (_myMinifigImg, _myMinifigName)           = (picks[1].MinifigImgUrl, picks[1].MinifigName);
+        }
 
         return Task.CompletedTask;
+    }
+
+    private static List<T> PickDistinct<T>(List<T> source, int count)
+    {
+        count = Math.Min(count, source.Count);
+        var indices = new HashSet<int>();
+        var result = new List<T>(count);
+        while (result.Count < count)
+        {
+            var i = Random.Shared.Next(source.Count);
+            if (indices.Add(i))
+                result.Add(source[i]);
+        }
+        return result;
     }
 }
