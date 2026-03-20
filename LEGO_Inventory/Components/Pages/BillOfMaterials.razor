@@ -177,14 +177,16 @@
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="Stock Used" Editable="true"
+                            <TemplateColumn Title="Stock Used" Editable="false"
                                             SortBy="x => x.SetBrickOwned == null ? 0 : x.SetBrickOwned.Stock">
                                 <CellTemplate>
-                                    <MudText>@(context.Item.SetBrickOwned?.Stock ?? 0)</MudText>
+                                    <MudNumericField T="int"
+                                                     Value="@(context.Item.SetBrickOwned?.Stock ?? 0)"
+                                                     ValueChanged="@(v => SaveSetBrickOwnedStock(context.Item, v))"
+                                                     Min="0"
+                                                     Disabled="@(context.Item.SetBrickOwned == null || AuthService.CurrentUser == null)"
+                                                     Variant="Variant.Text"/>
                                 </CellTemplate>
-                                <EditTemplate>
-                                    <MudNumericField @bind-Value="context.Item.SetBrickOwned!.Stock" Min="0"/>
-                                </EditTemplate>
                             </TemplateColumn>
                             <TemplateColumn Title="Move Stock" Editable="false">
                                 <CellTemplate>
@@ -198,21 +200,16 @@
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="My Stock" Editable="true"
+                            <TemplateColumn Title="My Stock" Editable="false"
                                             SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
                                 <CellTemplate>
-                                    <MudText>@(context.Item.BrickOwned?.Stock ?? 0)</MudText>
+                                    <MudNumericField T="int"
+                                                     Value="@(context.Item.BrickOwned?.Stock ?? 0)"
+                                                     ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                                     Min="0"
+                                                     Disabled="@(context.Item.BrickOwned == null || AuthService.CurrentUser == null)"
+                                                     Variant="Variant.Text"/>
                                 </CellTemplate>
-                                <EditTemplate>
-                                    @if (context.Item.BrickOwned != null)
-                                    {
-                                        <MudNumericField @bind-Value="context.Item.BrickOwned!.Stock" Min="0"/>
-                                    }
-                                    else
-                                    {
-                                        <MudText>0</MudText>
-                                    }
-                                </EditTemplate>
                             </TemplateColumn>
                         </Columns>
                         <PagerContent>
@@ -248,21 +245,16 @@
                             <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Minifig Id" Editable="false"/>
                             <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name" Editable="false"/>
                             <PropertyColumn Property="x => x.SetMinifig.Count" Title="Needed" Editable="false"/>
-                            <TemplateColumn Title="My Stock" Editable="true"
+                            <TemplateColumn Title="My Stock" Editable="false"
                                             SortBy="x => x.MinifigOwned == null ? 0 : x.MinifigOwned.Stock">
                                 <CellTemplate>
-                                    <MudText>@(context.Item.MinifigOwned?.Stock ?? 0)</MudText>
+                                    <MudNumericField T="int"
+                                                     Value="@(context.Item.MinifigOwned?.Stock ?? 0)"
+                                                     ValueChanged="@(v => SaveMinifigOwnedStock(context.Item, v))"
+                                                     Min="0"
+                                                     Disabled="@(context.Item.MinifigOwned == null || AuthService.CurrentUser == null)"
+                                                     Variant="Variant.Text"/>
                                 </CellTemplate>
-                                <EditTemplate>
-                                    @if (context.Item.MinifigOwned != null)
-                                    {
-                                        <MudNumericField @bind-Value="context.Item.MinifigOwned!.Stock" Min="0"/>
-                                    }
-                                    else
-                                    {
-                                        <MudText>0</MudText>
-                                    }
-                                </EditTemplate>
                             </TemplateColumn>
                         </Columns>
 
@@ -317,7 +309,12 @@
         if (AuthService.IsSessionRestored) CheckAuth();
     }
 
-    private void OnSessionRestored() => InvokeAsync(CheckAuth);
+    private void OnSessionRestored() => InvokeAsync(async () =>
+    {
+        CheckAuth();
+        await OnInitializedAsync();
+        StateHasChanged();
+    });
 
     private void CheckAuth()
     {
@@ -512,42 +509,84 @@
         return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
     }
 
-    void UpdateBrick(SetBrickInfo setBrickInfo)
+    async Task UpdateBrick(SetBrickInfo setBrickInfo)
     {
-        var updateData = new UpdateData();
-
         if (setBrickInfo.BrickOwned != null && setBrickInfo.BrickOwned.Stock < 0)
         {
             setBrickInfo.BrickOwned.Stock = 0;
-            OpenErrorPopup("Cannot set personal stock to less than 0");
+            await OpenErrorPopup("Cannot set personal stock to less than 0");
             return;
         }
 
         if (setBrickInfo.SetBrickOwned != null && setBrickInfo.SetBrickOwned.Stock < 0)
         {
             setBrickInfo.SetBrickOwned.Stock = 0;
-            OpenErrorPopup("Cannot set stock used to less than 0");
+            await OpenErrorPopup("Cannot set stock used to less than 0");
             return;
         }
 
         var userId = AuthService.CurrentUser?.UserId ?? 0;
-        if (setBrickInfo.BrickOwned != null)
-            updateData.UpdateBrickOwned(setBrickInfo.BrickOwned, userId);
-        if (setBrickInfo.SetBrickOwned != null)
-            updateData.UpdateSetBrickOwned(setBrickInfo.SetBrickOwned, userId);
+        if (userId == 0)
+        {
+            await OpenErrorPopup("You must be logged in to save stock changes.");
+            return;
+        }
+
+        var updateData = new UpdateData();
+        if (setBrickInfo.SetBrickOwned != null && !updateData.UpdateSetBrickOwned(setBrickInfo.SetBrickOwned, userId))
+            await OpenErrorPopup("Failed to save set stock. The set may not be in your inventory yet — try re-adding it.");
+        if (setBrickInfo.BrickOwned != null && !updateData.UpdateBrickOwned(setBrickInfo.BrickOwned, userId))
+            await OpenErrorPopup("Failed to save loose brick stock.");
 
         StateHasChanged();
     }
 
-    void UpdateMinifig(SetMinifigInfo setMinifigInfo)
+    async Task UpdateMinifig(SetMinifigInfo setMinifigInfo)
     {
         if (setMinifigInfo.MinifigOwned == null) return;
+        var userId = AuthService.CurrentUser?.UserId ?? 0;
+        if (userId == 0)
+        {
+            await OpenErrorPopup("You must be logged in to save stock changes.");
+            return;
+        }
         var updateData = new UpdateData();
-        updateData.UpdateMinifigOwned(setMinifigInfo.MinifigOwned, AuthService.CurrentUser?.UserId ?? 0);
+        if (!updateData.UpdateMinifigOwned(setMinifigInfo.MinifigOwned, userId))
+            await OpenErrorPopup("Failed to save minifig stock.");
         StateHasChanged();
     }
 
-    void MoveBrickStock(Direction dir, SetBrickInfo setBrickInfo)
+    private void SaveSetBrickOwnedStock(SetBrickInfo info, int newValue)
+    {
+        if (info.SetBrickOwned == null || AuthService.CurrentUser == null) return;
+        info.SetBrickOwned.Stock = newValue;
+        var updateData = new UpdateData();
+        if (!updateData.UpdateSetBrickOwned(info.SetBrickOwned, AuthService.CurrentUser.UserId))
+            _ = OpenErrorPopup("Failed to save set stock. The set may not be in your inventory yet.");
+        StateHasChanged();
+    }
+
+    private void SaveBrickOwnedStock(SetBrickInfo info, int newValue)
+    {
+        if (info.BrickOwned == null || AuthService.CurrentUser == null) return;
+        info.BrickOwned.Stock = newValue;
+        var updateData = new UpdateData();
+        if (!updateData.UpdateBrickOwned(info.BrickOwned, AuthService.CurrentUser.UserId))
+            _ = OpenErrorPopup("Failed to save loose brick stock.");
+        StateHasChanged();
+    }
+
+    private void SaveMinifigOwnedStock(SetMinifigInfo info, int newValue)
+    {
+        if (info.MinifigOwned == null || AuthService.CurrentUser == null) return;
+        info.MinifigOwned.Stock = newValue;
+        var updateData = new UpdateData();
+        if (!updateData.UpdateMinifigOwned(info.MinifigOwned, AuthService.CurrentUser.UserId))
+            _ = OpenErrorPopup("Failed to save minifig stock.");
+        StateHasChanged();
+    }
+
+    async Task MoveBrickStock(Direction dir, SetBrickInfo setBrickInfo)
     {
         if (setBrickInfo.SetBrickOwned == null || setBrickInfo.BrickOwned == null) return;
 
@@ -555,23 +594,23 @@
         {
             if (setBrickInfo.BrickOwned.Stock < setBrickInfo.MoveCount)
             {
-                OpenErrorPopup("Not enough personal inventory to move to set");
+                await OpenErrorPopup("Not enough personal inventory to move to set");
                 return;
             }
             setBrickInfo.BrickOwned.Stock -= setBrickInfo.MoveCount;
             setBrickInfo.SetBrickOwned.Stock += setBrickInfo.MoveCount;
-            UpdateBrick(setBrickInfo);
+            await UpdateBrick(setBrickInfo);
         }
         else if (dir == Direction.right)
         {
             if (setBrickInfo.SetBrickOwned.Stock < setBrickInfo.MoveCount)
             {
-                OpenErrorPopup("Not enough set stock to return to personal inventory");
+                await OpenErrorPopup("Not enough set stock to return to personal inventory");
                 return;
             }
             setBrickInfo.SetBrickOwned.Stock -= setBrickInfo.MoveCount;
             setBrickInfo.BrickOwned.Stock += setBrickInfo.MoveCount;
-            UpdateBrick(setBrickInfo);
+            await UpdateBrick(setBrickInfo);
         }
     }
 

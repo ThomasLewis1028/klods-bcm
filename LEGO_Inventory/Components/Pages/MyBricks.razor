@@ -20,7 +20,7 @@
     <MudItem xs="12">
         <MudDataGrid T="MyBrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
                      SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
-                     CommittedItemChanges="CommittedItemChanges" QuickFilter="BrickFilterFunc"
+                     QuickFilter="BrickFilterFunc"
                      ReadOnly="false">
             <ToolBarContent>
                 <MudText Typo="Typo.h6">My Bricks: @_brickInfos.Count</MudText>
@@ -60,13 +60,14 @@
                         }
                     </CellTemplate>
                 </TemplateColumn>
-                <TemplateColumn Title="My Stock" Editable="true" SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
+                <TemplateColumn Title="My Stock" Editable="false" SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
                     <CellTemplate>
-                        <MudText>@context.Item.BrickOwned.Stock</MudText>
+                        <MudNumericField T="int"
+                                         Value="@context.Item.BrickOwned.Stock"
+                                         ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                         Min="0"
+                                         Variant="Variant.Text"/>
                     </CellTemplate>
-                    <EditTemplate>
-                        <MudNumericField @bind-Value="context.Item.BrickOwned.Stock" Min="0"/>
-                    </EditTemplate>
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.UserNeeded" Title="Needed" Editable="false"/>
                 <PropertyColumn Property="x => x.UserSetCount" Title="Sets" Editable="false"/>
@@ -247,16 +248,14 @@
         return context.Set<Set>().Where(s => setIds.Contains(s.SetId)).ToList();
     }
 
-    private void CommittedItemChanges(MyBrickInfo info)
+    private void SaveBrickOwnedStock(MyBrickInfo info, int newValue)
     {
-        if (info.BrickOwned.Stock < 0)
-        {
-            info.BrickOwned.Stock = 0;
-            return;
-        }
-        using var context = new InventoryContext();
+        if (newValue < 0) return;
+        info.BrickOwned.Stock = newValue;
+
         if (info.IsNewBrickOwned)
         {
+            using var context = new InventoryContext();
             context.Set<BrickOwned>().Add(info.BrickOwned);
             context.SaveChanges();
             info.IsNewBrickOwned = false;
@@ -265,6 +264,8 @@
         {
             new UpdateData().UpdateBrickOwned(info.BrickOwned, AuthService.CurrentUser?.UserId ?? 0);
         }
+
+        StateHasChanged();
     }
 
     private bool BrickFilterFunc(MyBrickInfo b)
