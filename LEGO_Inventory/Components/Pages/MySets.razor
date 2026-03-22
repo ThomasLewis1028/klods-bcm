@@ -52,18 +52,6 @@
                 <PropertyColumn Property="x => x.Set.ReleaseYear" Title="Year" Editable="false"/>
                 <PropertyColumn Property="x => x.OwnedSets.Count" Title="Count" Editable="false"/>
                 <PropertyColumn Property="x => x.Set.NumBricks" Title="Pieces" Editable="false"/>
-                <TemplateColumn Title="Delete" Editable="false">
-                    <CellTemplate>
-                        <MudStack Row>
-                            <MudIconButton
-                                Icon="@Icons.Material.Filled.Delete"
-                                Variant="Variant.Filled"
-                                Color="Color.Error"
-                                Size="Size.Small"
-                                OnClick="() => DeleteSet(context.Item.Set.SetId, context.Item.Set.Name, context.Item.Set.SetImg)"/>
-                        </MudStack>
-                    </CellTemplate>
-                </TemplateColumn>
                 <TemplateColumn Title="Manual" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
@@ -282,25 +270,6 @@
     private void OpenBuildingInstructions(string url)
     {
         JsRuntime.InvokeVoidAsync("open", url, "_blank");
-    }
-
-    private async Task DeleteSet(string setId, string setName, string setImgUrl)
-    {
-        var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
-
-        var parameters = new DialogParameters<DeletePopup>
-        {
-            { x => x._id, setId },
-            { x => x._name, setName },
-            { x => x._imgUrl, setImgUrl }
-        };
-
-        var dialog = DialogService.Show<DeletePopup>("Delete Popup", parameters, deletePopup);
-
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
-            await OnInitializedAsync();
     }
 
     private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string setImgUrl)
