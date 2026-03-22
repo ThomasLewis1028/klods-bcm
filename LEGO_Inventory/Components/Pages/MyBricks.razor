@@ -20,7 +20,7 @@
     <MudItem xs="12">
         <MudDataGrid T="MyBrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
                      SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
-                     CommittedItemChanges="CommittedItemChanges" QuickFilter="BrickFilterFunc"
+                     QuickFilter="BrickFilterFunc"
                      ReadOnly="false">
             <ToolBarContent>
                 <MudText Typo="Typo.h6">My Bricks: @_brickInfos.Count</MudText>
@@ -50,7 +50,7 @@
                         {
                             <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
                                      class="mud-elevation-2"
-                                     Style="@ColorChipStyle(context.Item.Brick.HexColor)">
+                                     Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
                                 @context.Item.Brick.ColorName
                             </MudChip>
                         }
@@ -60,13 +60,14 @@
                         }
                     </CellTemplate>
                 </TemplateColumn>
-                <TemplateColumn Title="My Stock" Editable="true" SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
+                <TemplateColumn Title="My Stock" Editable="false" SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
                     <CellTemplate>
-                        <MudText>@context.Item.BrickOwned.Stock</MudText>
+                        <MudNumericField T="int"
+                                         Value="@context.Item.BrickOwned.Stock"
+                                         ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                         Min="0"
+                                         Variant="Variant.Text"/>
                     </CellTemplate>
-                    <EditTemplate>
-                        <MudNumericField @bind-Value="context.Item.BrickOwned.Stock" Min="0"/>
-                    </EditTemplate>
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.UserNeeded" Title="Needed" Editable="false"/>
                 <PropertyColumn Property="x => x.UserSetCount" Title="Sets" Editable="false"/>
@@ -159,6 +160,7 @@
 
         // Count how many copies the user owns of each set
         var userSetCopies = context.Set<SetOwned>()
+            .AsNoTracking()
             .Where(so => so.UserId == userId)
             .GroupBy(so => so.SetId)
             .ToDictionary(g => g.Key, g => g.Count());
@@ -167,6 +169,7 @@
 
         // BOM entries for the user's sets
         var setBricks = context.Set<SetBrick>()
+            .AsNoTracking()
             .Where(sb => userSetIds.Contains(sb.SetId))
             .ToList();
 
@@ -184,14 +187,18 @@
 
         // User's personal BrickOwned
         var brickOwnedDict = context.Set<BrickOwned>()
+            .AsNoTracking()
             .Where(bo => bo.UserId == userId)
-            .ToList()
             .ToDictionary(bo => (bo.PartNum, bo.ColorId));
 
         // All relevant brick keys (in set BOMs or in personal inventory)
         var allKeys = neededDict.Keys.Union(brickOwnedDict.Keys).ToHashSet();
+        var allPartNums = allKeys.Select(k => k.PartNum).ToList();
 
-        var allBricks = context.Set<Brick>().ToList()
+        var allBricks = context.Set<Brick>()
+            .AsNoTracking()
+            .Where(b => allPartNums.Contains(b.PartNum))
+            .ToList()
             .Where(b => allKeys.Contains((b.PartNum, b.ColorId)))
             .ToList();
 
@@ -241,24 +248,24 @@
         return context.Set<Set>().Where(s => setIds.Contains(s.SetId)).ToList();
     }
 
-    private void CommittedItemChanges(MyBrickInfo info)
+    private void SaveBrickOwnedStock(MyBrickInfo info, int newValue)
     {
-        if (info.BrickOwned.Stock < 0)
-        {
-            info.BrickOwned.Stock = 0;
-            return;
-        }
-        using var context = new InventoryContext();
+        if (newValue < 0) return;
+        info.BrickOwned.Stock = newValue;
+
         if (info.IsNewBrickOwned)
         {
+            using var context = new InventoryContext();
             context.Set<BrickOwned>().Add(info.BrickOwned);
             context.SaveChanges();
             info.IsNewBrickOwned = false;
         }
         else
         {
-            new UpdateData().UpdateBrickOwned(info.BrickOwned);
+            new UpdateData().UpdateBrickOwned(info.BrickOwned, AuthService.CurrentUser?.UserId ?? 0);
         }
+
+        StateHasChanged();
     }
 
     private bool BrickFilterFunc(MyBrickInfo b)
@@ -286,17 +293,6 @@
             },
             new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
 
-    private string ColorChipStyle(string hex)
-    {
-        var fg = IsDark(hex) ? "color: white;" : "color: #202020;";
-        return $"background-color: #{hex}; {fg} width: -moz-available;";
-    }
-
-    private bool IsDark(string hex)
-    {
-        var c = ColorTranslator.FromHtml($"#{hex}");
-        return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B < 128;
-    }
 
     private class MyBrickInfo
     {

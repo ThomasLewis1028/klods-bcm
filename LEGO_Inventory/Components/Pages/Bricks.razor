@@ -48,7 +48,7 @@
                             {
                                 <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
                                          class="mud-elevation-2"
-                                         Style="@ColorChipStyle(context.Item.Brick.HexColor, context.Item.Brick.ColorName)">
+                                         Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
                                     @context.Item.Brick.ColorName
                                 </MudChip>
                             }
@@ -124,19 +124,23 @@
 
         // Aggregate stock: personal BrickOwned + allocated SetBrickOwned, across all users
         var brickOwnedStock = context.Set<BrickOwned>()
+            .AsNoTracking()
             .GroupBy(bo => new { bo.PartNum, bo.ColorId })
             .ToDictionary(g => (g.Key.PartNum, g.Key.ColorId), g => g.Sum(bo => bo.Stock));
 
         var setBrickOwnedStock = context.Set<SetBrickOwned>()
+            .AsNoTracking()
             .GroupBy(sbo => new { sbo.PartNum, sbo.ColorId })
             .ToDictionary(g => (g.Key.PartNum, g.Key.ColorId), g => g.Sum(sbo => sbo.Stock));
 
         // Aggregate needed: SetBrick.Count × copies owned, across all users
         var setOwnedCopies = context.Set<SetOwned>()
+            .AsNoTracking()
             .GroupBy(so => so.SetId)
             .ToDictionary(g => g.Key, g => g.Count());
 
         var setBrickAggregates = context.Set<SetBrick>()
+            .AsNoTracking()
             .ToList()
             .GroupBy(sb => (sb.PartNum, sb.ColorId))
             .ToDictionary(
@@ -147,7 +151,7 @@
                     SetCount = g.Select(sb => sb.SetId).Distinct().Count()
                 });
 
-        _brickInfos = context.Set<Brick>().ToList().Select(b =>
+        _brickInfos = context.Set<Brick>().AsNoTracking().ToList().Select(b =>
         {
             var key = (b.PartNum, b.ColorId);
             var stock = brickOwnedStock.GetValueOrDefault(key, 0)
@@ -173,6 +177,7 @@
         if (info.IsLoaded) return;
         await using var context = new InventoryContext();
         info.SetBricks = context.Set<SetBrick>()
+            .AsNoTracking()
             .Where(sb => sb.PartNum == info.Brick.PartNum && sb.ColorId == info.Brick.ColorId)
             .ToList();
         info.SetIds = info.SetBricks.Select(sb => sb.SetId).Distinct().ToList();
@@ -212,18 +217,6 @@
             },
             new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
 
-    private string ColorChipStyle(string hex, string name)
-    {
-        var bg = "#" + hex;
-        var fg = IsDark(hex) ? "color: white;" : "color: #202020;";
-        return $"background-color: {bg}; {fg} width: -moz-available;";
-    }
-
-    private bool IsDark(string hex)
-    {
-        var c = ColorTranslator.FromHtml($"#{hex}");
-        return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B < 128;
-    }
 
     private class BrickInfo
     {

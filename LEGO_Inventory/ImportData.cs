@@ -12,7 +12,7 @@ public class ImportData
     /// Imports set catalog info, bricks, and BOM data from Rebrickable.
     /// Does NOT create an owned set — call AddOwnedSet separately.
     /// </summary>
-    public bool ImportAll(List<string> setIds)
+    public async Task<bool> ImportAll(List<string> setIds)
     {
         foreach (string setId in setIds)
         {
@@ -20,11 +20,11 @@ public class ImportData
             {
                 _logger.LogInformation($"Importing All Data for set {setId}");
 
-                ImportSetInfo(setId);
-                ImportBricks(setId);
-                ImportSetBOM(setId);
-                ImportMinifigs(setId);
-                ImportSetMinifigBOM(setId);
+                await ImportSetInfo(setId);
+                await ImportBricks(setId);
+                await ImportSetBOM(setId);
+                await ImportMinifigs(setId);
+                await ImportSetMinifigBOM(setId);
 
                 _logger.LogInformation($"DONE Importing All Data for set {setId}");
             }
@@ -41,7 +41,7 @@ public class ImportData
     /// <summary>
     /// Adds an owned set instance for a user. Creates SetOwned + SetBrickOwned rows.
     /// </summary>
-    public bool AddOwnedSet(string setId, int? userId = null)
+    public async Task<bool> AddOwnedSet(string setId, int? userId = null, bool applyBricks = false)
     {
         try
         {
@@ -69,11 +69,12 @@ public class ImportData
             context.SaveChanges();
 
             // Ensure BOM exists before creating owned entries
-            ImportSetBOM(setId);
-            ImportSetMinifigBOM(setId);
+            await ImportSetBOM(setId);
+            await ImportSetMinifigBOM(setId);
 
-            CreateSetBrickOwned(userId.Value, setId, index);
+            CreateSetBrickOwned(userId.Value, setId, index, applyBricks);
             EnsureBrickOwnedForSet(userId.Value, setId);
+            EnsureMinifigOwnedForSet(userId.Value, setId);
 
             _logger.LogInformation($"DONE Adding Owned Set for {setId}");
             return true;
@@ -89,7 +90,7 @@ public class ImportData
     /// Creates SetBrickOwned rows (Stock = 0) for a specific owned set instance,
     /// based on the existing SetBrick BOM entries for that set.
     /// </summary>
-    public bool CreateSetBrickOwned(int userId, string setId, int setIndex)
+    public bool CreateSetBrickOwned(int userId, string setId, int setIndex, bool applyBricks = false)
     {
         _logger.LogInformation($"Creating SetBrickOwned for user {userId}, {setId}-{setIndex}");
 
@@ -99,11 +100,16 @@ public class ImportData
 
         var bomEntries = setBrickContext.Where(sb => sb.SetId == setId).ToList();
 
+        var existingKeys = setBrickOwnedContext
+            .Where(sbo => sbo.UserId == userId && sbo.SetId == setId && sbo.SetIndex == setIndex)
+            .Select(sbo => new { sbo.PartNum, sbo.ColorId })
+            .AsEnumerable()
+            .Select(k => (k.PartNum, k.ColorId))
+            .ToHashSet();
+
         foreach (var bom in bomEntries)
         {
-            if (!setBrickOwnedContext.Any(sbo =>
-                    sbo.UserId == userId && sbo.SetId == setId && sbo.SetIndex == setIndex &&
-                    sbo.PartNum == bom.PartNum && sbo.ColorId == bom.ColorId))
+            if (!existingKeys.Contains((bom.PartNum, bom.ColorId)))
             {
                 setBrickOwnedContext.Add(new SetBrickOwned
                 {
@@ -112,7 +118,7 @@ public class ImportData
                     SetIndex = setIndex,
                     PartNum = bom.PartNum,
                     ColorId = bom.ColorId,
-                    Stock = 0
+                    Stock = applyBricks ? bom.Count : 0
                 });
             }
         }
@@ -157,12 +163,46 @@ public class ImportData
         context.SaveChanges();
     }
 
-    public bool ImportSetInfo(string? setId)
+    /// <summary>
+    /// Ensures a MinifigOwned(Stock=0) row exists for every minifig in a set's BOM for the given user.
+    /// Called when a user adds a set so the BOM minifig tab is immediately editable.
+    /// </summary>
+    public void EnsureMinifigOwnedForSet(int userId, string setId)
+    {
+        using var context = new InventoryContext();
+
+        var bomMinifigIds = context.Set<SetMinifig>()
+            .Where(sm => sm.SetId == setId)
+            .Select(sm => sm.MinifigId)
+            .ToList();
+
+        var existingIds = context.Set<MinifigOwned>()
+            .Where(mo => mo.UserId == userId)
+            .Select(mo => mo.MinifigId)
+            .ToHashSet();
+
+        foreach (var minifigId in bomMinifigIds)
+        {
+            if (!existingIds.Contains(minifigId))
+            {
+                context.Set<MinifigOwned>().Add(new MinifigOwned
+                {
+                    UserId = userId,
+                    MinifigId = minifigId,
+                    Stock = 0
+                });
+            }
+        }
+
+        context.SaveChanges();
+    }
+
+    public async Task<bool> ImportSetInfo(string? setId)
     {
         _logger.LogInformation($"Importing {setId}");
         RebrickableApi api = new RebrickableApi();
 
-        JsonObject? setInfo = api.GetSetInfo(setId).Result;
+        JsonObject? setInfo = await api.GetSetInfo(setId);
 
         using var context = new InventoryContext();
         var setContext = context.Set<Set>();
@@ -207,12 +247,12 @@ public class ImportData
     /// <summary>
     /// Creates/updates SetBrick BOM entries for a set (no SetIndex — BOM is per-set).
     /// </summary>
-    public bool ImportSetBOM(string setId)
+    public async Task<bool> ImportSetBOM(string setId)
     {
         _logger.LogInformation($"Importing SetBrick BOM for {setId}");
         RebrickableApi api = new RebrickableApi();
 
-        JsonObject? setParts = api.GetSetParts(setId).Result;
+        JsonObject? setParts = await api.GetSetParts(setId);
         int saveCount = 0;
 
         using var context = new InventoryContext();
@@ -269,28 +309,28 @@ public class ImportData
     /// <summary>
     /// Creates/updates SetMinifig BOM entries and merges minifig brick parts into SetBrick BOM.
     /// </summary>
-    public bool ImportSetMinifigBOM(string setId)
+    public async Task<bool> ImportSetMinifigBOM(string setId)
     {
         _logger.LogInformation($"Importing SetMinifig BOM for {setId}");
         RebrickableApi api = new RebrickableApi();
 
         using var context = new InventoryContext();
-        JsonObject? jsonObject = api.GetSetMinifigs(setId).Result;
+        JsonObject? jsonObject = await api.GetSetMinifigs(setId);
 
         foreach (var minifig in jsonObject!["results"].AsArray())
         {
             var minifigId = minifig!["set_num"]!.ToString();
             var quantity = (int)minifig!["quantity"]!;
 
-            ImportMinifig(minifigId);
-            LinkMinifigBricks(minifigId);
+            await ImportMinifig(minifigId);
+            await LinkMinifigBricks(minifigId);
             LinkMinifigToSetBOM(minifigId, setId, quantity);
         }
 
         return false;
     }
 
-    public bool ImportMinifig(string minifigId)
+    public async Task<bool> ImportMinifig(string minifigId)
     {
         _logger.LogInformation($"Importing minifig {minifigId}");
         RebrickableApi api = new RebrickableApi();
@@ -301,7 +341,7 @@ public class ImportData
         if (minifigContext.Any(m => m.MinifigId == minifigId))
             return false;
 
-        JsonObject? minifigJsonObject = api.GetMinifigInfo(minifigId).Result;
+        JsonObject? minifigJsonObject = await api.GetMinifigInfo(minifigId);
 
         var minifig = new Minifig
         {
@@ -317,18 +357,18 @@ public class ImportData
         return context.SaveChanges() > 0;
     }
 
-    public bool ImportMinifigs(string setId)
+    public async Task<bool> ImportMinifigs(string setId)
     {
         _logger.LogInformation($"Importing set minifigs for {setId}");
         RebrickableApi api = new RebrickableApi();
 
-        JsonObject? jsonObject = api.GetSetMinifigs(setId).Result;
+        JsonObject? jsonObject = await api.GetSetMinifigs(setId);
 
         foreach (var minifig in jsonObject!["results"].AsArray())
         {
             var minifigId = minifig!["set_num"]!.ToString();
-            ImportMinifig(minifigId);
-            LinkMinifigBricks(minifigId);
+            await ImportMinifig(minifigId);
+            await LinkMinifigBricks(minifigId);
         }
 
         return false;
@@ -392,7 +432,7 @@ public class ImportData
         return context.SaveChanges() > 0;
     }
 
-    public bool LinkMinifigBricks(string minifigId)
+    public async Task<bool> LinkMinifigBricks(string minifigId)
     {
         _logger.LogInformation($"Linking minifig bricks for {minifigId}");
         RebrickableApi api = new RebrickableApi();
@@ -401,7 +441,7 @@ public class ImportData
         var minifigBrickContext = context.Set<MinifigBrick>();
         var brickContext = context.Set<Brick>();
 
-        JsonObject? jsonObject = api.GetMinifigParts(minifigId).Result;
+        JsonObject? jsonObject = await api.GetMinifigParts(minifigId);
 
         foreach (var brick in jsonObject!["results"]!.AsArray())
         {
@@ -442,7 +482,7 @@ public class ImportData
         return context.SaveChanges() > 0;
     }
 
-    public bool ImportBrick(string brickId, string colorId)
+    public async Task<bool> ImportBrick(string brickId, string colorId)
     {
         _logger.LogInformation($"Importing brick {brickId} with color {colorId}");
 
@@ -456,17 +496,17 @@ public class ImportData
 
             RebrickableApi api = new RebrickableApi();
 
-            JsonObject part = api.GetPartInfo(brickId).Result.AsObject();
+            JsonObject part = (await api.GetPartInfo(brickId))!.AsObject();
             var partNum = part!["part_num"]!.ToString();
             var name = part!["name"]!.ToString();
             var partUrl = part["part_url"]?.ToString() ?? null;
 
-            JsonObject color = api.GetColorInfo(colorId).Result;
+            JsonObject color = await api.GetColorInfo(colorId);
             var colorName = color!["name"]?.ToString() ?? null;
             var rgb = color["rgb"]?.ToString() ?? null;
             var isTrans = color["is_trans"]!.ToString().Equals("true");
 
-            JsonObject partColorInfo = api.GetPartColorInfo(brickId, colorId).Result.AsObject();
+            JsonObject partColorInfo = (await api.GetPartColorInfo(brickId, colorId))!.AsObject();
             var partImg = partColorInfo!["part_img_url"]?.ToString() ?? null;
 
             brickContext.Add(new Brick
@@ -475,7 +515,6 @@ public class ImportData
                 Name = name,
                 PartURL = partUrl,
                 PartImg = partImg,
-                Count = 0,
                 ColorId = colorId,
                 ColorName = colorName,
                 IsTrans = isTrans,
@@ -493,14 +532,14 @@ public class ImportData
         return true;
     }
 
-    public bool ImportBricks(string setId)
+    public async Task<bool> ImportBricks(string setId)
     {
         _logger.LogInformation($"Importing bricks for {setId}");
 
         try
         {
             RebrickableApi api = new RebrickableApi();
-            JsonObject? setParts = api.GetSetParts(setId).Result;
+            JsonObject? setParts = await api.GetSetParts(setId);
             int saveCount = 0;
 
             using var context = new InventoryContext();
@@ -551,7 +590,6 @@ public class ImportData
             Name = name,
             PartURL = partUrl,
             PartImg = partImg,
-            Count = 0,
             ColorId = colorId,
             ColorName = colorName,
             IsTrans = isTrans,
@@ -563,14 +601,14 @@ public class ImportData
         return brick;
     }
 
-    public bool ImportColors()
+    public async Task<bool> ImportColors()
     {
         _logger.LogInformation($"Importing colors");
         RebrickableApi api = new RebrickableApi();
 
         using var context = new InventoryContext();
         var colorContext = context.Set<Color>();
-        JsonObject? jsonObject = api.GetColors().Result;
+        JsonObject? jsonObject = await api.GetColors();
 
         List<Color> colors = new List<Color>();
 

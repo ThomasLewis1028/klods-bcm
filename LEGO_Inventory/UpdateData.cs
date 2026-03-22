@@ -1,16 +1,10 @@
 using LEGO_Inventory.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace LEGO_Inventory;
 
 public class UpdateData
 {
-    public bool UpdateSet(Set set)
-    {
-        using var context = new InventoryContext();
-        context.Set<Set>().Update(set);
-        return context.SaveChanges() > 0;
-    }
-
     public bool UpdateBrick(Brick brick)
     {
         using var context = new InventoryContext();
@@ -25,18 +19,26 @@ public class UpdateData
         return context.SaveChanges() > 0;
     }
 
-    public bool UpdateSetBrickOwned(SetBrickOwned sbo)
+    public bool UpdateSetBrickOwned(SetBrickOwned sbo, int callerUserId)
     {
+        if (sbo.UserId != callerUserId) return false;
         using var context = new InventoryContext();
-        context.Set<SetBrickOwned>().Update(sbo);
-        return context.SaveChanges() > 0;
+        var affected = context.Set<SetBrickOwned>()
+            .Where(e => e.UserId == sbo.UserId && e.SetId == sbo.SetId &&
+                        e.SetIndex == sbo.SetIndex && e.PartNum == sbo.PartNum &&
+                        e.ColorId == sbo.ColorId)
+            .ExecuteUpdate(s => s.SetProperty(e => e.Stock, sbo.Stock));
+        return affected > 0;
     }
 
-    public bool UpdateBrickOwned(BrickOwned bo)
+    public bool UpdateBrickOwned(BrickOwned bo, int callerUserId)
     {
+        if (bo.UserId != callerUserId) return false;
         using var context = new InventoryContext();
-        context.Set<BrickOwned>().Update(bo);
-        return context.SaveChanges() > 0;
+        var affected = context.Set<BrickOwned>()
+            .Where(e => e.UserId == bo.UserId && e.PartNum == bo.PartNum && e.ColorId == bo.ColorId)
+            .ExecuteUpdate(s => s.SetProperty(e => e.Stock, bo.Stock));
+        return affected > 0;
     }
 
     public bool UpdateMinifig(Minifig minifig)
@@ -46,11 +48,14 @@ public class UpdateData
         return context.SaveChanges() > 0;
     }
 
-    public bool UpdateMinifigOwned(MinifigOwned mo)
+    public bool UpdateMinifigOwned(MinifigOwned mo, int callerUserId)
     {
+        if (mo.UserId != callerUserId) return false;
         using var context = new InventoryContext();
-        context.Set<MinifigOwned>().Update(mo);
-        return context.SaveChanges() > 0;
+        var affected = context.Set<MinifigOwned>()
+            .Where(e => e.UserId == mo.UserId && e.MinifigId == mo.MinifigId)
+            .ExecuteUpdate(s => s.SetProperty(e => e.Stock, mo.Stock));
+        return affected > 0;
     }
 
     public bool UpdateSetMinifig(SetMinifig setMinifig)

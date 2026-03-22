@@ -70,18 +70,18 @@ public class InventoryTests
         }
 
         [TestMethod]
-        public void ImportSetInfoTest()
+        public async Task ImportSetInfoTest()
         {
             var importData = new ImportData();
 
-            Assert.IsTrue(importData.ImportSetInfo("4502-1"));
+            Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
 
             using var context = new InventoryContext();
             CleanupBomData(context, "4502-1");
         }
 
         [TestMethod]
-        public void ImportSetPartTest()
+        public async Task ImportSetPartTest()
         {
             using var context = new InventoryContext();
             var userId = CreateTestUser(context);
@@ -90,8 +90,8 @@ public class InventoryTests
             {
                 var importData = new ImportData();
 
-                Assert.IsTrue(importData.ImportSetInfo("4502-1"));
-                Assert.IsTrue(importData.AddOwnedSet("4502-1", userId));
+                Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
+                Assert.IsTrue(await importData.AddOwnedSet("4502-1", userId));
 
                 var count = context.Set<SetBrick>().Where(sb => sb.SetId == "4502-1").Sum(b => b.Count);
                 var setCount = context.Set<Set>().First(sb => sb.SetId == "4502-1").NumBricks;
