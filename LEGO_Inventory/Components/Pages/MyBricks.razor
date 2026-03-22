@@ -60,7 +60,7 @@
                         }
                     </CellTemplate>
                 </TemplateColumn>
-                <TemplateColumn Title="My Stock" Editable="false" SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
+                <TemplateColumn Title="My Stock" Editable="false" Sortable="true" SortBy="x => x.BrickOwned == null ? 0 : x.BrickOwned.Stock">
                     <CellTemplate>
                         <MudNumericField T="int"
                                          Value="@context.Item.BrickOwned.Stock"

@@ -1,8 +1,7 @@
-﻿version: "3"
-services:
+﻿services:
   # https://github.com/felipewom/docker-compose-postgres/blob/main/README.md
   postgres:
-    image: 'postgres:latest'
+    image: 'postgres:16'
     ports:
       - 5432:5432
     env_file:
@@ -24,7 +23,7 @@ services:
   
   pgwebadmin:
     image: dpage/pgadmin4
-    user: "${UID}:${GID}"
+#    user: "${UID}:${GID}"
     ports:
       - 8888:80
     env_file:
@@ -36,7 +35,7 @@ services:
     networks:
       - lego-network
     volumes:
-      - lego-db-volume:/var/lib/pgadmin/:rw
+      - lego-pgadmin-volume:/var/lib/pgadmin/:rw
 
   lego_inventory:
     image: lego_inventory
@@ -59,6 +58,7 @@ services:
 volumes:
   lego-volume:
   lego-db-volume:
+  lego-pgadmin-volume:
 
 networks: 
   lego-network:
