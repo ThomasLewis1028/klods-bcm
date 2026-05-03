@@ -1,12 +1,13 @@
 using LEGO_Inventory.Database;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace LEGO_Inventory;
 
 public class InventoryTests
 {
-
     [TestClass]
     public class RebrickableApiTests
     {
@@ -46,12 +47,11 @@ public class InventoryTests
     [TestClass]
     public class ImportTests
     {
-        private static int CreateTestUser(InventoryContext context)
+        private static IDbContextFactory<InventoryContext> CreateFactory()
         {
-            var user = new User { UserName = "test_user", PasswordHash = "test" };
-            context.Users.Add(user);
-            context.SaveChanges();
-            return user.UserId;
+            var services = new ServiceCollection();
+            services.AddDbContextFactory<InventoryContext>();
+            return services.BuildServiceProvider().GetRequiredService<IDbContextFactory<InventoryContext>>();
         }
 
         private static void CleanupBomData(InventoryContext context, string setId)
@@ -72,23 +72,28 @@ public class InventoryTests
         [TestMethod]
         public async Task ImportSetInfoTest()
         {
-            var importData = new ImportData();
+            var factory = CreateFactory();
+            var importData = new ImportData(factory, NullLogger<ImportData>.Instance);
 
             Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
 
-            using var context = new InventoryContext();
+            using var context = factory.CreateDbContext();
             CleanupBomData(context, "4502-1");
         }
 
         [TestMethod]
         public async Task ImportSetPartTest()
         {
-            using var context = new InventoryContext();
-            var userId = CreateTestUser(context);
+            var factory = CreateFactory();
+            using var context = factory.CreateDbContext();
+            var user = new User { UserName = "test_user", PasswordHash = "test" };
+            context.Users.Add(user);
+            context.SaveChanges();
+            var userId = user.UserId;
 
             try
             {
-                var importData = new ImportData();
+                var importData = new ImportData(factory, NullLogger<ImportData>.Instance);
 
                 Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
                 Assert.IsTrue(await importData.AddOwnedSet("4502-1", userId));

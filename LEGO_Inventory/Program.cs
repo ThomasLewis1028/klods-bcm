@@ -1,3 +1,4 @@
+using LEGO_Inventory;
 using LEGO_Inventory.Components;
 using LEGO_Inventory.Database;
 using LEGO_Inventory.Services;
@@ -7,7 +8,10 @@ using MudBlazor.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Core services ──────────────────────────────────────────────────────────
-builder.Services.AddDbContext<InventoryContext>();
+builder.Services.AddDbContextFactory<InventoryContext>();
+builder.Services.AddScoped<ImportData>();
+builder.Services.AddScoped<UpdateData>();
+builder.Services.AddScoped<DeleteData>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddMudServices();
 builder.Services.AddScoped<ThemeService>();
@@ -72,8 +76,9 @@ if (!app.Environment.IsDevelopment())
 }
 
 await using var scope = app.Services.CreateAsyncScope();
-await using var db = scope.ServiceProvider.GetService<InventoryContext>();
-await db!.Database.MigrateAsync();
+var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InventoryContext>>();
+await using var db = dbFactory.CreateDbContext();
+await db.Database.MigrateAsync();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();

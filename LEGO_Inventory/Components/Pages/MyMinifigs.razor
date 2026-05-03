@@ -2,6 +2,8 @@
 @inject IDialogService DialogService
 @inject AuthService AuthService
 @inject NavigationManager Nav
+@inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject UpdateData UpdateData
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
@@ -151,7 +153,7 @@
         if (AuthService.CurrentUser == null) return;
         var userId = AuthService.CurrentUser.UserId;
 
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
 
         var userSetCopies = context.Set<SetOwned>()
             .AsNoTracking()
@@ -215,7 +217,7 @@
     {
         if (info.IsLoaded) return;
 
-        await using var context = new InventoryContext();
+        await using var context = DbContextFactory.CreateDbContext();
 
         var joined = context.Set<MinifigBrick>()
             .AsNoTracking()
@@ -238,14 +240,14 @@
 
         if (info.IsNewMinifigOwned)
         {
-            using var context = new InventoryContext();
+            using var context = DbContextFactory.CreateDbContext();
             context.Set<MinifigOwned>().Add(info.MinifigOwned);
             context.SaveChanges();
             info.IsNewMinifigOwned = false;
         }
         else
         {
-            new UpdateData().UpdateMinifigOwned(info.MinifigOwned, AuthService.CurrentUser?.UserId ?? 0);
+            UpdateData.UpdateMinifigOwned(info.MinifigOwned, AuthService.CurrentUser?.UserId ?? 0);
         }
 
         StateHasChanged();

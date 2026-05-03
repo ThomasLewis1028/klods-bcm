@@ -3,6 +3,9 @@
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
 @inject AuthService AuthService
+@inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject ImportData ImportData
+@inject DeleteData DeleteData
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
@@ -121,7 +124,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         var userId = AuthService.CurrentUser?.UserId;
 
         var sets = context.Set<Set>().ToList();
@@ -157,8 +160,7 @@
     {
         if (AuthService.CurrentUser == null) return;
 
-        var importData = new ImportData();
-        await importData.AddOwnedSet(row.Set.SetId, AuthService.CurrentUser.UserId);
+        await ImportData.AddOwnedSet(row.Set.SetId, AuthService.CurrentUser.UserId);
 
         row.UserOwnedCount++;
         _totalOwnedInstances++;
@@ -169,7 +171,7 @@
     {
         if (AuthService.CurrentUser == null || row.UserOwnedCount == 0) return;
 
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         var userId = AuthService.CurrentUser.UserId;
 
         var toRemove = context.Set<SetOwned>()
@@ -179,8 +181,7 @@
 
         if (toRemove == null) return;
 
-        var deleteData = new DeleteData();
-        deleteData.DeleteOwnedSetInfo(userId, row.Set.SetId, toRemove.SetIndex);
+        DeleteData.DeleteOwnedSetInfo(userId, row.Set.SetId, toRemove.SetIndex);
 
         row.UserOwnedCount--;
         _totalOwnedInstances--;

@@ -4,6 +4,8 @@
 @inject IJSRuntime JsRuntime
 @inject AuthService AuthService
 @inject NavigationManager Nav
+@inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject ImportData ImportData
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
@@ -150,7 +152,7 @@
     {
         var logger = LoggerFactory.CreateLogger<MySets>();
         logger.LogTrace("Loading My Sets");
-        using (var context = new InventoryContext())
+        using (var context = DbContextFactory.CreateDbContext())
         {
             var setContext = context.Set<Set>();
             var ownedSetContext = context.Set<SetOwned>();
@@ -191,10 +193,9 @@
 
     private async Task AddOwnedSet(string setId)
     {
-        ImportData importData = new ImportData();
-        await importData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
+        await ImportData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
 
-        using (var context = new InventoryContext())
+        using (var context = DbContextFactory.CreateDbContext())
         {
             var ownedSetContext = context.Set<SetOwned>();
             var userId = AuthService.CurrentUser?.UserId;
@@ -237,7 +238,7 @@
 
     private int GetMissingPieceCount(SetOwned setOwned)
     {
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         var totalNeeded = context.Set<SetBrick>()
             .Where(sb => sb.SetId == setOwned.SetId)
             .Sum(sb => sb.Count);
@@ -249,7 +250,7 @@
 
     private int GetStockCount(SetOwned setOwned)
     {
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         return context.Set<SetBrickOwned>()
             .Where(sbo => sbo.UserId == setOwned.UserId && sbo.SetId == setOwned.SetId && sbo.SetIndex == setOwned.SetIndex)
             .Sum(sbo => sbo.Stock);

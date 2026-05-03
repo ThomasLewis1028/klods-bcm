@@ -4,6 +4,7 @@
 @inject PendingAuthService PendingAuth
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDbContextFactory<InventoryContext> DbContextFactory
 @using LEGO_Inventory.Database
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
@@ -293,7 +294,7 @@
         else if (qs["link_error"] == "already_linked")
             Snackbar.Add("That account is already linked to another user.", Severity.Error);
 
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         _minifigs = context.Set<Minifig>()
             .Where(m => m.MinifigImgUrl != null && m.MinifigImgUrl != "")
             .OrderBy(m => m.MinifigName)

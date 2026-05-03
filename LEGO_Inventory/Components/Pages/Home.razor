@@ -2,6 +2,7 @@
 @layout FullPageLayout
 @inject NavigationManager Nav
 @inject AuthService AuthService
+@inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject IDialogService DialogService
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Components.Layout
@@ -239,7 +240,7 @@
 
     protected override Task OnInitializedAsync()
     {
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
 
         var sets = context.Set<Set>().Where(s => s.SetImg != null).ToList();
         if (sets.Count > 0)

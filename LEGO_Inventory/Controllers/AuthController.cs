@@ -3,11 +3,12 @@ using LEGO_Inventory.Database;
 using LEGO_Inventory.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LEGO_Inventory.Controllers;
 
 [Route("auth")]
-public class AuthController(PendingAuthService pendingAuth) : Controller
+public class AuthController(PendingAuthService pendingAuth, IDbContextFactory<InventoryContext> contextFactory) : Controller
 {
     private const string ExternalScheme = "External";
 
@@ -48,7 +49,7 @@ public class AuthController(PendingAuthService pendingAuth) : Controller
         // Clean up the temporary external cookie
         await HttpContext.SignOutAsync(ExternalScheme);
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
 
         var existing = context.UserExternalLogins
             .FirstOrDefault(l => l.Provider == provider && l.ProviderKey == providerKey);

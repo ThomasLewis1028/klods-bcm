@@ -1,4 +1,5 @@
-﻿@using Color = MudBlazor.Color
+﻿@inject DeleteData DeleteData
+@using Color = MudBlazor.Color
 <MudDialog>
     <TitleContent>
         Deleting Set @_id - @_name
@@ -41,9 +42,7 @@
 
     private void DeleteSet(string id)
     {
-        DeleteData deleteData = new DeleteData();
-
-        deleteData.DeleteSetInfo(id, MoveStock);
+        DeleteData.DeleteSetInfo(id, MoveStock);
 
         Cancel();
         OnInitializedAsync();

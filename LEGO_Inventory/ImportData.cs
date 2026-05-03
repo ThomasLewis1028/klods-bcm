@@ -1,12 +1,11 @@
 using System.Text.Json.Nodes;
 using LEGO_Inventory.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace LEGO_Inventory;
 
-public class ImportData
+public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger)
 {
-    private readonly ILogger<ImportData> _logger =
-        LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<ImportData>();
 
     /// <summary>
     /// Imports set catalog info, bricks, and BOM data from Rebrickable.
@@ -18,7 +17,7 @@ public class ImportData
         {
             try
             {
-                _logger.LogInformation($"Importing All Data for set {setId}");
+                logger.LogInformation($"Importing All Data for set {setId}");
 
                 await ImportSetInfo(setId);
                 await ImportBricks(setId);
@@ -26,11 +25,11 @@ public class ImportData
                 await ImportMinifigs(setId);
                 await ImportSetMinifigBOM(setId);
 
-                _logger.LogInformation($"DONE Importing All Data for set {setId}");
+                logger.LogInformation($"DONE Importing All Data for set {setId}");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Failed to import All Data for set {setId}" + Environment.NewLine + ex);
+                logger.LogError($"Failed to import All Data for set {setId}" + Environment.NewLine + ex);
                 return false;
             }
         }
@@ -45,15 +44,15 @@ public class ImportData
     {
         try
         {
-            _logger.LogInformation($"Adding Owned Set for {setId}");
+            logger.LogInformation($"Adding Owned Set for {setId}");
 
             if (userId == null)
             {
-                _logger.LogWarning($"AddOwnedSet called without a userId for set {setId} — skipping.");
+                logger.LogWarning($"AddOwnedSet called without a userId for set {setId} — skipping.");
                 return false;
             }
 
-            using var context = new InventoryContext();
+            using var context = contextFactory.CreateDbContext();
             var ownedSetContext = context.Set<SetOwned>();
 
             // SetIndex is per-user: count only this user's copies of the set
@@ -76,12 +75,12 @@ public class ImportData
             EnsureBrickOwnedForSet(userId.Value, setId);
             EnsureMinifigOwnedForSet(userId.Value, setId);
 
-            _logger.LogInformation($"DONE Adding Owned Set for {setId}");
+            logger.LogInformation($"DONE Adding Owned Set for {setId}");
             return true;
         }
         catch (Exception e)
         {
-            _logger.LogError($"Failed to add Owned Set for {setId}" + Environment.NewLine + e);
+            logger.LogError($"Failed to add Owned Set for {setId}" + Environment.NewLine + e);
             return false;
         }
     }
@@ -92,9 +91,9 @@ public class ImportData
     /// </summary>
     public bool CreateSetBrickOwned(int userId, string setId, int setIndex, bool applyBricks = false)
     {
-        _logger.LogInformation($"Creating SetBrickOwned for user {userId}, {setId}-{setIndex}");
+        logger.LogInformation($"Creating SetBrickOwned for user {userId}, {setId}-{setIndex}");
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var setBrickContext = context.Set<SetBrick>();
         var setBrickOwnedContext = context.Set<SetBrickOwned>();
 
@@ -132,7 +131,7 @@ public class ImportData
     /// </summary>
     public void EnsureBrickOwnedForSet(int userId, string setId)
     {
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
 
         var bomPartKeys = context.Set<SetBrick>()
             .Where(sb => sb.SetId == setId)
@@ -169,7 +168,7 @@ public class ImportData
     /// </summary>
     public void EnsureMinifigOwnedForSet(int userId, string setId)
     {
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
 
         var bomMinifigIds = context.Set<SetMinifig>()
             .Where(sm => sm.SetId == setId)
@@ -199,12 +198,12 @@ public class ImportData
 
     public async Task<bool> ImportSetInfo(string? setId)
     {
-        _logger.LogInformation($"Importing {setId}");
+        logger.LogInformation($"Importing {setId}");
         RebrickableApi api = new RebrickableApi();
 
         JsonObject? setInfo = await api.GetSetInfo(setId);
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var setContext = context.Set<Set>();
 
         if (setContext.Any(s => s.SetId == setId))
@@ -240,7 +239,7 @@ public class ImportData
             setContext.Add(set);
         }
 
-        _logger.LogInformation($"Importing {setId} Completed");
+        logger.LogInformation($"Importing {setId} Completed");
         return context.SaveChanges() > 0;
     }
 
@@ -249,13 +248,13 @@ public class ImportData
     /// </summary>
     public async Task<bool> ImportSetBOM(string setId)
     {
-        _logger.LogInformation($"Importing SetBrick BOM for {setId}");
+        logger.LogInformation($"Importing SetBrick BOM for {setId}");
         RebrickableApi api = new RebrickableApi();
 
         JsonObject? setParts = await api.GetSetParts(setId);
         int saveCount = 0;
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
 
         if (!context.Set<Set>().Any(s => s.SetId == setId))
             throw new Exception($"No set found with ID {setId} in database");
@@ -302,7 +301,7 @@ public class ImportData
             saveCount += context.SaveChanges();
         }
 
-        _logger.LogInformation($"Importing SetBrick BOM for {setId} Completed");
+        logger.LogInformation($"Importing SetBrick BOM for {setId} Completed");
         return saveCount > 0;
     }
 
@@ -311,10 +310,10 @@ public class ImportData
     /// </summary>
     public async Task<bool> ImportSetMinifigBOM(string setId)
     {
-        _logger.LogInformation($"Importing SetMinifig BOM for {setId}");
+        logger.LogInformation($"Importing SetMinifig BOM for {setId}");
         RebrickableApi api = new RebrickableApi();
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         JsonObject? jsonObject = await api.GetSetMinifigs(setId);
 
         foreach (var minifig in jsonObject!["results"].AsArray())
@@ -332,10 +331,10 @@ public class ImportData
 
     public async Task<bool> ImportMinifig(string minifigId)
     {
-        _logger.LogInformation($"Importing minifig {minifigId}");
+        logger.LogInformation($"Importing minifig {minifigId}");
         RebrickableApi api = new RebrickableApi();
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var minifigContext = context.Set<Minifig>();
 
         if (minifigContext.Any(m => m.MinifigId == minifigId))
@@ -352,14 +351,14 @@ public class ImportData
         };
 
         minifigContext.Add(minifig);
-        _logger.LogInformation($"Imported minifig ({minifigId}) {minifig.MinifigName}");
+        logger.LogInformation($"Imported minifig ({minifigId}) {minifig.MinifigName}");
 
         return context.SaveChanges() > 0;
     }
 
     public async Task<bool> ImportMinifigs(string setId)
     {
-        _logger.LogInformation($"Importing set minifigs for {setId}");
+        logger.LogInformation($"Importing set minifigs for {setId}");
         RebrickableApi api = new RebrickableApi();
 
         JsonObject? jsonObject = await api.GetSetMinifigs(setId);
@@ -379,9 +378,9 @@ public class ImportData
     /// </summary>
     public bool LinkMinifigToSetBOM(string minifigId, string setId, int quantity)
     {
-        _logger.LogInformation($"Linking minifig {minifigId} to set {setId} BOM");
+        logger.LogInformation($"Linking minifig {minifigId} to set {setId} BOM");
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var setMinifigContext = context.Set<SetMinifig>();
         var setBrickContext = context.Set<SetBrick>();
         var minifigBrickContext = context.Set<MinifigBrick>();
@@ -434,10 +433,10 @@ public class ImportData
 
     public async Task<bool> LinkMinifigBricks(string minifigId)
     {
-        _logger.LogInformation($"Linking minifig bricks for {minifigId}");
+        logger.LogInformation($"Linking minifig bricks for {minifigId}");
         RebrickableApi api = new RebrickableApi();
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var minifigBrickContext = context.Set<MinifigBrick>();
         var brickContext = context.Set<Brick>();
 
@@ -484,11 +483,11 @@ public class ImportData
 
     public async Task<bool> ImportBrick(string brickId, string colorId)
     {
-        _logger.LogInformation($"Importing brick {brickId} with color {colorId}");
+        logger.LogInformation($"Importing brick {brickId} with color {colorId}");
 
         try
         {
-            using var context = new InventoryContext();
+            using var context = contextFactory.CreateDbContext();
             var brickContext = context.Set<Brick>();
 
             if (brickContext.Any(b => b.PartNum == brickId && b.ColorId == colorId))
@@ -525,7 +524,7 @@ public class ImportData
         }
         catch (Exception e)
         {
-            _logger.LogError($"Failed to import brick {brickId} with color {colorId}: {e}");
+            logger.LogError($"Failed to import brick {brickId} with color {colorId}: {e}");
             return false;
         }
 
@@ -534,7 +533,7 @@ public class ImportData
 
     public async Task<bool> ImportBricks(string setId)
     {
-        _logger.LogInformation($"Importing bricks for {setId}");
+        logger.LogInformation($"Importing bricks for {setId}");
 
         try
         {
@@ -542,7 +541,7 @@ public class ImportData
             JsonObject? setParts = await api.GetSetParts(setId);
             int saveCount = 0;
 
-            using var context = new InventoryContext();
+            using var context = contextFactory.CreateDbContext();
             var brickContext = context.Set<Brick>();
 
             foreach (var part in setParts!["results"]!.AsArray())
@@ -555,20 +554,20 @@ public class ImportData
                 }
             }
 
-            _logger.LogInformation($"Importing bricks for {setId} Completed");
+            logger.LogInformation($"Importing bricks for {setId} Completed");
             return saveCount > 0;
         }
         catch (Exception e)
         {
-            _logger.LogError($"Failed to import bricks for {setId}: {e}");
+            logger.LogError($"Failed to import bricks for {setId}: {e}");
             return false;
         }
     }
 
     public Brick ImportBrick(JsonNode part)
     {
-        _logger.LogInformation($"Importing set parts for {part!["part"]!["part_num"]}");
-        using var context = new InventoryContext();
+        logger.LogInformation($"Importing set parts for {part!["part"]!["part_num"]}");
+        using var context = contextFactory.CreateDbContext();
         var brickContext = context.Set<Brick>();
 
         if (brickContext.Any(b => b.PartNum == part!["part"]!["part_num"]!.ToString()
@@ -603,10 +602,10 @@ public class ImportData
 
     public async Task<bool> ImportColors()
     {
-        _logger.LogInformation($"Importing colors");
+        logger.LogInformation($"Importing colors");
         RebrickableApi api = new RebrickableApi();
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var colorContext = context.Set<Color>();
         JsonObject? jsonObject = await api.GetColors();
 

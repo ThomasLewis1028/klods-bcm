@@ -1,6 +1,7 @@
 @page "/bricks"
 @inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
+@inject IDbContextFactory<InventoryContext> DbContextFactory
 @using System.Drawing
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
@@ -120,7 +121,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
 
         // Aggregate stock: personal BrickOwned + allocated SetBrickOwned, across all users
         var brickOwnedStock = context.Set<BrickOwned>()
@@ -175,7 +176,7 @@
     private async Task LoadSetBricksAsync(BrickInfo info)
     {
         if (info.IsLoaded) return;
-        await using var context = new InventoryContext();
+        await using var context = DbContextFactory.CreateDbContext();
         info.SetBricks = context.Set<SetBrick>()
             .AsNoTracking()
             .Where(sb => sb.PartNum == info.Brick.PartNum && sb.ColorId == info.Brick.ColorId)
@@ -187,7 +188,7 @@
 
     private List<Set> GetSets(List<string> setIds)
     {
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         return context.Set<Set>().Where(s => setIds.Contains(s.SetId)).ToList();
     }
 

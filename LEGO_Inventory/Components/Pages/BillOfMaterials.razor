@@ -7,6 +7,8 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JSRuntime
 @inject AuthService AuthService
+@inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject UpdateData UpdateData
 @using System.Drawing
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
@@ -343,7 +345,7 @@
 
         _setsOwned = new List<SetOwned>();
 
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         var setBrickContext = context.Set<SetBrick>();
         var setBrickOwnedContext = context.Set<SetBrickOwned>();
         var brickContext = context.Set<Brick>();
@@ -552,10 +554,9 @@
             return;
         }
 
-        var updateData = new UpdateData();
-        if (setBrickInfo.SetBrickOwned != null && !updateData.UpdateSetBrickOwned(setBrickInfo.SetBrickOwned, userId))
+        if (setBrickInfo.SetBrickOwned != null && !UpdateData.UpdateSetBrickOwned(setBrickInfo.SetBrickOwned, userId))
             await OpenErrorPopup("Failed to save set stock. The set may not be in your inventory yet — try re-adding it.");
-        if (setBrickInfo.BrickOwned != null && !updateData.UpdateBrickOwned(setBrickInfo.BrickOwned, userId))
+        if (setBrickInfo.BrickOwned != null && !UpdateData.UpdateBrickOwned(setBrickInfo.BrickOwned, userId))
             await OpenErrorPopup("Failed to save loose brick stock.");
 
         StateHasChanged();
@@ -570,8 +571,7 @@
             await OpenErrorPopup("You must be logged in to save stock changes.");
             return;
         }
-        var updateData = new UpdateData();
-        if (!updateData.UpdateMinifigOwned(setMinifigInfo.MinifigOwned, userId))
+        if (!UpdateData.UpdateMinifigOwned(setMinifigInfo.MinifigOwned, userId))
             await OpenErrorPopup("Failed to save minifig stock.");
         StateHasChanged();
     }
@@ -580,8 +580,7 @@
     {
         if (info.SetBrickOwned == null || AuthService.CurrentUser == null) return;
         info.SetBrickOwned.Stock = newValue;
-        var updateData = new UpdateData();
-        if (!updateData.UpdateSetBrickOwned(info.SetBrickOwned, AuthService.CurrentUser.UserId))
+        if (!UpdateData.UpdateSetBrickOwned(info.SetBrickOwned, AuthService.CurrentUser.UserId))
             _ = OpenErrorPopup("Failed to save set stock. The set may not be in your inventory yet.");
         StateHasChanged();
     }
@@ -590,8 +589,7 @@
     {
         if (info.BrickOwned == null || AuthService.CurrentUser == null) return;
         info.BrickOwned.Stock = newValue;
-        var updateData = new UpdateData();
-        if (!updateData.UpdateBrickOwned(info.BrickOwned, AuthService.CurrentUser.UserId))
+        if (!UpdateData.UpdateBrickOwned(info.BrickOwned, AuthService.CurrentUser.UserId))
             _ = OpenErrorPopup("Failed to save loose brick stock.");
         StateHasChanged();
     }
@@ -600,8 +598,7 @@
     {
         if (info.MinifigOwned == null || AuthService.CurrentUser == null) return;
         info.MinifigOwned.Stock = newValue;
-        var updateData = new UpdateData();
-        if (!updateData.UpdateMinifigOwned(info.MinifigOwned, AuthService.CurrentUser.UserId))
+        if (!UpdateData.UpdateMinifigOwned(info.MinifigOwned, AuthService.CurrentUser.UserId))
             _ = OpenErrorPopup("Failed to save minifig stock.");
         StateHasChanged();
     }
@@ -644,7 +641,7 @@
 
     public List<SetBrickInfo> GetMinifigBricks(Minifig minifig)
     {
-        using var context = new InventoryContext();
+        using var context = DbContextFactory.CreateDbContext();
         var minifigBrickContext = context.Set<MinifigBrick>();
         var setBrickContext = context.Set<SetBrick>();
         var setBrickOwnedContext = context.Set<SetBrickOwned>();

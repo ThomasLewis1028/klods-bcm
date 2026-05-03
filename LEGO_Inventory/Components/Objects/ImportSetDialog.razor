@@ -1,4 +1,5 @@
 @inject AuthService AuthService
+@inject ImportData ImportData
 @using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 
@@ -82,20 +83,19 @@
         _isLoading = true;
         StateHasChanged();
 
-        var importData = new ImportData();
         var userId = AuthService.CurrentUser?.UserId;
 
         foreach (var entry in validEntries)
         {
             _statusMessage = $"Importing catalog for {entry.SetId}...";
             StateHasChanged();
-            await importData.ImportAll([entry.SetId]);
+            await ImportData.ImportAll([entry.SetId]);
 
             for (int i = 0; i < entry.Owned; i++)
             {
                 _statusMessage = $"Adding copy {i + 1} of {entry.Owned} for {entry.SetId}...";
                 StateHasChanged();
-                await importData.AddOwnedSet(entry.SetId, userId, entry.ApplyBricks);
+                await ImportData.AddOwnedSet(entry.SetId, userId, entry.ApplyBricks);
             }
         }
 

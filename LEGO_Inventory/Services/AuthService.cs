@@ -1,9 +1,10 @@
 using System.Security.Cryptography;
 using LEGO_Inventory.Database;
+using Microsoft.EntityFrameworkCore;
 
 namespace LEGO_Inventory.Services;
 
-public class AuthService
+public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
 {
     private const int PasswordHashIterations = 100_000;
     public User? CurrentUser { get; private set; }
@@ -19,7 +20,7 @@ public class AuthService
 
     public bool Login(string username, string password)
     {
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var user = context.Users.FirstOrDefault(u => u.UserName == username);
         if (user == null || string.IsNullOrEmpty(user.PasswordHash) || !VerifyPassword(password, user.PasswordHash))
             return false;
@@ -37,7 +38,7 @@ public class AuthService
 
     public void RestoreUser(int userId)
     {
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var user = context.Users.FirstOrDefault(u => u.UserId == userId);
         if (user != null)
         {
@@ -48,7 +49,7 @@ public class AuthService
 
     public bool Register(string username, string password)
     {
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         if (context.Users.Any(u => u.UserName == username))
             return false;
 
@@ -70,7 +71,7 @@ public class AuthService
     {
         if (CurrentUser == null) return false;
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         if (context.Users.Any(u => u.UserName == newUsername && u.UserId != CurrentUser.UserId))
             return false;
 
@@ -89,7 +90,7 @@ public class AuthService
         if (CurrentUser == null) return false;
         if (!VerifyPassword(currentPassword, CurrentUser.PasswordHash)) return false;
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
         if (user == null) return false;
         user.PasswordHash = HashPassword(newPassword);
@@ -102,7 +103,7 @@ public class AuthService
     public List<UserExternalLogin> GetLinkedLogins()
     {
         if (CurrentUser == null) return [];
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         return context.UserExternalLogins
             .Where(l => l.UserId == CurrentUser.UserId)
             .ToList();
@@ -112,7 +113,7 @@ public class AuthService
     {
         if (CurrentUser == null) return false;
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var logins = context.UserExternalLogins
             .Where(l => l.UserId == CurrentUser.UserId)
             .ToList();
@@ -132,7 +133,7 @@ public class AuthService
     {
         if (CurrentUser == null) return;
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
         if (user == null) return;
         user.PrimaryColor = hex;
@@ -146,7 +147,7 @@ public class AuthService
     {
         if (CurrentUser == null) return;
 
-        using var context = new InventoryContext();
+        using var context = contextFactory.CreateDbContext();
         var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
         if (user == null) return;
         user.ProfilePictureUrl = url;
