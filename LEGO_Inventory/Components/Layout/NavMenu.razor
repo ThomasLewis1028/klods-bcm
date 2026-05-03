@@ -13,7 +13,7 @@
         </MudNavGroup>
 
         <MudNavGroup Title="My Collection" Icon="@Icons.Material.Filled.CollectionsBookmark" Expanded="true"
-                     @attributes="_collectionAttrs">
+                     Style="@(_signedOut ? "opacity: 0.45;" : null)">
             <MudNavLink Href="/my/sets" Icon="@Icons.Material.Filled.ViewModule" Disabled="_signedOut">My Sets</MudNavLink>
             <MudNavLink Href="/my/bricks" Icon="@Icons.Material.Filled.Category" Disabled="_signedOut">My Bricks</MudNavLink>
             <MudNavLink Href="/my/minifigs" Icon="@Icons.Material.Filled.Person" Disabled="_signedOut">My Minifigs</MudNavLink>
@@ -27,10 +27,6 @@
 
 @code {
     private bool _signedOut => AuthService.CurrentUser == null;
-
-    private Dictionary<string, object> _collectionAttrs => _signedOut
-        ? new() { ["style"] = "opacity: 0.45;" }
-        : new();
 
     protected override void OnInitialized() => AuthService.OnChange += OnAuthChanged;
     private void OnAuthChanged() => InvokeAsync(StateHasChanged);

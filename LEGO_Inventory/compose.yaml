@@ -1,7 +1,7 @@
 ﻿services:
   # https://github.com/felipewom/docker-compose-postgres/blob/main/README.md
   postgres:
-    image: 'postgres:16'
+    image: 'postgres:17'
     ports:
       - 5432:5432
     env_file:

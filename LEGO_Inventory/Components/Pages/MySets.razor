@@ -138,7 +138,12 @@
         if (AuthService.IsSessionRestored) CheckAuth();
     }
 
-    private void OnSessionRestored() => InvokeAsync(CheckAuth);
+    private void OnSessionRestored() => InvokeAsync(async () =>
+    {
+        CheckAuth();
+        await LoadDataAsync();
+        StateHasChanged();
+    });
 
     private void CheckAuth()
     {
@@ -152,34 +157,34 @@
     {
         var logger = LoggerFactory.CreateLogger<MySets>();
         logger.LogTrace("Loading My Sets");
-        using (var context = DbContextFactory.CreateDbContext())
-        {
-            var setContext = context.Set<Set>();
-            var ownedSetContext = context.Set<SetOwned>();
-
-            var userId = AuthService.CurrentUser?.UserId;
-
-            _sets = setContext.ToList();
-            _setInfos.Clear();
-
-            foreach (Set set in setContext.ToList())
-            {
-                var ownedSets = userId.HasValue
-                    ? ownedSetContext.Where(so => so.SetId == set.SetId && so.UserId == userId.Value).ToList()
-                    : new List<SetOwned>();
-
-                if (userId.HasValue && ownedSets.Count == 0) continue;
-
-                _setInfos?.Add(new SetInfo
-                {
-                    Set = set,
-                    OwnedSets = ownedSets
-                });
-            }
-        }
-
-        StateHasChanged();
+        await LoadDataAsync();
         logger.LogTrace("Loading My Sets Complete");
+    }
+
+    private async Task LoadDataAsync()
+    {
+        using var context = DbContextFactory.CreateDbContext();
+        var setContext = context.Set<Set>();
+        var ownedSetContext = context.Set<SetOwned>();
+        var userId = AuthService.CurrentUser?.UserId;
+
+        _sets = setContext.ToList();
+        _setInfos.Clear();
+
+        foreach (Set set in setContext.ToList())
+        {
+            var ownedSets = userId.HasValue
+                ? ownedSetContext.Where(so => so.SetId == set.SetId && so.UserId == userId.Value).ToList()
+                : new List<SetOwned>();
+
+            if (userId.HasValue && ownedSets.Count == 0) continue;
+
+            _setInfos?.Add(new SetInfo
+            {
+                Set = set,
+                OwnedSets = ownedSets
+            });
+        }
     }
 
     private async Task OpenImportDialog()
