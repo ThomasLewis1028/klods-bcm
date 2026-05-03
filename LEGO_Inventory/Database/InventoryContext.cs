@@ -157,11 +157,15 @@ public class InventoryContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        var POSTGRES_HOST = Environment.GetEnvironmentVariable("POSTGRES_HOST");
-        var POSTGRES_USER = Environment.GetEnvironmentVariable("POSTGRES_USER");
-        var POSTGRES_PASSWORD = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
-        var POSTGRES_DB = Environment.GetEnvironmentVariable("POSTGRES_DB");
-        var connectionString = $"Host={POSTGRES_HOST};Database={POSTGRES_DB};Username={POSTGRES_USER};Password={POSTGRES_PASSWORD};Pooling=true;MaxPoolSize=100;";
+        var host = Environment.GetEnvironmentVariable("POSTGRES_HOST")
+            ?? throw new InvalidOperationException("Required environment variable POSTGRES_HOST is not set.");
+        var user = Environment.GetEnvironmentVariable("POSTGRES_USER")
+            ?? throw new InvalidOperationException("Required environment variable POSTGRES_USER is not set.");
+        var password = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD")
+            ?? throw new InvalidOperationException("Required environment variable POSTGRES_PASSWORD is not set.");
+        var db = Environment.GetEnvironmentVariable("POSTGRES_DB")
+            ?? throw new InvalidOperationException("Required environment variable POSTGRES_DB is not set.");
+        var connectionString = $"Host={host};Database={db};Username={user};Password={password};Pooling=true;MaxPoolSize=100;";
         optionsBuilder.UseNpgsql(connectionString);
         optionsBuilder.ConfigureWarnings(warnings =>
             warnings.Ignore(RelationalEventId.PendingModelChangesWarning));

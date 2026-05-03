@@ -74,7 +74,8 @@ public class AuthService
         if (context.Users.Any(u => u.UserName == newUsername && u.UserId != CurrentUser.UserId))
             return false;
 
-        var user = context.Users.First(u => u.UserId == CurrentUser.UserId);
+        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
+        if (user == null) return false;
         user.UserName = newUsername;
         context.SaveChanges();
 
@@ -89,7 +90,8 @@ public class AuthService
         if (!VerifyPassword(currentPassword, CurrentUser.PasswordHash)) return false;
 
         using var context = new InventoryContext();
-        var user = context.Users.First(u => u.UserId == CurrentUser.UserId);
+        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
+        if (user == null) return false;
         user.PasswordHash = HashPassword(newPassword);
         context.SaveChanges();
 
@@ -131,7 +133,8 @@ public class AuthService
         if (CurrentUser == null) return;
 
         using var context = new InventoryContext();
-        var user = context.Users.First(u => u.UserId == CurrentUser.UserId);
+        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
+        if (user == null) return;
         user.PrimaryColor = hex;
         context.SaveChanges();
 
@@ -144,7 +147,8 @@ public class AuthService
         if (CurrentUser == null) return;
 
         using var context = new InventoryContext();
-        var user = context.Users.First(u => u.UserId == CurrentUser.UserId);
+        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
+        if (user == null) return;
         user.ProfilePictureUrl = url;
         context.SaveChanges();
 

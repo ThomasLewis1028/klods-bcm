@@ -1,0 +1,25 @@
+@page "/not-found"
+@layout FullPageLayout
+@inject NavigationManager Nav
+@using LEGO_Inventory.Components.Layout
+
+<PageTitle>Not Found</PageTitle>
+
+<div class="landing-page">
+    <MudStack AlignItems="AlignItems.Center" Spacing="4" Style="text-align: center; max-width: 480px;">
+        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Style="font-size: 4rem; opacity: 0.25;"/>
+        <div>
+            <MudText Typo="Typo.h4" Style="font-weight: 800;">Not found</MudText>
+            <MudText Typo="Typo.body1" Style="opacity: 0.55; margin-top: 0.5rem;">
+                The page or content you're looking for doesn't exist or may have been removed.
+            </MudText>
+        </div>
+        <MudStack Row Spacing="2">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Home"
+                       OnClick='() => Nav.NavigateTo("/")'>Go Home</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Collections"
+                       OnClick='() => Nav.NavigateTo("/my-sets")'>My Sets</MudButton>
+        </MudStack>
+    </MudStack>
+</div>

@@ -386,13 +386,21 @@
                     .ToDictionary(bo => (bo.PartNum, bo.ColorId))
                 : new Dictionary<(string, string), BrickOwned>();
 
+            var setBrickPartNums = setBricks.Select(sb => sb.PartNum).ToHashSet();
+            var brickDict = brickContext
+                .Where(b => setBrickPartNums.Contains(b.PartNum))
+                .AsNoTracking()
+                .ToList()
+                .ToDictionary(b => (b.PartNum, b.ColorId));
+
             foreach (var setBrick in setBricks)
             {
+                if (!brickDict.TryGetValue((setBrick.PartNum, setBrick.ColorId), out var brick)) continue;
                 ownedStock.TryGetValue((setBrick.PartNum, setBrick.ColorId), out var sbo);
                 _brickOwnedDict.TryGetValue((setBrick.PartNum, setBrick.ColorId), out var bo);
                 _setBrickInfo.Add(new SetBrickInfo
                 {
-                    Brick = brickContext.First(b => b.PartNum == setBrick.PartNum && b.ColorId == setBrick.ColorId),
+                    Brick = brick,
                     SetBrick = setBrick,
                     SetBrickOwned = sbo,
                     BrickOwned = bo
@@ -406,18 +414,30 @@
                 : new Dictionary<string, MinifigOwned>();
 
             var setMinifigs = setMinifigContext.Where(sm => sm.SetId == _setId).ToList();
+            var minifigIds = setMinifigs.Select(sm => sm.MinifigId).ToHashSet();
+            var minifigDict = minifigContext
+                .Where(m => minifigIds.Contains(m.MinifigId))
+                .AsNoTracking()
+                .ToDictionary(m => m.MinifigId);
+
             foreach (var setMinifig in setMinifigs)
             {
+                if (!minifigDict.TryGetValue(setMinifig.MinifigId, out var minifig)) continue;
                 minifigOwnedDict.TryGetValue(setMinifig.MinifigId, out var mo);
                 _setMinifigInfo.Add(new SetMinifigInfo
                 {
-                    Minifig = minifigContext.First(m => m.MinifigId == setMinifig.MinifigId),
+                    Minifig = minifig,
                     SetMinifig = setMinifig,
                     MinifigOwned = mo
                 });
             }
 
-            _set = setContext.First(s => s.SetId == _setId);
+            _set = setContext.FirstOrDefault(s => s.SetId == _setId);
+            if (_set == null)
+            {
+                Nav.NavigateTo("/not-found");
+                return;
+            }
         }
 
         var ownedSetIds = userId.HasValue
@@ -642,19 +662,28 @@
 
         var result = new List<SetBrickInfo>();
 
+        var minifigBrickIds = minifigBricks.Select(mb => mb.BrickID).ToHashSet();
+        var setBrickDict = setBrickContext
+            .Where(sb => sb.SetId == _setId && minifigBrickIds.Contains(sb.PartNum))
+            .AsNoTracking()
+            .ToList()
+            .ToDictionary(sb => (sb.PartNum, sb.ColorId));
+        var brickDict = brickContext
+            .Where(b => minifigBrickIds.Contains(b.PartNum))
+            .AsNoTracking()
+            .ToList()
+            .ToDictionary(b => (b.PartNum, b.ColorId));
+
         foreach (var minifigBrick in minifigBricks)
         {
-            var bom = setBrickContext.FirstOrDefault(sb =>
-                sb.SetId == _setId && sb.PartNum == minifigBrick.BrickID && sb.ColorId == minifigBrick.ColorId);
-
-            if (bom == null) continue;
+            if (!setBrickDict.TryGetValue((minifigBrick.BrickID, minifigBrick.ColorId), out var bom)) continue;
+            if (!brickDict.TryGetValue((minifigBrick.BrickID, minifigBrick.ColorId), out var brick)) continue;
 
             ownedStock.TryGetValue((minifigBrick.BrickID, minifigBrick.ColorId), out var sbo);
-
             _brickOwnedDict.TryGetValue((minifigBrick.BrickID, minifigBrick.ColorId), out var bo);
             result.Add(new SetBrickInfo
             {
-                Brick = brickContext.First(b => b.PartNum == minifigBrick.BrickID && b.ColorId == minifigBrick.ColorId),
+                Brick = brick,
                 SetBrick = bom,
                 SetBrickOwned = sbo,
                 BrickOwned = bo
