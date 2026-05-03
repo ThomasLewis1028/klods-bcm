@@ -2,6 +2,7 @@ using LEGO_Inventory;
 using LEGO_Inventory.Components;
 using LEGO_Inventory.Database;
 using LEGO_Inventory.Services;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
@@ -16,6 +17,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddMudServices();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri("https://rebrickable.com/") });

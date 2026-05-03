@@ -16,6 +16,7 @@
 @using Color = MudBlazor.Color
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
+@attribute [Authorize]
 @implements IDisposable
 
 <PageTitle>@_pageTitle</PageTitle>
@@ -43,7 +44,7 @@
                     <MudSelect T="SetOwned"
                                Variant="Variant.Outlined"
                                Dense="true"
-                               Value="_setsOwned.First(so => so.SetIndex == (_setIndex != null ? int.Parse(_setIndex) : 0))"
+                               Value="_setsOwned.FirstOrDefault(so => so.SetIndex == (int.TryParse(_setIndex, out var idx) ? idx : 0))"
                                ValueChanged="ChangeIndex">
                         @foreach (var set in _setsOwned)
                         {
@@ -367,9 +368,9 @@
             _pageTitle = $"{_setId} - Bill of Materials";
             StateHasChanged();
 
-            if (_setIndex == null) _setIndex = "0";
-
-            var setIndex = int.Parse(_setIndex);
+            if (!int.TryParse(_setIndex, out var setIndex))
+                setIndex = 0;
+            _setIndex = setIndex.ToString();
             _pageTitle = $"{_setId}-{_setIndex} - Bill of Materials";
             StateHasChanged();
 
@@ -648,7 +649,7 @@
         var brickContext = context.Set<Brick>();
 
         var minifigBricks = minifigBrickContext.Where(mb => mb.MinifigID == minifig.MinifigId).ToList();
-        var setIndex = _setIndex != null ? int.Parse(_setIndex) : 0;
+        var setIndex = int.TryParse(_setIndex, out var parsedIdx) ? parsedIdx : 0;
 
         var userId = AuthService.CurrentUser?.UserId;
         var ownedStock = userId.HasValue
