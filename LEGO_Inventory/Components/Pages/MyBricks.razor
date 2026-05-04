@@ -161,32 +161,16 @@
 
         using var context = DbContextFactory.CreateDbContext();
 
-        // Count how many copies the user owns of each set
-        var userSetCopies = context.Set<SetOwned>()
-            .AsNoTracking()
-            .Where(so => so.UserId == userId)
-            .GroupBy(so => so.SetId)
-            .ToDictionary(g => g.Key, g => g.Count());
-
+        var userSetCopies = InventoryAggregates.GetSetCopies(context, userId);
         var userSetIds = userSetCopies.Keys.ToList();
 
-        // BOM entries for the user's sets
         var setBricks = context.Set<SetBrick>()
             .AsNoTracking()
             .Where(sb => userSetIds.Contains(sb.SetId))
             .ToList();
 
-        // Needed per brick weighted by copies owned
-        var neededDict = setBricks
-            .GroupBy(sb => (sb.PartNum, sb.ColorId))
-            .ToDictionary(
-                g => g.Key,
-                g => g.Sum(sb => sb.Count * userSetCopies.GetValueOrDefault(sb.SetId, 1)));
-
-        // Distinct sets per brick (from user's owned sets)
-        var setCountDict = setBricks
-            .GroupBy(sb => (sb.PartNum, sb.ColorId))
-            .ToDictionary(g => g.Key, g => g.Select(sb => sb.SetId).Distinct().Count());
+        var neededDict = InventoryAggregates.GetBrickNeededDict(setBricks, userSetCopies);
+        var setCountDict = InventoryAggregates.GetBrickSetCountDict(setBricks);
 
         // User's personal BrickOwned
         var brickOwnedDict = context.Set<BrickOwned>()
@@ -229,10 +213,7 @@
 
         await using var context = DbContextFactory.CreateDbContext();
 
-        var userSetCopies = context.Set<SetOwned>()
-            .Where(so => so.UserId == userId)
-            .GroupBy(so => so.SetId)
-            .ToDictionary(g => g.Key, g => g.Count());
+        var userSetCopies = InventoryAggregates.GetSetCopies(context, userId);
 
         info.SetBricks = context.Set<SetBrick>()
             .Where(sb => sb.PartNum == info.Brick.PartNum && sb.ColorId == info.Brick.ColorId

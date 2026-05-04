@@ -134,36 +134,22 @@
             .GroupBy(sbo => new { sbo.PartNum, sbo.ColorId })
             .ToDictionary(g => (g.Key.PartNum, g.Key.ColorId), g => g.Sum(sbo => sbo.Stock));
 
-        // Aggregate needed: SetBrick.Count × copies owned, across all users
-        var setOwnedCopies = context.Set<SetOwned>()
-            .AsNoTracking()
-            .GroupBy(so => so.SetId)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        var setBrickAggregates = context.Set<SetBrick>()
-            .AsNoTracking()
-            .ToList()
-            .GroupBy(sb => (sb.PartNum, sb.ColorId))
-            .ToDictionary(
-                g => g.Key,
-                g => new
-                {
-                    TotalNeeded = g.Sum(sb => sb.Count * setOwnedCopies.GetValueOrDefault(sb.SetId, 0)),
-                    SetCount = g.Select(sb => sb.SetId).Distinct().Count()
-                });
+        var setOwnedCopies = InventoryAggregates.GetSetCopies(context);
+        var allSetBricks = context.Set<SetBrick>().AsNoTracking().ToList();
+        var brickNeededDict = InventoryAggregates.GetBrickNeededDict(allSetBricks, setOwnedCopies);
+        var brickSetCountDict = InventoryAggregates.GetBrickSetCountDict(allSetBricks);
 
         _brickInfos = context.Set<Brick>().AsNoTracking().ToList().Select(b =>
         {
             var key = (b.PartNum, b.ColorId);
             var stock = brickOwnedStock.GetValueOrDefault(key, 0)
                       + setBrickOwnedStock.GetValueOrDefault(key, 0);
-            setBrickAggregates.TryGetValue(key, out var agg);
             return new BrickInfo
             {
                 Brick = b,
                 TotalStock = stock,
-                TotalNeeded = agg?.TotalNeeded ?? 0,
-                SetCount = agg?.SetCount ?? 0
+                TotalNeeded = brickNeededDict.GetValueOrDefault(key, 0),
+                SetCount = brickSetCountDict.GetValueOrDefault(key, 0)
             };
         }).ToList();
 

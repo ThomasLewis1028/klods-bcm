@@ -156,12 +156,7 @@
 
         using var context = DbContextFactory.CreateDbContext();
 
-        var userSetCopies = context.Set<SetOwned>()
-            .AsNoTracking()
-            .Where(so => so.UserId == userId)
-            .GroupBy(so => so.SetId)
-            .ToDictionary(g => g.Key, g => g.Count());
-
+        var userSetCopies = InventoryAggregates.GetSetCopies(context, userId);
         var userSetIds = userSetCopies.Keys.ToList();
 
         var setMinifigs = context.Set<SetMinifig>()
@@ -169,15 +164,8 @@
             .Where(sm => userSetIds.Contains(sm.SetId))
             .ToList();
 
-        var neededDict = setMinifigs
-            .GroupBy(sm => sm.MinifigId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Sum(sm => sm.Count * userSetCopies.GetValueOrDefault(sm.SetId, 1)));
-
-        var setCountDict = setMinifigs
-            .GroupBy(sm => sm.MinifigId)
-            .ToDictionary(g => g.Key, g => g.Select(sm => sm.SetId).Distinct().Count());
+        var neededDict = InventoryAggregates.GetMinifigNeededDict(setMinifigs, userSetCopies);
+        var setCountDict = InventoryAggregates.GetMinifigSetCountDict(setMinifigs);
 
         var minifigOwnedDict = context.Set<MinifigOwned>()
             .AsNoTracking()
