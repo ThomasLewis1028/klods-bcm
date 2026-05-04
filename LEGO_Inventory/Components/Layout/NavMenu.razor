@@ -20,13 +20,21 @@
             <MudNavLink Href="/bom" Icon="@Icons.Material.Filled.FormatListBulleted" Disabled="_signedOut">My Bill of Materials</MudNavLink>
         </MudNavGroup>
 
-        <MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">Users</MudNavLink>
+        @if (!_signedOut)
+        {
+            <MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">Users</MudNavLink>
+        }
+        @if (_isAdmin)
+        {
+            <MudNavLink Href="/admin" Icon="@Icons.Material.Filled.AdminPanelSettings">Admin</MudNavLink>
+        }
 
     </MudNavMenu>
 </MudDrawer>
 
 @code {
     private bool _signedOut => AuthService.CurrentUser == null;
+    private bool _isAdmin => AuthService.CurrentUser?.Role == "Admin";
 
     protected override void OnInitialized() => AuthService.OnChange += OnAuthChanged;
     private void OnAuthChanged() => InvokeAsync(StateHasChanged);

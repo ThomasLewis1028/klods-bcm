@@ -4,6 +4,7 @@
 @inject IJSRuntime JsRuntime
 @inject AuthService AuthService
 @inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject ImageStorageService ImageStorage
 @inject ImportData ImportData
 @inject DeleteData DeleteData
 @using LEGO_Inventory.Components.Objects
@@ -83,8 +84,8 @@
                     <CellTemplate>
                         <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                             <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                      Src="@context.Item.Set.SetImg" Height="50"
-                                      @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, context.Item.Set.SetImg)"/>
+                                      Src="@ImageStorage.ResolveUrl(context.Item.Set.SetImg)" Height="50"
+                                      @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>

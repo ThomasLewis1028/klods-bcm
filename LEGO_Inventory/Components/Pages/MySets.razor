@@ -6,6 +6,7 @@
 @inject NavigationManager Nav
 @inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject ImportData ImportData
+@inject ImageStorageService ImageStorage
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
@@ -52,9 +53,9 @@
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
-                            <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.Set.SetImg"
+                            <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@ImageStorage.ResolveUrl(context.Item.Set.SetImg)"
                                       Height="50"
-                                      @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, context.Item.Set.SetImg)"/>
+                                      @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
@@ -115,7 +116,7 @@
                                                         Variant="Variant.Filled"
                                                         Color="Color.Error"
                                                         Size="Size.Small"
-                                                        OnClick="() => DeleteOwnedSet(context.Item.SetId, context.Item.SetIndex, setContext.Item.Set.Name, setContext.Item.Set.SetImg)"/>
+                                                        OnClick="() => DeleteOwnedSet(context.Item.SetId, context.Item.SetIndex, setContext.Item.Set.Name, ImageStorage.ResolveUrl(setContext.Item.Set.SetImg))"/>
                                                 </MudStack>
                                             </CellTemplate>
                                         </TemplateColumn>

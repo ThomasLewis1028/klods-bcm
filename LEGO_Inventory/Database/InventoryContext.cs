@@ -145,6 +145,10 @@ public class InventoryContext : DbContext
             .HasIndex(e => e.UserName)
             .IsUnique();
 
+        modelBuilder.Entity<User>()
+            .Property(e => e.Role)
+            .HasDefaultValue("User");
+
         // USER EXTERNAL LOGIN
         modelBuilder.Entity<UserExternalLogin>().HasKey(e => new { e.Provider, e.ProviderKey });
 

@@ -159,7 +159,7 @@ public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
         return true;
     }
 
-    private static string HashPassword(string password)
+    internal static string HashPassword(string password)
     {
         var salt = RandomNumberGenerator.GetBytes(16);
         var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordHashIterations, HashAlgorithmName.SHA256, 32);

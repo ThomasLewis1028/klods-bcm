@@ -1,0 +1,209 @@
+@page "/admin"
+@inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject ImportData ImportData
+@inject AuthService AuthService
+@inject ImageStorageService ImageStorage
+@using LEGO_Inventory.Database
+@using Color = MudBlazor.Color
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+<PageTitle>Admin</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Administration</MudText>
+
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
+<MudStack Spacing="4">
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-3">User Management</MudText>
+        <MudDataGrid T="UserRow" Items="@_rows" SortMode="SortMode.Multiple" QuickFilter="FilterFunc">
+            <ToolBarContent>
+                <MudText Typo="Typo.subtitle1">@_rows.Count users</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                              Immediate="true" Class="mt-0"/>
+            </ToolBarContent>
+            <Columns>
+                <TemplateColumn Title="Avatar" Sortable="false">
+                    <CellTemplate>
+                        <MudAvatar Style="width: 36px; height: 36px;">
+                            @if (context.Item.User.ProfilePictureUrl != null)
+                            {
+                                <MudImage Src="@ImageStorage.ResolveUrl(context.Item.User.ProfilePictureUrl)" Style="width: 100%; height: 100%; object-fit: cover;"/>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Person"/>
+                            }
+                        </MudAvatar>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.User.UserId" Title="ID"/>
+                <PropertyColumn Property="x => x.User.UserName" Title="Username"/>
+                <TemplateColumn Title="Role" SortBy="x => x.User.Role">
+                    <CellTemplate>
+                        <MudChip Color="@(context.Item.User.Role == "Admin" ? Color.Warning : Color.Default)"
+                                 Size="Size.Small">
+                            @context.Item.User.Role
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Actions" Sortable="false">
+                    <CellTemplate>
+                        @if (context.Item.User.UserId != AuthService.CurrentUser?.UserId)
+                        {
+                            @if (context.Item.User.Role == "Admin")
+                            {
+                                <MudButton OnClick="() => RemoveAdmin(context.Item.User)"
+                                           Color="Color.Warning" Variant="Variant.Outlined" Size="Size.Small">
+                                    Remove Admin
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton OnClick="() => MakeAdmin(context.Item.User)"
+                                           Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                    Make Admin
+                                </MudButton>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Style="opacity: 0.5;">You</MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <PagerContent>
+                <MudDataGridPager T="UserRow"/>
+            </PagerContent>
+        </MudDataGrid>
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Image Migration</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Migrate all images from Rebrickable URLs to local MinIO storage.
+            Required for full offline operation after import.
+        </MudText>
+
+        @if (_backfillRunning)
+        {
+            <MudStack Spacing="2">
+                <MudProgressLinear Value="_backfillDone" Max="_backfillTotal > 0 ? _backfillTotal : 1"
+                                   Rounded="true" Size="Size.Medium" Color="Color.Primary"/>
+                <MudText Typo="Typo.body2">@_backfillDone / @_backfillTotal images migrated</MudText>
+                <MudButton OnClick="CancelBackfill" Color="Color.Error" Variant="Variant.Outlined" Size="Size.Small">
+                    Cancel
+                </MudButton>
+            </MudStack>
+        }
+        else
+        {
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                <MudButton OnClick="StartBackfill" Disabled="_pendingCount == 0"
+                           Color="Color.Primary" Variant="Variant.Filled">
+                    @(_pendingCount == 0 ? "All images stored locally" : $"Migrate {_pendingCount} images")
+                </MudButton>
+                @if (_pendingCount == 0)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                }
+            </MudStack>
+        }
+    </MudPaper>
+
+</MudStack>
+
+@code {
+    private List<UserRow> _rows = [];
+    private string _search = string.Empty;
+    private bool _isLoading = true;
+
+    private int _pendingCount;
+    private bool _backfillRunning;
+    private int _backfillDone;
+    private int _backfillTotal;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var context = DbContextFactory.CreateDbContext();
+
+        _rows = await context.Users
+            .OrderBy(u => u.UserName)
+            .Select(u => new UserRow { User = u })
+            .ToListAsync();
+
+        _pendingCount = await GetPendingCountAsync(context);
+        _isLoading = false;
+    }
+
+    private Task MakeAdmin(User user)   => SetRole(user, "Admin");
+    private Task RemoveAdmin(User user) => SetRole(user, "User");
+
+    private async Task SetRole(User user, string role)
+    {
+        await using var context = DbContextFactory.CreateDbContext();
+        var dbUser = await context.Users.FindAsync(user.UserId);
+        if (dbUser == null) return;
+        dbUser.Role = role;
+        await context.SaveChangesAsync();
+        user.Role = role;
+        StateHasChanged();
+    }
+
+    private async Task StartBackfill()
+    {
+        _cts = new CancellationTokenSource();
+        _backfillRunning = true;
+        _backfillDone = 0;
+        _backfillTotal = _pendingCount;
+
+        var progress = new Progress<(int done, int total)>(p =>
+        {
+            _backfillDone = p.done;
+            _backfillTotal = p.total;
+            InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            await ImportData.BackfillImagesAsync(progress, _cts.Token);
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            _backfillRunning = false;
+            await using var context = DbContextFactory.CreateDbContext();
+            _pendingCount = await GetPendingCountAsync(context);
+            StateHasChanged();
+        }
+    }
+
+    private void CancelBackfill() => _cts?.Cancel();
+
+    private async Task<int> GetPendingCountAsync(InventoryContext context) =>
+        await context.Set<Set>()    .CountAsync(s => s.SetImg        != null && s.SetImg.StartsWith("http"))
+      + await context.Set<Minifig>().CountAsync(m => m.MinifigImgUrl != null && m.MinifigImgUrl.StartsWith("http"))
+      + await context.Set<Brick>()  .CountAsync(b => b.PartImg       != null && b.PartImg.StartsWith("http"));
+
+    private bool FilterFunc(UserRow row) =>
+        string.IsNullOrWhiteSpace(_search) ||
+        row.User.UserName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        row.User.UserId.ToString().Contains(_search);
+
+    private class UserRow
+    {
+        public User User { get; set; } = null!;
+    }
+}

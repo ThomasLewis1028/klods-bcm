@@ -37,6 +37,24 @@
     volumes:
       - lego-pgadmin-volume:/var/lib/pgadmin/:rw
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file:
+      - .env
+    networks:
+      - lego-network
+    volumes:
+      - lego-minio-volume:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
   lego_inventory:
     image: lego_inventory
     build:
@@ -46,6 +64,9 @@
       - .env
     depends_on:
       postgres:
+        condition: service_healthy
+        restart: true
+      minio:
         condition: service_healthy
         restart: true
     ports:
@@ -59,6 +80,7 @@ volumes:
   lego-volume:
   lego-db-volume:
   lego-pgadmin-volume:
+  lego-minio-volume:
 
 networks: 
   lego-network:

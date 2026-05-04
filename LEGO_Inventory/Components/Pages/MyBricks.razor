@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject UpdateData UpdateData
+@inject ImageStorageService ImageStorage
 @using System.Drawing
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
@@ -48,9 +49,9 @@
                 <HierarchyColumn T="MyBrickInfo" ButtonDisabledFunc="@(info => info.UserSetCount == 0)"/>
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
-                        <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@context.Item.Brick.PartImg"
+                        <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)"
                                   Height="50"
-                                  @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg)"/>
+                                  @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg))"/>
                     </CellTemplate>
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Brick.PartNum" Title="Id" Editable="false"/>
@@ -99,8 +100,8 @@
                                 <TemplateColumn Title="Image">
                                     <CellTemplate>
                                         <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                  Src="@context.Item.SetImg" Height="50"
-                                                  @onclick="() => OpenImagePopup(context.Item.SetId, context.Item.Name, context.Item.SetImg)"/>
+                                                  Src="@ImageStorage.ResolveUrl(context.Item.SetImg)" Height="50"
+                                                  @onclick="() => OpenImagePopup(context.Item.SetId, context.Item.Name, ImageStorage.ResolveUrl(context.Item.SetImg))"/>
                                     </CellTemplate>
                                 </TemplateColumn>
                                 <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
