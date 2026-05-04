@@ -8,14 +8,14 @@ public class ImageStorageService
     private readonly IMinioClient _minio;
     private readonly HttpClient _http;
     private readonly string _bucket;
-    private readonly string _publicEndpoint;
+    private readonly string? _publicEndpoint;
     private readonly ILogger<ImageStorageService> _logger;
 
     public ImageStorageService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<ImageStorageService> logger)
     {
         var endpoint  = config["MINIO_ENDPOINT"] ?? "http://minio:9000";
         _bucket           = config["MINIO_BUCKET"] ?? "lego-images";
-        _publicEndpoint   = config["MINIO_PUBLIC_ENDPOINT"] ?? endpoint;
+        _publicEndpoint   = config["MINIO_PUBLIC_ENDPOINT"];
 
         var uri = new Uri(endpoint);
         _minio = new MinioClient()
@@ -56,7 +56,8 @@ public class ImageStorageService
 
     /// <summary>
     /// Downloads the image at <paramref name="sourceUrl"/> and stores it in MinIO under
-    /// <paramref name="objectKey"/>. Returns the public URL, or the original URL on failure.
+    /// <paramref name="objectKey"/>. Returns the object key slug, or the original URL on failure.
+    /// Use <see cref="ResolveUrl"/> to convert the returned slug to a browser-accessible URL.
     /// </summary>
     public async Task<string?> StoreImageAsync(string? sourceUrl, string objectKey)
     {
@@ -75,7 +76,7 @@ public class ImageStorageService
                 .WithObjectSize(bytes.Length)
                 .WithContentType(contentType));
 
-            return $"{_publicEndpoint.TrimEnd('/')}/{_bucket}/{objectKey}";
+            return $"{_bucket}/{objectKey}";
         }
         catch (Exception ex)
         {
@@ -83,6 +84,13 @@ public class ImageStorageService
             return sourceUrl;
         }
     }
+
+    public string? ResolveUrl(string? stored) =>
+        stored is null ? null :
+        stored.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? stored :
+        string.IsNullOrEmpty(_publicEndpoint)
+            ? $"/media/{stored}"
+            : $"{_publicEndpoint.TrimEnd('/')}/{stored}";
 
     private static string GuessContentType(string url)
     {

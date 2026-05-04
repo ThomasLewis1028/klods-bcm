@@ -91,6 +91,20 @@ var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<Inven
 await using var db = dbFactory.CreateDbContext();
 await db.Database.MigrateAsync();
 
+if (!await db.Users.AnyAsync(u => u.Role == "Admin"))
+{
+    var defaultPassword = builder.Configuration["ADMIN_DEFAULT_PASSWORD"] ?? "admin";
+    db.Users.Add(new User
+    {
+        UserName = "admin",
+        PasswordHash = AuthService.HashPassword(defaultPassword),
+        Role = "Admin"
+    });
+    await db.SaveChangesAsync();
+    var seedLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    seedLogger.LogWarning("No admin user found — created default admin. Username: admin, Password: {Password}. Change this immediately.", defaultPassword);
+}
+
 var imageStorage = app.Services.GetRequiredService<ImageStorageService>();
 await imageStorage.InitializeAsync();
 
@@ -103,6 +117,22 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapControllers();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+var minioEndpoint = builder.Configuration["MINIO_ENDPOINT"] ?? "http://minio:9000";
+app.MapGet("/media/{**path}", async (string path, IHttpClientFactory factory, CancellationToken ct) =>
+{
+    try
+    {
+        var client = factory.CreateClient();
+        var response = await client.GetAsync($"{minioEndpoint.TrimEnd('/')}/{path}", ct);
+        if (!response.IsSuccessStatusCode) return Results.NotFound();
+        var stream = await response.Content.ReadAsStreamAsync(ct);
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
+        return Results.Stream(stream, contentType);
+    }
+    catch (OperationCanceledException) { return Results.StatusCode(499); }
+    catch { return Results.StatusCode(502); }
+});
 
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<Program>();
 logger.LogInformation("Lego application starting.");

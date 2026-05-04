@@ -1,5 +1,6 @@
 @page "/users"
 @inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject ImageStorageService ImageStorage
 @using LEGO_Inventory.Database
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
@@ -32,7 +33,7 @@
                     <MudAvatar Style="width: 36px; height: 36px;">
                         @if (context.Item.User.ProfilePictureUrl != null)
                         {
-                            <MudImage Src="@context.Item.User.ProfilePictureUrl" Style="width: 100%; height: 100%; object-fit: cover;"/>
+                            <MudImage Src="@ImageStorage.ResolveUrl(@context.Item.User.ProfilePictureUrl)" Style="width: 100%; height: 100%; object-fit: cover;"/>
                         }
                         else
                         {

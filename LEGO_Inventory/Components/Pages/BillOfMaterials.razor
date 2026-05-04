@@ -9,6 +9,7 @@
 @inject AuthService AuthService
 @inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject UpdateData UpdateData
+@inject ImageStorageService ImageStorage
 @using System.Drawing
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
@@ -70,10 +71,10 @@
                 <MudItem xs="3">
                     <MudImage class="cursor-pointer rounded-2"
                               Elevation="2"
-                              Src="@_set.SetImg"
+                              Src="@ImageStorage.ResolveUrl(_set.SetImg)"
                               Style="height: 150px;"
                               ObjectFit="ObjectFit.Contain"
-                              @onclick="((e) => OpenImagePopup(_set.SetId, _set.Name, _set.SetImg))"/>
+                              @onclick="((e) => OpenImagePopup(_set.SetId, _set.Name, ImageStorage.ResolveUrl(_set.SetImg)))"/>
                 </MudItem>
                 <MudItem xs="6">
                     <MudGrid xs="12">
@@ -126,8 +127,8 @@
                                 <CellTemplate>
                                     <MudStack Row>
                                         <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                  Src="@context.Item.Brick.PartImg" Height="50"
-                                                  @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg))"/>
+                                                  Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)" Height="50"
+                                                  @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg)))"/>
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
@@ -248,8 +249,8 @@
                                 <CellTemplate>
                                     <MudStack Row>
                                         <MudImage class="cursor-pointer rounded-2" Elevation="2"
-                                                  Src="@context.Item.Minifig.MinifigImgUrl" Height="50"
-                                                  @onclick="((e) => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.MinifigName, context.Item.Minifig.MinifigImgUrl))"/>
+                                                  Src="@ImageStorage.ResolveUrl(context.Item.Minifig.MinifigImgUrl)" Height="50"
+                                                  @onclick="((e) => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.MinifigName, ImageStorage.ResolveUrl(context.Item.Minifig.MinifigImgUrl)))"/>
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
@@ -277,8 +278,8 @@
                                             <CellTemplate>
                                                 <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                                                     <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                              Src="@context.Item.Brick.PartImg" Height="50"
-                                                              @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, context.Item.Brick.PartImg))"/>
+                                                              Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)" Height="50"
+                                                              @onclick="((e) => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg)))"/>
                                                 </MudStack>
                                             </CellTemplate>
                                         </TemplateColumn>

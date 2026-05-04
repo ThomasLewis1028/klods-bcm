@@ -6,6 +6,7 @@
 @inject AuthService AuthService
 @inject IDialogService DialogService
 @inject ProtectedLocalStorage LocalStorage
+@inject ImageStorageService ImageStorage
 @implements IDisposable
 
 <PageTitle>LEGO Inventory Tracker</PageTitle>
@@ -33,7 +34,7 @@
                             @if (AuthService.CurrentUser.ProfilePictureUrl != null)
                             {
                                 <MudAvatar Style="width: 32px; height: 32px;">
-                                    <MudImage Src="@AuthService.CurrentUser.ProfilePictureUrl" Style="width: 100%; height: 100%; object-fit: cover;"/>
+                                    <MudImage Src="@ImageStorage.ResolveUrl(AuthService.CurrentUser.ProfilePictureUrl)" Style="width: 100%; height: 100%; object-fit: cover;"/>
                                 </MudAvatar>
                             }
                             else

@@ -4,6 +4,7 @@
 @inject AuthService AuthService
 @inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject IDialogService DialogService
+@inject ImageStorageService ImageStorage
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Components.Layout
 @using LEGO_Inventory.Components.Objects
@@ -246,25 +247,25 @@
         if (sets.Count > 0)
         {
             var picks = PickDistinct(sets, 4);
-            (_catalogSetImg, _catalogSetName) = (picks[0].SetImg, picks[0].Name);
-            (_mySetImg, _mySetName)           = (picks[1].SetImg, picks[1].Name);
-            (_myBomImg, _myBomName)           = (picks[2].SetImg, picks[2].Name);
+            (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(picks[0].SetImg), picks[0].Name);
+            (_mySetImg, _mySetName)           = (ImageStorage.ResolveUrl(picks[1].SetImg), picks[1].Name);
+            (_myBomImg, _myBomName)           = (ImageStorage.ResolveUrl(picks[2].SetImg), picks[2].Name);
         }
 
         var bricks = context.Set<Brick>().Where(b => b.PartImg != null).ToList();
         if (bricks.Count > 0)
         {
             var picks = PickDistinct(bricks, 2);
-            (_catalogBrickImg, _catalogBrickName) = (picks[0].PartImg, picks[0].Name);
-            (_myBrickImg, _myBrickName)           = (picks[1].PartImg, picks[1].Name);
+            (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(picks[0].PartImg), picks[0].Name);
+            (_myBrickImg, _myBrickName)           = (ImageStorage.ResolveUrl(picks[1].PartImg), picks[1].Name);
         }
 
         var minifigs = context.Set<Minifig>().Where(m => m.MinifigImgUrl != null).ToList();
         if (minifigs.Count > 0)
         {
             var picks = PickDistinct(minifigs, 2);
-            (_catalogMinifigImg, _catalogMinifigName) = (picks[0].MinifigImgUrl, picks[0].MinifigName);
-            (_myMinifigImg, _myMinifigName)           = (picks[1].MinifigImgUrl, picks[1].MinifigName);
+            (_catalogMinifigImg, _catalogMinifigName) = (ImageStorage.ResolveUrl(picks[0].MinifigImgUrl), picks[0].MinifigName);
+            (_myMinifigImg, _myMinifigName)           = (ImageStorage.ResolveUrl(picks[1].MinifigImgUrl), picks[1].MinifigName);
         }
 
         return Task.CompletedTask;

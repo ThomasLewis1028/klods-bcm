@@ -642,4 +642,52 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         colorContext.AddRange(colors);
         return context.SaveChanges() > 0;
     }
+
+    public async Task BackfillImagesAsync(IProgress<(int done, int total)>? progress = null, CancellationToken ct = default)
+    {
+        await using var context = contextFactory.CreateDbContext();
+
+        var sets     = await context.Set<Set>()    .Where(s => s.SetImg        != null && s.SetImg.StartsWith("http"))       .ToListAsync(ct);
+        var minifigs = await context.Set<Minifig>().Where(m => m.MinifigImgUrl != null && m.MinifigImgUrl.StartsWith("http")).ToListAsync(ct);
+        var bricks   = await context.Set<Brick>()  .Where(b => b.PartImg       != null && b.PartImg.StartsWith("http"))      .ToListAsync(ct);
+
+        var total = sets.Count + minifigs.Count + bricks.Count;
+        var done = 0;
+
+        // Extract plain data so parallel tasks never touch EF objects
+        var setWork     = sets    .Select((s, i) => (i, src: s.SetImg!,        key: $"sets/{s.SetId}.jpg")).ToArray();
+        var minifigWork = minifigs.Select((m, i) => (i, src: m.MinifigImgUrl!, key: $"minifigs/{m.MinifigId}.jpg")).ToArray();
+        var brickWork   = bricks  .Select((b, i) => (i, src: b.PartImg!,       key: $"bricks/{b.PartNum}-{b.ColorId}.jpg")).ToArray();
+
+        var setUrls     = new string?[sets.Count];
+        var minifigUrls = new string?[minifigs.Count];
+        var brickUrls   = new string?[bricks.Count];
+
+        var sem = new SemaphoreSlim(5, 5);
+
+        async Task ProcessAsync(string src, string key, string?[] results, int index)
+        {
+            await sem.WaitAsync(ct);
+            try   { results[index] = await imageStorage.StoreImageAsync(src, key); }
+            finally
+            {
+                sem.Release();
+                Interlocked.Increment(ref done);
+                progress?.Report((done, total));
+            }
+        }
+
+        var tasks = setWork    .Select(w => ProcessAsync(w.src, w.key, setUrls,     w.i))
+            .Concat(minifigWork.Select(w => ProcessAsync(w.src, w.key, minifigUrls, w.i)))
+            .Concat(brickWork  .Select(w => ProcessAsync(w.src, w.key, brickUrls,   w.i)));
+
+        try   { await Task.WhenAll(tasks); }
+        catch (OperationCanceledException) { }
+
+        for (int i = 0; i < sets.Count;     i++) if (setUrls[i]     != null) sets[i].SetImg        = setUrls[i];
+        for (int i = 0; i < minifigs.Count; i++) if (minifigUrls[i] != null) minifigs[i].MinifigImgUrl = minifigUrls[i];
+        for (int i = 0; i < bricks.Count;   i++) if (brickUrls[i]   != null) bricks[i].PartImg      = brickUrls[i];
+
+        await context.SaveChangesAsync(CancellationToken.None);
+    }
 }
