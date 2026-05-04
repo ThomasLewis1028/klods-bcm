@@ -3,6 +3,7 @@ using LEGO_Inventory.Components;
 using LEGO_Inventory.Database;
 using LEGO_Inventory.Services;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
@@ -68,6 +69,13 @@ builder.Services.AddSingleton(new PendingAuthService { EnabledProviders = enable
 builder.Services.AddCors(options =>
     options.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // ── Build ──────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
@@ -82,6 +90,7 @@ var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<Inven
 await using var db = dbFactory.CreateDbContext();
 await db.Database.MigrateAsync();
 
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
