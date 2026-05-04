@@ -78,7 +78,7 @@ public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
         var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
         if (user == null) return false;
         user.UserName = newUsername;
-        context.SaveChanges();
+        try { context.SaveChanges(); } catch { return false; }
 
         CurrentUser.UserName = newUsername;
         OnChange?.Invoke();
@@ -94,7 +94,7 @@ public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
         var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
         if (user == null) return false;
         user.PasswordHash = HashPassword(newPassword);
-        context.SaveChanges();
+        try { context.SaveChanges(); } catch { return false; }
 
         CurrentUser.PasswordHash = user.PasswordHash;
         return true;
@@ -129,32 +129,34 @@ public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
         return true;
     }
 
-    public void ChangeThemeColor(string? hex)
+    public bool ChangeThemeColor(string? hex)
     {
-        if (CurrentUser == null) return;
+        if (CurrentUser == null) return false;
 
         using var context = contextFactory.CreateDbContext();
         var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
-        if (user == null) return;
+        if (user == null) return false;
         user.PrimaryColor = hex;
-        context.SaveChanges();
+        try { context.SaveChanges(); } catch { return false; }
 
         CurrentUser.PrimaryColor = hex;
         OnChange?.Invoke();
+        return true;
     }
 
-    public void ChangeProfilePicture(string? url)
+    public bool ChangeProfilePicture(string? url)
     {
-        if (CurrentUser == null) return;
+        if (CurrentUser == null) return false;
 
         using var context = contextFactory.CreateDbContext();
         var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
-        if (user == null) return;
+        if (user == null) return false;
         user.ProfilePictureUrl = url;
-        context.SaveChanges();
+        try { context.SaveChanges(); } catch { return false; }
 
         CurrentUser.ProfilePictureUrl = url;
         OnChange?.Invoke();
+        return true;
     }
 
     private static string HashPassword(string password)

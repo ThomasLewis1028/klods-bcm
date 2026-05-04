@@ -335,8 +335,10 @@
 
     private void SelectProfilePicture(string url)
     {
-        AuthService.ChangeProfilePicture(url);
-        Snackbar.Add("Profile picture updated.", Severity.Success);
+        if (AuthService.ChangeProfilePicture(url))
+            Snackbar.Add("Profile picture updated.", Severity.Success);
+        else
+            Snackbar.Add("Failed to update profile picture.", Severity.Error);
     }
 
     private void LinkProvider(string provider)
@@ -374,14 +376,22 @@
 
     private void SelectColor(string hex)
     {
-        AuthService.ChangeThemeColor(hex);
-        ThemeService.SetPrimaryColor(hex);
-        Snackbar.Add("Theme color updated.", Severity.Success);
+        if (AuthService.ChangeThemeColor(hex))
+        {
+            ThemeService.SetPrimaryColor(hex);
+            Snackbar.Add("Theme color updated.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Failed to update theme color.", Severity.Error);
+        }
     }
 
     private void ClearProfilePicture()
     {
-        AuthService.ChangeProfilePicture(null);
-        Snackbar.Add("Profile picture removed.", Severity.Success);
+        if (AuthService.ChangeProfilePicture(null))
+            Snackbar.Add("Profile picture removed.", Severity.Success);
+        else
+            Snackbar.Add("Failed to remove profile picture.", Severity.Error);
     }
 }
