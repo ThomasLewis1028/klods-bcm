@@ -19,6 +19,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Bricks</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudGrid>
     <MudItem xs="12">
         <MudDataGrid T="MyBrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
@@ -132,6 +140,7 @@
 @code {
     private List<MyBrickInfo> _brickInfos = [];
     private string _search = "";
+    private bool _isLoading = true;
 
     protected override void OnInitialized()
     {
@@ -161,31 +170,30 @@
 
         using var context = DbContextFactory.CreateDbContext();
 
-        var userSetCopies = InventoryAggregates.GetSetCopies(context, userId);
+        var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(context, userId);
         var userSetIds = userSetCopies.Keys.ToList();
 
-        var setBricks = context.Set<SetBrick>()
+        var setBricks = await context.Set<SetBrick>()
             .AsNoTracking()
             .Where(sb => userSetIds.Contains(sb.SetId))
-            .ToList();
+            .ToListAsync();
 
         var neededDict = InventoryAggregates.GetBrickNeededDict(setBricks, userSetCopies);
         var setCountDict = InventoryAggregates.GetBrickSetCountDict(setBricks);
 
-        // User's personal BrickOwned
-        var brickOwnedDict = context.Set<BrickOwned>()
+        var brickOwnedDict = (await context.Set<BrickOwned>()
             .AsNoTracking()
             .Where(bo => bo.UserId == userId)
+            .ToListAsync())
             .ToDictionary(bo => (bo.PartNum, bo.ColorId));
 
-        // All relevant brick keys (in set BOMs or in personal inventory)
         var allKeys = neededDict.Keys.Union(brickOwnedDict.Keys).ToHashSet();
         var allPartNums = allKeys.Select(k => k.PartNum).ToList();
 
-        var allBricks = context.Set<Brick>()
+        var allBricks = (await context.Set<Brick>()
             .AsNoTracking()
             .Where(b => allPartNums.Contains(b.PartNum))
-            .ToList()
+            .ToListAsync())
             .Where(b => allKeys.Contains((b.PartNum, b.ColorId)))
             .ToList();
 
@@ -203,6 +211,7 @@
             };
         }).ToList();
 
+        _isLoading = false;
         StateHasChanged();
     }
 
@@ -213,12 +222,12 @@
 
         await using var context = DbContextFactory.CreateDbContext();
 
-        var userSetCopies = InventoryAggregates.GetSetCopies(context, userId);
+        var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(context, userId);
 
-        info.SetBricks = context.Set<SetBrick>()
+        info.SetBricks = await context.Set<SetBrick>()
             .Where(sb => sb.PartNum == info.Brick.PartNum && sb.ColorId == info.Brick.ColorId
                          && userSetCopies.Keys.Contains(sb.SetId))
-            .ToList();
+            .ToListAsync();
 
         info.UserOwnedSetIds = info.SetBricks.Select(sb => sb.SetId).Distinct().ToList();
         info.UserSetCopies = userSetCopies;

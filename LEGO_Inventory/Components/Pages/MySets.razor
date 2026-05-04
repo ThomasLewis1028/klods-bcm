@@ -18,6 +18,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Sets</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudGrid>
     <MudItem xs="12" Style="position: relative;">
         <MudDataGrid T="SetInfo" Items="@_setInfos.OrderBy(b => b.Set.SetId)"
@@ -132,6 +140,7 @@
     private List<Set>? _sets;
     private List<SetInfo>? _setInfos = [];
     private string searchString;
+    private bool _isLoading = true;
 
     protected override void OnInitialized()
     {
@@ -165,27 +174,25 @@
     private async Task LoadDataAsync()
     {
         using var context = DbContextFactory.CreateDbContext();
-        var setContext = context.Set<Set>();
-        var ownedSetContext = context.Set<SetOwned>();
         var userId = AuthService.CurrentUser?.UserId;
 
-        _sets = setContext.ToList();
-        _setInfos.Clear();
+        var sets = await context.Set<Set>().ToListAsync();
+        var allOwned = userId.HasValue
+            ? await context.Set<SetOwned>().Where(so => so.UserId == userId.Value).ToListAsync()
+            : new List<SetOwned>();
+        var ownedBySetId = allOwned.GroupBy(so => so.SetId).ToDictionary(g => g.Key, g => g.ToList());
 
-        foreach (Set set in setContext.ToList())
+        _sets = sets;
+        _setInfos!.Clear();
+
+        foreach (var set in sets)
         {
-            var ownedSets = userId.HasValue
-                ? ownedSetContext.Where(so => so.SetId == set.SetId && so.UserId == userId.Value).ToList()
-                : new List<SetOwned>();
-
+            var ownedSets = ownedBySetId.GetValueOrDefault(set.SetId, []);
             if (userId.HasValue && ownedSets.Count == 0) continue;
-
-            _setInfos?.Add(new SetInfo
-            {
-                Set = set,
-                OwnedSets = ownedSets
-            });
+            _setInfos.Add(new SetInfo { Set = set, OwnedSets = ownedSets });
         }
+
+        _isLoading = false;
     }
 
     private async Task OpenImportDialog()
@@ -203,11 +210,12 @@
 
         using (var context = DbContextFactory.CreateDbContext())
         {
-            var ownedSetContext = context.Set<SetOwned>();
             var userId = AuthService.CurrentUser?.UserId;
             var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
             if (setInfo != null && userId.HasValue)
-                setInfo.OwnedSets = ownedSetContext.Where(so => so.SetId == setId && so.UserId == userId.Value).ToList();
+                setInfo.OwnedSets = await context.Set<SetOwned>()
+                    .Where(so => so.SetId == setId && so.UserId == userId.Value)
+                    .ToListAsync();
         }
 
         StateHasChanged();

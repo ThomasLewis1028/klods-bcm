@@ -20,6 +20,14 @@
     return;
 }
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Profile</MudText>
 
 <MudGrid Spacing="3">
@@ -272,6 +280,8 @@
     private List<Minifig> _minifigs = [];
     private string _minifigSearch = string.Empty;
 
+    private bool _isLoading = true;
+
     private bool CanSavePassword =>
         !string.IsNullOrEmpty(_currentPassword) &&
         !string.IsNullOrEmpty(_newPassword) &&
@@ -281,7 +291,7 @@
         ? _minifigs
         : _minifigs.Where(m => m.MinifigName.Contains(_minifigSearch, StringComparison.OrdinalIgnoreCase));
 
-    protected override Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync()
     {
         _customColorHex = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
         _linkedLogins   = AuthService.GetLinkedLogins();
@@ -296,11 +306,11 @@
             Snackbar.Add("That account is already linked to another user.", Severity.Error);
 
         using var context = DbContextFactory.CreateDbContext();
-        _minifigs = context.Set<Minifig>()
+        _minifigs = await context.Set<Minifig>()
             .Where(m => m.MinifigImgUrl != null && m.MinifigImgUrl != "")
             .OrderBy(m => m.MinifigName)
-            .ToList();
-        return Task.CompletedTask;
+            .ToListAsync();
+        _isLoading = false;
     }
 
     private void SaveUsername()

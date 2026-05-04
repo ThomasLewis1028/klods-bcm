@@ -15,6 +15,17 @@ public static class InventoryAggregates
             .ToDictionary(g => g.Key, g => g.Count());
     }
 
+    public static async Task<Dictionary<string, int>> GetSetCopiesAsync(InventoryContext context, int? userId = null)
+    {
+        var query = context.Set<SetOwned>().AsNoTracking();
+        if (userId.HasValue)
+            query = query.Where(so => so.UserId == userId.Value);
+        var list = await query.ToListAsync();
+        return list
+            .GroupBy(so => so.SetId)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
     public static Dictionary<(string PartNum, string ColorId), int> GetBrickNeededDict(
         IEnumerable<SetBrick> setBricks, Dictionary<string, int> setCopies) =>
         setBricks

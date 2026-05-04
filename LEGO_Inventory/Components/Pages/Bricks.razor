@@ -14,6 +14,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Bricks</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudGrid>
     <MudItem xs="12">
         <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
@@ -118,28 +126,28 @@
     private int _totalStock;
     private int _totalNeeded;
     private string searchString = "";
+    private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
         using var context = DbContextFactory.CreateDbContext();
 
-        // Aggregate stock: personal BrickOwned + allocated SetBrickOwned, across all users
-        var brickOwnedStock = context.Set<BrickOwned>()
-            .AsNoTracking()
+        var brickOwnedList = await context.Set<BrickOwned>().AsNoTracking().ToListAsync();
+        var brickOwnedStock = brickOwnedList
             .GroupBy(bo => new { bo.PartNum, bo.ColorId })
             .ToDictionary(g => (g.Key.PartNum, g.Key.ColorId), g => g.Sum(bo => bo.Stock));
 
-        var setBrickOwnedStock = context.Set<SetBrickOwned>()
-            .AsNoTracking()
+        var setBrickOwnedList = await context.Set<SetBrickOwned>().AsNoTracking().ToListAsync();
+        var setBrickOwnedStock = setBrickOwnedList
             .GroupBy(sbo => new { sbo.PartNum, sbo.ColorId })
             .ToDictionary(g => (g.Key.PartNum, g.Key.ColorId), g => g.Sum(sbo => sbo.Stock));
 
-        var setOwnedCopies = InventoryAggregates.GetSetCopies(context);
-        var allSetBricks = context.Set<SetBrick>().AsNoTracking().ToList();
+        var setOwnedCopies = await InventoryAggregates.GetSetCopiesAsync(context);
+        var allSetBricks = await context.Set<SetBrick>().AsNoTracking().ToListAsync();
         var brickNeededDict = InventoryAggregates.GetBrickNeededDict(allSetBricks, setOwnedCopies);
         var brickSetCountDict = InventoryAggregates.GetBrickSetCountDict(allSetBricks);
 
-        _brickInfos = context.Set<Brick>().AsNoTracking().ToList().Select(b =>
+        _brickInfos = (await context.Set<Brick>().AsNoTracking().ToListAsync()).Select(b =>
         {
             var key = (b.PartNum, b.ColorId);
             var stock = brickOwnedStock.GetValueOrDefault(key, 0)
@@ -155,6 +163,7 @@
 
         _totalStock = _brickInfos.Sum(b => b.TotalStock);
         _totalNeeded = _brickInfos.Sum(b => b.TotalNeeded);
+        _isLoading = false;
 
         StateHasChanged();
     }
@@ -163,10 +172,10 @@
     {
         if (info.IsLoaded) return;
         await using var context = DbContextFactory.CreateDbContext();
-        info.SetBricks = context.Set<SetBrick>()
+        info.SetBricks = await context.Set<SetBrick>()
             .AsNoTracking()
             .Where(sb => sb.PartNum == info.Brick.PartNum && sb.ColorId == info.Brick.ColorId)
-            .ToList();
+            .ToListAsync();
         info.SetIds = info.SetBricks.Select(sb => sb.SetId).Distinct().ToList();
         info.IsLoaded = true;
         StateHasChanged();

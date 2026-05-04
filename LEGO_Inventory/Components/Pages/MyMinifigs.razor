@@ -17,6 +17,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Minifigs</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudGrid>
     <MudItem xs="12">
         <MudDataGrid T="MyMinifigInfo" Items="@_minifigInfos.OrderBy(m => m.Minifig.MinifigId)"
@@ -127,6 +135,7 @@
 @code {
     private List<MyMinifigInfo> _minifigInfos = [];
     private string _search = "";
+    private bool _isLoading = true;
 
     protected override void OnInitialized()
     {
@@ -156,34 +165,36 @@
 
         using var context = DbContextFactory.CreateDbContext();
 
-        var userSetCopies = InventoryAggregates.GetSetCopies(context, userId);
+        var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(context, userId);
         var userSetIds = userSetCopies.Keys.ToList();
 
-        var setMinifigs = context.Set<SetMinifig>()
+        var setMinifigs = await context.Set<SetMinifig>()
             .AsNoTracking()
             .Where(sm => userSetIds.Contains(sm.SetId))
-            .ToList();
+            .ToListAsync();
 
         var neededDict = InventoryAggregates.GetMinifigNeededDict(setMinifigs, userSetCopies);
         var setCountDict = InventoryAggregates.GetMinifigSetCountDict(setMinifigs);
 
-        var minifigOwnedDict = context.Set<MinifigOwned>()
+        var minifigOwnedDict = (await context.Set<MinifigOwned>()
             .AsNoTracking()
             .Where(mo => mo.UserId == userId)
+            .ToListAsync())
             .ToDictionary(mo => mo.MinifigId);
 
         var allMinifigIds = neededDict.Keys.Union(minifigOwnedDict.Keys).ToHashSet();
 
-        var partCounts = context.Set<MinifigBrick>()
+        var partCounts = (await context.Set<MinifigBrick>()
             .AsNoTracking()
             .Where(mb => allMinifigIds.Contains(mb.MinifigID))
+            .ToListAsync())
             .GroupBy(mb => mb.MinifigID)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        var allMinifigs = context.Set<Minifig>()
+        var allMinifigs = await context.Set<Minifig>()
             .AsNoTracking()
             .Where(m => allMinifigIds.Contains(m.MinifigId))
-            .ToList();
+            .ToListAsync();
 
         _minifigInfos = allMinifigs.Select(m =>
         {
@@ -199,6 +210,7 @@
             };
         }).ToList();
 
+        _isLoading = false;
         StateHasChanged();
     }
 
@@ -208,14 +220,14 @@
 
         await using var context = DbContextFactory.CreateDbContext();
 
-        var joined = context.Set<MinifigBrick>()
+        var joined = await context.Set<MinifigBrick>()
             .AsNoTracking()
             .Where(mb => mb.MinifigID == info.Minifig.MinifigId)
             .Join(context.Set<Brick>().AsNoTracking(),
                 mb => new { PartNum = mb.BrickID, mb.ColorId },
                 b  => new { b.PartNum, b.ColorId },
                 (mb, b) => new { Brick = b, mb.Quantity })
-            .ToList();
+            .ToListAsync();
 
         info.Bricks = joined.Select(e => new BrickEntry { Brick = e.Brick, Quantity = e.Quantity }).ToList();
         info.IsLoaded = true;

@@ -23,6 +23,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Bill of Materials</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudGrid>
     <MudItem xs="3">
         <MudGrid>
@@ -336,6 +344,7 @@
     private Dictionary<(string PartNum, string ColorId), BrickOwned> _brickOwnedDict = new();
     private string searchString;
     private bool _showMissing = false;
+    private bool _isLoading = true;
 
     private Set? _set;
 
@@ -363,7 +372,7 @@
         if (_setId != null)
         {
             _setsOwned = userId.HasValue
-                ? setOwnedContext.Where(so => so.SetId == _setId && so.UserId == userId.Value).ToList()
+                ? await setOwnedContext.Where(so => so.SetId == _setId && so.UserId == userId.Value).ToListAsync()
                 : new List<SetOwned>();
             _pageTitle = $"{_setId} - Bill of Materials";
             StateHasChanged();
@@ -374,26 +383,25 @@
             _pageTitle = $"{_setId}-{_setIndex} - Bill of Materials";
             StateHasChanged();
 
-            // Load BOM entries for this set
-            var setBricks = setBrickContext.Where(sb => sb.SetId == _setId).ToList();
-            // Load per-instance stock for this set copy (scoped to current user)
+            var setBricks = await setBrickContext.Where(sb => sb.SetId == _setId).ToListAsync();
             var ownedStock = userId.HasValue
-                ? setBrickOwnedContext
+                ? (await setBrickOwnedContext
                     .Where(sbo => sbo.UserId == userId.Value && sbo.SetId == _setId && sbo.SetIndex == setIndex)
+                    .ToListAsync())
                     .ToDictionary(sbo => (sbo.PartNum, sbo.ColorId))
                 : new Dictionary<(string, string), SetBrickOwned>();
-            // Load personal loose brick inventory for this user
             _brickOwnedDict = userId.HasValue
-                ? context.Set<BrickOwned>()
+                ? (await context.Set<BrickOwned>()
                     .Where(bo => bo.UserId == userId.Value)
+                    .ToListAsync())
                     .ToDictionary(bo => (bo.PartNum, bo.ColorId))
                 : new Dictionary<(string, string), BrickOwned>();
 
             var setBrickPartNums = setBricks.Select(sb => sb.PartNum).ToHashSet();
-            var brickDict = brickContext
+            var brickDict = (await brickContext
                 .Where(b => setBrickPartNums.Contains(b.PartNum))
                 .AsNoTracking()
-                .ToList()
+                .ToListAsync())
                 .ToDictionary(b => (b.PartNum, b.ColorId));
 
             foreach (var setBrick in setBricks)
@@ -411,16 +419,18 @@
             }
 
             var minifigOwnedDict = userId.HasValue
-                ? context.Set<MinifigOwned>()
+                ? (await context.Set<MinifigOwned>()
                     .Where(mo => mo.UserId == userId.Value)
+                    .ToListAsync())
                     .ToDictionary(mo => mo.MinifigId)
                 : new Dictionary<string, MinifigOwned>();
 
-            var setMinifigs = setMinifigContext.Where(sm => sm.SetId == _setId).ToList();
+            var setMinifigs = await setMinifigContext.Where(sm => sm.SetId == _setId).ToListAsync();
             var minifigIds = setMinifigs.Select(sm => sm.MinifigId).ToHashSet();
-            var minifigDict = minifigContext
+            var minifigDict = (await minifigContext
                 .Where(m => minifigIds.Contains(m.MinifigId))
                 .AsNoTracking()
+                .ToListAsync())
                 .ToDictionary(m => m.MinifigId);
 
             foreach (var setMinifig in setMinifigs)
@@ -435,7 +445,7 @@
                 });
             }
 
-            _set = setContext.FirstOrDefault(s => s.SetId == _setId);
+            _set = await setContext.FirstOrDefaultAsync(s => s.SetId == _setId);
             if (_set == null)
             {
                 Nav.NavigateTo("/not-found");
@@ -444,10 +454,11 @@
         }
 
         var ownedSetIds = userId.HasValue
-            ? setOwnedContext.Where(so => so.UserId == userId.Value).Select(so => so.SetId).Distinct().ToHashSet()
+            ? (await setOwnedContext.Where(so => so.UserId == userId.Value).Select(so => so.SetId).Distinct().ToListAsync()).ToHashSet()
             : new HashSet<string>();
-        _sets = setContext.Where(s => ownedSetIds.Contains(s.SetId)).ToList();
+        _sets = await setContext.Where(s => ownedSetIds.Contains(s.SetId)).ToListAsync();
 
+        _isLoading = false;
         StateHasChanged();
         logger.LogTrace("Loading Sets Complete");
     }

@@ -13,6 +13,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Minifigs</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudGrid>
     <MudItem xs="12">
         <MudDataGrid T="MinifigInfo" Items="@_minifigInfos.OrderBy(m => m.Minifig.MinifigId)"
@@ -117,6 +125,7 @@
     private string _pageTitle = "Minifigs";
     private List<MinifigInfo> _minifigInfos = [];
     private string searchString;
+    private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -127,14 +136,15 @@
             var minifigContext = context.Set<Minifig>();
             var minifigBrickContext = context.Set<MinifigBrick>();
 
-            var partCounts = minifigBrickContext
+            var partCounts = (await minifigBrickContext
                 .GroupBy(mb => mb.MinifigID)
                 .Select(g => new { MinifigId = g.Key, Count = g.Count() })
+                .ToListAsync())
                 .ToDictionary(x => x.MinifigId, x => x.Count);
 
             _minifigInfos.Clear();
 
-            foreach (var minifig in minifigContext.ToList())
+            foreach (var minifig in await minifigContext.ToListAsync())
             {
                 partCounts.TryGetValue(minifig.MinifigId, out var count);
                 _minifigInfos.Add(new MinifigInfo
@@ -148,6 +158,7 @@
             }
         }
 
+        _isLoading = false;
         StateHasChanged();
         logger.LogTrace("Loading Minifigs Complete");
     }
@@ -160,14 +171,14 @@
             var minifigBrickContext = context.Set<MinifigBrick>();
             var brickContext = context.Set<Brick>();
 
-            var joined = minifigBrickContext
+            var joined = await minifigBrickContext
                 .AsNoTracking()
                 .Where(mb => mb.MinifigID == minifigInfo.Minifig.MinifigId)
                 .Join(brickContext.AsNoTracking(),
                     mb => new { PartNum = mb.BrickID, mb.ColorId },
                     b  => new { b.PartNum, b.ColorId },
                     (mb, b) => new { MinifigBrick = mb, Brick = b, mb.Quantity })
-                .ToList();
+                .ToListAsync();
 
             minifigInfo.MinifigBricks = joined.Select(e => e.MinifigBrick).ToList();
             minifigInfo.Bricks = joined

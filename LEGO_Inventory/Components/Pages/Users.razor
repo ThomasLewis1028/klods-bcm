@@ -9,6 +9,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Users</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudPaper Elevation="2">
     <MudDataGrid T="UserRow" Items="@_rows" SortMode="SortMode.Multiple" QuickFilter="FilterFunc">
         <ToolBarContent>
@@ -69,40 +77,35 @@
 @code {
     private List<UserRow> _rows = [];
     private string _search = string.Empty;
+    private bool _isLoading = true;
 
-    protected override Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync()
     {
         using var context = DbContextFactory.CreateDbContext();
 
-        var setCounts = context.Set<SetOwned>()
-            .AsNoTracking()
+        var setCounts = (await context.Set<SetOwned>().AsNoTracking().ToListAsync())
             .GroupBy(so => so.UserId)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        var brickCounts = context.Set<BrickOwned>()
-            .AsNoTracking()
+        var brickCounts = (await context.Set<BrickOwned>().AsNoTracking().ToListAsync())
             .GroupBy(bo => bo.UserId)
             .ToDictionary(g => g.Key, g => g.Sum(bo => bo.Stock));
 
-        var minifigCounts = context.Set<MinifigOwned>()
-            .AsNoTracking()
+        var minifigCounts = (await context.Set<MinifigOwned>().AsNoTracking().ToListAsync())
             .GroupBy(mo => mo.UserId)
             .ToDictionary(g => g.Key, g => g.Sum(mo => mo.Stock));
 
-        _rows = context.Users
-            .AsNoTracking()
-            .OrderBy(u => u.UserName)
-            .ToList()
+        _rows = (await context.Users.AsNoTracking().OrderBy(u => u.UserName).ToListAsync())
             .Select(u => new UserRow
             {
                 User = u,
-                OwnedSets    = setCounts.GetValueOrDefault(u.UserId, 0),
-                OwnedBricks  = brickCounts.GetValueOrDefault(u.UserId, 0),
+                OwnedSets     = setCounts.GetValueOrDefault(u.UserId, 0),
+                OwnedBricks   = brickCounts.GetValueOrDefault(u.UserId, 0),
                 OwnedMinifigs = minifigCounts.GetValueOrDefault(u.UserId, 0)
             })
             .ToList();
 
-        return Task.CompletedTask;
+        _isLoading = false;
     }
 
     private bool FilterFunc(UserRow row) =>

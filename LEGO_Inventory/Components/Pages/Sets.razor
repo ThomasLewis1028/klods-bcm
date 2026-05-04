@@ -16,6 +16,14 @@
 
 <MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">Sets</MudText>
 
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
 <MudGrid>
     @* Stats *@
     <MudItem xs="12" sm="6" md="3">
@@ -121,15 +129,17 @@
     private int _totalOwnedInstances;
     private int _totalOwners;
     private int _totalPieces;
+    private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
         using var context = DbContextFactory.CreateDbContext();
         var userId = AuthService.CurrentUser?.UserId;
 
-        var sets = context.Set<Set>().ToList();
-        var ownedCounts = context.Set<SetOwned>()
+        var sets = await context.Set<Set>().ToListAsync();
+        var ownedCounts = (await context.Set<SetOwned>()
             .Where(so => userId.HasValue && so.UserId == userId.Value)
+            .ToListAsync())
             .GroupBy(so => so.SetId)
             .ToDictionary(g => g.Key, g => g.Count());
 
@@ -140,9 +150,10 @@
         }).ToList();
 
         _totalSets = sets.Count;
-        _totalOwnedInstances = context.Set<SetOwned>().Count();
-        _totalOwners = context.Set<SetOwned>().Select(so => so.UserId).Distinct().Count();
+        _totalOwnedInstances = await context.Set<SetOwned>().CountAsync();
+        _totalOwners = await context.Set<SetOwned>().Select(so => so.UserId).Distinct().CountAsync();
         _totalPieces = sets.Sum(s => s.NumBricks);
+        _isLoading = false;
 
         StateHasChanged();
     }
@@ -174,10 +185,10 @@
         using var context = DbContextFactory.CreateDbContext();
         var userId = AuthService.CurrentUser.UserId;
 
-        var toRemove = context.Set<SetOwned>()
+        var toRemove = await context.Set<SetOwned>()
             .Where(so => so.UserId == userId && so.SetId == row.Set.SetId)
             .OrderByDescending(so => so.SetIndex)
-            .FirstOrDefault();
+            .FirstOrDefaultAsync();
 
         if (toRemove == null) return;
 
