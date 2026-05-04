@@ -1,10 +1,11 @@
 using System.Text.Json.Nodes;
 using LEGO_Inventory.Database;
+using LEGO_Inventory.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace LEGO_Inventory;
 
-public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger)
+public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger, ImageStorageService imageStorage)
 {
 
     /// <summary>
@@ -206,6 +207,10 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         using var context = contextFactory.CreateDbContext();
         var setContext = context.Set<Set>();
 
+        var setImg = await imageStorage.StoreImageAsync(
+            setInfo!["set_img_url"]?.ToString(),
+            $"sets/{setId}.jpg");
+
         if (setContext.Any(s => s.SetId == setId))
         {
             var set = setContext.First(s => s.SetId == setId);
@@ -213,7 +218,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             if (set.DateModified >= DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()).ToUniversalTime())
             {
                 set.Name = setInfo!["name"]!.ToString();
-                set.SetImg = setInfo!["set_img_url"]!.ToString();
+                set.SetImg = setImg;
                 set.SetURL = setInfo!["set_url"]!.ToString();
                 set.DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()).ToUniversalTime();
                 set.NumBricks = int.Parse(setInfo!["num_parts"]!.ToString());
@@ -229,7 +234,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 SetId = setInfo!["set_num"]!.ToString(),
                 Name = setInfo!["name"]!.ToString(),
                 SetURL = setInfo["set_url"]?.ToString(),
-                SetImg = setInfo!["set_img_url"]?.ToString(),
+                SetImg = setImg,
                 DateModified = DateTime.Parse(setInfo!["last_modified_dt"]!.ToString()).ToUniversalTime(),
                 NumBricks = int.Parse(setInfo!["num_parts"]!.ToString()),
                 ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
@@ -342,11 +347,15 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
         JsonObject? minifigJsonObject = await api.GetMinifigInfo(minifigId);
 
+        var minifigImg = await imageStorage.StoreImageAsync(
+            minifigJsonObject!["set_img_url"]?.ToString(),
+            $"minifigs/{minifigId}.jpg");
+
         var minifig = new Minifig
         {
             MinifigId = minifigId,
             MinifigName = minifigJsonObject!["name"]?.ToString(),
-            MinifigImgUrl = minifigJsonObject["set_img_url"]?.ToString(),
+            MinifigImgUrl = minifigImg,
             MinifigUrl = minifigJsonObject["set_url"]?.ToString(),
         };
 
@@ -465,7 +474,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             }
             else
             {
-                Brick newBrick = ImportBrick(brick);
+                Brick newBrick = await ImportBrickAsync(brick);
                 minifigBrick = new MinifigBrick
                 {
                     MinifigID = minifigId,
@@ -506,7 +515,9 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             var isTrans = color["is_trans"]!.ToString().Equals("true");
 
             JsonObject partColorInfo = (await api.GetPartColorInfo(brickId, colorId))!.AsObject();
-            var partImg = partColorInfo!["part_img_url"]?.ToString() ?? null;
+            var partImg = await imageStorage.StoreImageAsync(
+                partColorInfo!["part_img_url"]?.ToString(),
+                $"bricks/{partNum}-{colorId}.jpg");
 
             brickContext.Add(new Brick
             {
@@ -549,7 +560,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 if (!brickContext.Any(b => b.PartNum == part!["part"]!["part_num"]!.ToString()
                                            && b.ColorId == part!["color"]!["id"]!.ToString()))
                 {
-                    ImportBrick(part);
+                    await ImportBrickAsync(part);
                     saveCount += context.SaveChanges();
                 }
             }
@@ -564,7 +575,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         }
     }
 
-    public Brick ImportBrick(JsonNode part)
+    public async Task<Brick> ImportBrickAsync(JsonNode part)
     {
         logger.LogInformation($"Importing set parts for {part!["part"]!["part_num"]}");
         using var context = contextFactory.CreateDbContext();
@@ -577,11 +588,14 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         var partNum = part!["part"]!["part_num"]!.ToString();
         var name = part!["part"]!["name"]!.ToString();
         var partUrl = part["part"]?["part_url"]?.ToString() ?? null;
-        var partImg = part["part"]?["part_img_url"]?.ToString() ?? null;
         var colorId = part["color"]?["id"]?.ToString() ?? null;
         var colorName = part["color"]?["name"]?.ToString() ?? null;
         var rgb = part["color"]?["rgb"]?.ToString() ?? null;
         var isTrans = part!["color"]!["is_trans"]!.ToString().Equals("true");
+
+        var partImg = await imageStorage.StoreImageAsync(
+            part["part"]?["part_img_url"]?.ToString(),
+            $"bricks/{partNum}-{colorId}.jpg");
 
         var brick = new Brick
         {

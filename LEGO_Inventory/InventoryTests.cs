@@ -1,5 +1,7 @@
 using LEGO_Inventory.Database;
+using LEGO_Inventory.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -54,6 +56,19 @@ public class InventoryTests
             return services.BuildServiceProvider().GetRequiredService<IDbContextFactory<InventoryContext>>();
         }
 
+        // Returns an ImageStorageService that gracefully falls back to the original URL
+        // when MinIO is unavailable (expected in test environments).
+        private static ImageStorageService CreateImageStorage()
+        {
+            var services = new ServiceCollection();
+            services.AddHttpClient();
+            var provider = services.BuildServiceProvider();
+            return new ImageStorageService(
+                provider.GetRequiredService<IHttpClientFactory>(),
+                new ConfigurationBuilder().Build(),
+                NullLogger<ImageStorageService>.Instance);
+        }
+
         private static void CleanupBomData(InventoryContext context, string setId)
         {
             context.Set<SetBrick>().Where(sb => sb.SetId == setId).ExecuteDelete();
@@ -73,7 +88,7 @@ public class InventoryTests
         public async Task ImportSetInfoTest()
         {
             var factory = CreateFactory();
-            var importData = new ImportData(factory, NullLogger<ImportData>.Instance);
+            var importData = new ImportData(factory, NullLogger<ImportData>.Instance, CreateImageStorage());
 
             Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
 
@@ -93,7 +108,7 @@ public class InventoryTests
 
             try
             {
-                var importData = new ImportData(factory, NullLogger<ImportData>.Instance);
+                var importData = new ImportData(factory, NullLogger<ImportData>.Instance, CreateImageStorage());
 
                 Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
                 Assert.IsTrue(await importData.AddOwnedSet("4502-1", userId));

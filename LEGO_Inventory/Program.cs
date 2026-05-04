@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ── Core services ──────────────────────────────────────────────────────────
 builder.Services.AddDbContextFactory<InventoryContext>();
+builder.Services.AddSingleton<ImageStorageService>();
 builder.Services.AddScoped<ImportData>();
 builder.Services.AddScoped<UpdateData>();
 builder.Services.AddScoped<DeleteData>();
@@ -89,6 +90,9 @@ await using var scope = app.Services.CreateAsyncScope();
 var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InventoryContext>>();
 await using var db = dbFactory.CreateDbContext();
 await db.Database.MigrateAsync();
+
+var imageStorage = app.Services.GetRequiredService<ImageStorageService>();
+await imageStorage.InitializeAsync();
 
 app.UseForwardedHeaders();
 app.UseHttpsRedirection();
