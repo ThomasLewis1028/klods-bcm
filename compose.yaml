@@ -1,0 +1,86 @@
+services:
+  # https://github.com/felipewom/docker-compose-postgres/blob/main/README.md
+  postgres:
+    image: 'postgres:17'
+    ports:
+      - 5432:5432
+    env_file:
+      - .env
+    networks:
+      - lego-network
+    volumes:
+      - lego-db-volume:/var/lib/postgresql/data/:rw
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
+        ]
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
+
+  pgwebadmin:
+    image: dpage/pgadmin4
+    ports:
+      - 8888:80
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+    networks:
+      - lego-network
+    volumes:
+      - lego-pgadmin-volume:/var/lib/pgadmin/:rw
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file:
+      - .env
+    networks:
+      - lego-network
+    volumes:
+      - lego-minio-volume:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  lego_inventory:
+    image: lego_inventory
+    build:
+      context: .
+      dockerfile: LEGO_Inventory/Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      minio:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "8080:8080"
+    networks:
+      - lego-network
+    volumes:
+      - lego-volume:/home/app/.local/share:rw
+
+volumes:
+  lego-volume:
+  lego-db-volume:
+  lego-pgadmin-volume:
+  lego-minio-volume:
+
+networks:
+  lego-network:
+    driver: bridge
