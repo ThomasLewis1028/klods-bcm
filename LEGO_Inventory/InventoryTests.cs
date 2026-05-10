@@ -34,11 +34,11 @@ public class InventoryTests
         }
 
         [TestMethod]
-        public void GetSetPartInfoTest()
+        public void GetMinifigPartsTest()
         {
             RebrickableApi api = new RebrickableApi();
 
-            var response = api.GetPartInfo("3001");
+            var response = api.GetMinifigParts("fig-001162");
 
             Assert.IsNotNull(response.Result);
 
