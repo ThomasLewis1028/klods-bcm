@@ -32,6 +32,18 @@ public class RebrickableApi
         return await SendQuery($"{BaseUrl}themes/{themeId}/?");
     }
 
+    public async Task<JsonObject?> GetPartInfo(string partNum)
+    {
+        _logger.LogInformation("Getting part info for {PartNum}", partNum);
+        return await SendQuery($"{BaseUrl}parts/{partNum}/?");
+    }
+
+    public async Task<JsonObject?> SearchMinifigs(string query, int page = 1)
+    {
+        _logger.LogInformation("Searching minifigs for {Query} (page {Page})", query, page);
+        return await SendQuery($"{BaseUrl}minifigs/?search={Uri.EscapeDataString(query)}&page={page}&page_size=25&");
+    }
+
     // ── List endpoints (auto-paginated, returns all results) ─────────────────
 
     public async Task<JsonArray?> GetSetParts(string setId)

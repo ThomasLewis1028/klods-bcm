@@ -6,6 +6,7 @@
 @inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject UpdateData UpdateData
 @inject ImageStorageService ImageStorage
+@inject ImportData ImportData
 @using System.Drawing
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
@@ -44,6 +45,14 @@
                 <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
                               Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
                               IconSize="Size.Medium" Class="mt-0"/>
+                <MudTooltip Text="@(AuthService.CurrentUser == null ? "Sign in to import" : "Add loose bricks by part number")">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                               StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Add)"
+                               Disabled="@(AuthService.CurrentUser == null)"
+                               OnClick="OpenImportBrickDialog">
+                        Add Bricks
+                    </MudButton>
+                </MudTooltip>
             </ToolBarContent>
             <Columns>
                 <HierarchyColumn T="MyBrickInfo" ButtonDisabledFunc="@(info => info.UserSetCount == 0)"/>
@@ -163,6 +172,15 @@
     public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
 
     protected override async Task OnInitializedAsync() => await LoadDataAsync();
+
+    private async Task OpenImportBrickDialog()
+    {
+        var dialog = await DialogService.ShowAsync<ImportBrickDialog>("Add Loose Bricks",
+            new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+            await OnInitializedAsync();
+    }
 
     private async Task LoadDataAsync()
     {

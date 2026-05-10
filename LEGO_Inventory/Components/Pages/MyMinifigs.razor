@@ -5,6 +5,7 @@
 @inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject UpdateData UpdateData
 @inject ImageStorageService ImageStorage
+@inject ImportData ImportData
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
@@ -42,6 +43,14 @@
                 <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
                               Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
                               IconSize="Size.Medium" Class="mt-0"/>
+                <MudTooltip Text="@(AuthService.CurrentUser == null ? "Sign in to import" : "Import a minifig")">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                               StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Download)"
+                               Disabled="@(AuthService.CurrentUser == null)"
+                               OnClick="OpenImportMinifigDialog">
+                        Import
+                    </MudButton>
+                </MudTooltip>
             </ToolBarContent>
             <Columns>
                 <HierarchyColumn T="MyMinifigInfo" ButtonDisabledFunc="@(info => info.PartCount == 0)"/>
@@ -158,6 +167,15 @@
     public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
 
     protected override async Task OnInitializedAsync() => await LoadDataAsync();
+
+    private async Task OpenImportMinifigDialog()
+    {
+        var dialog = await DialogService.ShowAsync<ImportMinifigDialog>("Import Minifigs",
+            new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+            await OnInitializedAsync();
+    }
 
     private async Task LoadDataAsync()
     {

@@ -652,6 +652,194 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         return saved > 0;
     }
 
+    /// <summary>
+    /// Resolves a minifig ID or search term to one or more Rebrickable minifig candidates.
+    /// Tries exact match first (if input looks like "fig-XXXXXX"), then falls back to search.
+    /// </summary>
+    public async Task<(MinifigCandidate? Resolved, List<MinifigCandidate> Candidates, bool NotFound, bool HasMore)>
+        ResolveMinifigId(string input, int page = 1)
+    {
+        var api = new RebrickableApi();
+        var trimmed = input.Trim();
+
+        if (page == 1)
+        {
+            try
+            {
+                var info = await api.GetMinifigInfo(trimmed);
+                if (info != null)
+                    return (ToMinifigCandidate(info), [], false, false);
+            }
+            catch { /* not an exact ID — fall through to search */ }
+        }
+
+        var searchResult = await api.SearchMinifigs(trimmed, page);
+        if (searchResult == null)
+            return (null, [], true, false);
+
+        var candidates = searchResult["results"]!.AsArray()
+            .Where(r => r != null)
+            .Select(r => ToMinifigCandidate(r!))
+            .ToList();
+
+        var hasMore = searchResult["next"] != null;
+
+        if (candidates.Count == 0 && !hasMore) return (null, [], true, false);
+        if (candidates.Count == 1 && !hasMore) return (candidates[0], [], false, false);
+        return (null, candidates, false, hasMore);
+    }
+
+    private static MinifigCandidate ToMinifigCandidate(JsonNode node) => new(
+        node["set_num"]!.ToString(),
+        node["name"]!.ToString(),
+        node["num_parts"] != null ? int.Parse(node["num_parts"]!.ToString()) : 0,
+        node["set_img_url"]?.ToString()
+    );
+
+    /// <summary>
+    /// Imports a minifig from Rebrickable (if not already present) and creates/increments
+    /// a MinifigOwned row for the user. Also ensures BrickOwned rows exist for all parts.
+    /// </summary>
+    public async Task<bool> AddOwnedMinifig(string minifigId, int? userId, int count = 1)
+    {
+        if (userId == null)
+        {
+            logger.LogWarning("AddOwnedMinifig called without userId for {MinifigId}", minifigId);
+            return false;
+        }
+
+        logger.LogInformation("Adding owned minifig {MinifigId} for user {UserId}", minifigId, userId);
+
+        await ImportMinifig(minifigId);
+        await LinkMinifigBricks(minifigId);
+
+        await using var context = contextFactory.CreateDbContext();
+        var minifigOwnedContext = context.Set<MinifigOwned>();
+
+        var existing = await minifigOwnedContext
+            .FirstOrDefaultAsync(m => m.UserId == userId.Value && m.MinifigId == minifigId);
+
+        if (existing == null)
+            minifigOwnedContext.Add(new MinifigOwned { UserId = userId.Value, MinifigId = minifigId, Stock = count });
+        else
+            existing.Stock += count;
+
+        await context.SaveChangesAsync();
+        await EnsureMinifigBricksOwned(userId.Value, minifigId);
+
+        logger.LogInformation("Finished adding owned minifig {MinifigId} for user {UserId}", minifigId, userId);
+        return true;
+    }
+
+    private async Task EnsureMinifigBricksOwned(int userId, string minifigId)
+    {
+        await using var context = contextFactory.CreateDbContext();
+
+        var brickKeys = await context.Set<MinifigBrick>()
+            .Where(mb => mb.MinifigID == minifigId)
+            .Select(mb => new { mb.BrickID, mb.ColorId })
+            .ToListAsync();
+
+        var partNums = brickKeys.Select(k => k.BrickID).ToList();
+
+        var existingKeys = (await context.Set<BrickOwned>()
+            .Where(bo => bo.UserId == userId && partNums.Contains(bo.PartNum))
+            .Select(bo => new { bo.PartNum, bo.ColorId })
+            .ToListAsync())
+            .Select(k => (k.PartNum, k.ColorId))
+            .ToHashSet();
+
+        foreach (var key in brickKeys)
+        {
+            if (!existingKeys.Contains((key.BrickID, key.ColorId)))
+            {
+                context.Set<BrickOwned>().Add(new BrickOwned
+                {
+                    UserId = userId,
+                    PartNum = key.BrickID,
+                    ColorId = key.ColorId,
+                    Stock = 0,
+                });
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Looks up a part number on Rebrickable and returns its name + all available colors.
+    /// </summary>
+    public async Task<(string? PartName, List<PartColorInfo> Colors, bool NotFound)>
+        ResolvePartColors(string partNum)
+    {
+        var api = new RebrickableApi();
+        var trimmed = partNum.Trim();
+
+        JsonObject? partInfo;
+        try
+        {
+            partInfo = await api.GetPartInfo(trimmed);
+            if (partInfo == null) return (null, [], true);
+        }
+        catch { return (null, [], true); }
+
+        var partName = partInfo["name"]?.ToString();
+        var colorResults = await api.GetPartColors(trimmed);
+        if (colorResults == null) return (partName, [], false);
+
+        var colors = colorResults
+            .Where(c => c != null)
+            .Select(c => new PartColorInfo(
+                c!["color_id"]!.ToString(),
+                c["color_name"]!.ToString(),
+                c["elements"]?.AsArray().FirstOrDefault()?["part_img_url"]?.ToString()
+            ))
+            .ToList();
+
+        return (partName, colors, false);
+    }
+
+    /// <summary>
+    /// Ensures a Brick catalog record exists for the given part+color, then adds the specified
+    /// quantity to the user's BrickOwned stock (creates the row if absent, otherwise increments).
+    /// </summary>
+    public async Task AddLooseBrick(string partNum, string partName, PartColorInfo colorInfo, int quantity, int userId)
+    {
+        logger.LogInformation("Adding loose brick {PartNum}/{ColorId} for user {UserId}", partNum, colorInfo.ColorId, userId);
+
+        await using var context = contextFactory.CreateDbContext();
+        var brickContext = context.Set<Brick>();
+
+        if (!await brickContext.AnyAsync(b => b.PartNum == partNum && b.ColorId == colorInfo.ColorId))
+        {
+            var colorRow = await context.Set<Color>().FirstOrDefaultAsync(c => c.Id == colorInfo.ColorId);
+            var partImg = await imageStorage.StoreImageAsync(colorInfo.PartImgUrl, $"bricks/{partNum}-{colorInfo.ColorId}.jpg");
+
+            brickContext.Add(new Brick
+            {
+                PartNum = partNum,
+                Name = partName,
+                ColorId = colorInfo.ColorId,
+                ColorName = colorInfo.ColorName,
+                HexColor = colorRow?.Hex,
+                IsTrans = colorRow?.IsTrans ?? false,
+                PartImg = partImg,
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var brickOwnedContext = context.Set<BrickOwned>();
+        var existing = await brickOwnedContext
+            .FirstOrDefaultAsync(bo => bo.UserId == userId && bo.PartNum == partNum && bo.ColorId == colorInfo.ColorId);
+
+        if (existing == null)
+            brickOwnedContext.Add(new BrickOwned { UserId = userId, PartNum = partNum, ColorId = colorInfo.ColorId, Stock = quantity });
+        else
+            existing.Stock += quantity;
+
+        await context.SaveChangesAsync();
+    }
+
     public async Task BackfillImagesAsync(IProgress<(int done, int total)>? progress = null, CancellationToken ct = default)
     {
         await using var context = contextFactory.CreateDbContext();

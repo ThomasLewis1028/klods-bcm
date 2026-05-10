@@ -1,0 +1,171 @@
+@inject AuthService AuthService
+@inject ImportData ImportData
+@using LEGO_Inventory.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(_step == Step.Input ? "Add Loose Bricks" : "Choose Colors")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            @* ── Step 1: Enter part number ──────────────────────────────── *@
+            @if (_step == Step.Input)
+            {
+                <MudTextField @bind-Value="_partNum" Label="Part Number" Variant="Variant.Outlined"
+                              Immediate="true" HelperText="e.g. 3001 or 6558"/>
+                @if (_notFound)
+                {
+                    <MudAlert Severity="Severity.Error">
+                        Part "@_partNum" could not be found on Rebrickable.
+                    </MudAlert>
+                }
+            }
+
+            @* ── Step 2: Select colors + quantities ─────────────────────── *@
+            else if (_step == Step.Colors)
+            {
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@_partName</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Enter 0 to skip a color. Only colors with count > 0 will be added.
+                </MudText>
+
+                @foreach (var entry in _colorEntries)
+                {
+                    <MudPaper Elevation="1" Class="pa-2">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                            @if (entry.Color.PartImgUrl != null)
+                            {
+                                <img src="@entry.Color.PartImgUrl"
+                                     style="width:50px;height:50px;object-fit:contain;" alt=""/>
+                            }
+                            else
+                            {
+                                <div style="width:50px;height:50px;background:var(--mud-palette-background-grey);border-radius:4px;"/>
+                            }
+                            <MudText Style="flex:1">@entry.Color.ColorName</MudText>
+                            <MudNumericField @bind-Value="entry.Quantity" Label="Count"
+                                             Min="0" Style="max-width:90px;" Variant="Variant.Outlined"/>
+                        </MudStack>
+                    </MudPaper>
+                }
+
+                @if (!_colorEntries.Any())
+                {
+                    <MudAlert Severity="Severity.Info">No color variants found for this part.</MudAlert>
+                }
+            }
+
+            @* ── Importing ──────────────────────────────────────────────── *@
+            else if (_step == Step.Importing)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
+                <MudText Typo="Typo.caption" Align="Align.Center">@_statusMessage</MudText>
+            }
+
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        @if (_step == Step.Input)
+        {
+            <MudButton OnClick="Cancel" Variant="Variant.Filled">Cancel</MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="LookUpPart"
+                       Disabled="@(string.IsNullOrWhiteSpace(_partNum) || _isLookingUp)">
+                @if (_isLookingUp)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                }
+                Look Up
+            </MudButton>
+        }
+        else if (_step == Step.Colors)
+        {
+            <MudButton Variant="Variant.Filled" OnClick="@(() => { _step = Step.Input; _notFound = false; })">
+                Back
+            </MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartImport"
+                       Disabled="@(!_colorEntries.Any(e => e.Quantity > 0))">
+                Add to Inventory
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private enum Step { Input, Colors, Importing }
+
+    private Step _step = Step.Input;
+    private string _partNum = "";
+    private string? _partName;
+    private bool _notFound;
+    private bool _isLookingUp;
+    private string _statusMessage = "";
+    private List<ColorEntry> _colorEntries = [];
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task LookUpPart()
+    {
+        _isLookingUp = true;
+        _notFound = false;
+        StateHasChanged();
+
+        try
+        {
+            var (partName, colors, notFound) = await ImportData.ResolvePartColors(_partNum);
+            if (notFound || partName == null)
+            {
+                _notFound = true;
+                return;
+            }
+
+            _partName = partName;
+            _colorEntries = colors.Select(c => new ColorEntry { Color = c, Quantity = 0 }).ToList();
+            _step = Step.Colors;
+        }
+        catch
+        {
+            _notFound = true;
+        }
+        finally
+        {
+            _isLookingUp = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartImport()
+    {
+        _step = Step.Importing;
+        StateHasChanged();
+
+        var userId = AuthService.CurrentUser?.UserId;
+        if (userId == null)
+        {
+            MudDialog.Cancel();
+            return;
+        }
+
+        foreach (var entry in _colorEntries.Where(e => e.Quantity > 0))
+        {
+            _statusMessage = $"Adding {entry.Color.ColorName}...";
+            StateHasChanged();
+            await ImportData.AddLooseBrick(_partNum.Trim(), _partName!, entry.Color, entry.Quantity, userId.Value);
+        }
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private class ColorEntry
+    {
+        public required PartColorInfo Color { get; init; }
+        public int Quantity { get; set; }
+    }
+}

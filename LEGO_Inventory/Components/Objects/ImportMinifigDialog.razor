@@ -1,0 +1,320 @@
+@inject AuthService AuthService
+@inject ImportData ImportData
+@using LEGO_Inventory.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(_step switch {
+                Step.Input      => "Import Minifigs",
+                Step.Confirming => "Review Minifigs",
+                _               => "Importing..."
+            })
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            @* ── Step 1: Input ──────────────────────────────────────────── *@
+            @if (_step == Step.Input)
+            {
+                @for (int i = 0; i < _entries.Count; i++)
+                {
+                    var entry = _entries[i];
+                    var idx = i;
+                    <MudPaper Elevation="1" Class="pa-3">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                            <MudTextField @bind-Value="entry.SearchTerm" Label="Minifig ID or name" Variant="Variant.Outlined"
+                                          Immediate="true" Style="flex: 1; min-width: 160px;"
+                                          HelperText="e.g. fig-001162 or Darth Vader"/>
+                            <MudNumericField @bind-Value="entry.Count" Label="Count" Variant="Variant.Outlined"
+                                             Min="1" Style="max-width: 90px;"/>
+                            @if (_entries.Count > 1)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                               OnClick="() => RemoveEntry(idx)"/>
+                            }
+                        </MudStack>
+                    </MudPaper>
+                }
+                <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddEntry" Variant="Variant.Text">
+                    Add another
+                </MudButton>
+            }
+
+            @* ── Step 2: Resolve + Confirm ──────────────────────────────── *@
+            else if (_step == Step.Confirming)
+            {
+                @foreach (var item in _resolutions.ToList())
+                {
+                    <MudPaper Elevation="1" Class="pa-3">
+                        @if (item.IsLoading)
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+                                <MudText>Searching "@item.Input"...</MudText>
+                            </MudStack>
+                        }
+                        else if (item.NotFound)
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error"/>
+                                <MudText Style="flex:1">"@item.Input" could not be found on Rebrickable.</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                               Color="Color.Default"
+                                               OnClick="() => _resolutions.Remove(item)"/>
+                            </MudStack>
+                        }
+                        else if (item.ResolvedCandidate != null)
+                        {
+                            @* Single auto-resolved minifig *@
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                                @if (item.ResolvedCandidate.ImageUrl != null)
+                                {
+                                    <img src="@item.ResolvedCandidate.ImageUrl"
+                                         style="width:60px;height:60px;object-fit:contain;" alt=""/>
+                                }
+                                <MudStack Spacing="0" Style="flex:1">
+                                    <MudText Typo="Typo.body1">@item.ResolvedCandidate.Name</MudText>
+                                    <MudText Typo="Typo.caption">
+                                        @item.ResolvedCandidate.MinifigId — @item.ResolvedCandidate.NumParts parts
+                                    </MudText>
+                                </MudStack>
+                                <MudNumericField @bind-Value="item.ResolvedCount" Label="Count"
+                                                 Min="1" Style="max-width:90px;" Variant="Variant.Outlined"/>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                               Color="Color.Default"
+                                               OnClick="() => _resolutions.Remove(item)"/>
+                            </MudStack>
+                        }
+                        else if (item.Candidates.Any())
+                        {
+                            @* Multiple results — user picks which ones they own *@
+                            <MudStack Spacing="2">
+                                <MudStack Row AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.subtitle2" Style="flex:1">
+                                        Results for "@item.Input" — set count to 0 to skip:
+                                    </MudText>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                   Color="Color.Default"
+                                                   OnClick="() => _resolutions.Remove(item)"/>
+                                </MudStack>
+
+                                @foreach (var candidate in item.Candidates)
+                                {
+                                    <MudPaper Elevation="0" Class="pa-2"
+                                              Style="background:var(--mud-palette-background-grey);">
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                                            @if (candidate.Candidate.ImageUrl != null)
+                                            {
+                                                <img src="@candidate.Candidate.ImageUrl"
+                                                     style="width:50px;height:50px;object-fit:contain;" alt=""/>
+                                            }
+                                            <MudStack Spacing="0" Style="flex:1">
+                                                <MudText Typo="Typo.body2">@candidate.Candidate.Name</MudText>
+                                                <MudText Typo="Typo.caption">
+                                                    @candidate.Candidate.MinifigId — @candidate.Candidate.NumParts parts
+                                                </MudText>
+                                            </MudStack>
+                                            <MudNumericField @bind-Value="candidate.Count" Label="Count"
+                                                             Min="0" Style="max-width:90px;"
+                                                             Variant="Variant.Outlined"/>
+                                        </MudStack>
+                                    </MudPaper>
+                                }
+
+                                @if (item.HasMore)
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                                               OnClick="() => LoadMoreCandidates(item)">
+                                        Load more results
+                                    </MudButton>
+                                }
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Minifigs with count 0 will be skipped.
+                                </MudText>
+                            </MudStack>
+                        }
+                    </MudPaper>
+                }
+
+                @if (!_resolutions.Any())
+                {
+                    <MudAlert Severity="Severity.Info">All entries removed. Click Back to start over.</MudAlert>
+                }
+            }
+
+            @* ── Step 3: Import progress ────────────────────────────────── *@
+            else if (_step == Step.Importing)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
+                <MudText Typo="Typo.caption" Align="Align.Center">@_statusMessage</MudText>
+            }
+
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        @if (_step == Step.Input)
+        {
+            <MudButton OnClick="Cancel" Variant="Variant.Filled">Cancel</MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartResolving"
+                       Disabled="@(!_entries.Any(e => !string.IsNullOrWhiteSpace(e.SearchTerm)))">
+                Search
+            </MudButton>
+        }
+        else if (_step == Step.Confirming)
+        {
+            <MudButton Variant="Variant.Filled" OnClick="@(() => _step = Step.Input)"
+                       Disabled="@IsResolving">
+                Back
+            </MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartImport"
+                       Disabled="@(!CanImport)">
+                Import
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private enum Step { Input, Confirming, Importing }
+
+    private Step _step = Step.Input;
+    private List<MinifigImportEntry> _entries = [new MinifigImportEntry()];
+    private List<MinifigResolutionItem> _resolutions = [];
+    private string _statusMessage = "";
+
+    private bool IsResolving => _resolutions.Any(r => r.IsLoading);
+
+    private bool CanImport =>
+        !IsResolving &&
+        _resolutions.Any() &&
+        _resolutions.All(r => !r.NotFound) &&
+        _resolutions.Any(r =>
+            (r.ResolvedCandidate != null && r.ResolvedCount > 0) ||
+            r.Candidates.Any(c => c.Count > 0));
+
+    private void AddEntry() => _entries.Add(new MinifigImportEntry());
+    private void RemoveEntry(int index) => _entries.RemoveAt(index);
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task StartResolving()
+    {
+        _resolutions = _entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.SearchTerm))
+            .Select(e => new MinifigResolutionItem
+            {
+                Input = e.SearchTerm.Trim(),
+                ResolvedCount = e.Count,
+            })
+            .ToList();
+
+        _step = Step.Confirming;
+        StateHasChanged();
+
+        foreach (var item in _resolutions)
+        {
+            try
+            {
+                var (resolved, candidates, notFound, hasMore) =
+                    await ImportData.ResolveMinifigId(item.Input);
+
+                item.IsLoading = false;
+                item.NotFound = notFound;
+                item.ResolvedCandidate = resolved;
+                item.HasMore = hasMore;
+
+                if (candidates.Count > 0)
+                {
+                    item.Candidates = candidates
+                        .Select((c, i) => new CandidateEntry
+                        {
+                            Candidate = c,
+                            Count = i == 0 ? item.ResolvedCount : 0
+                        })
+                        .ToList();
+                }
+            }
+            catch
+            {
+                item.IsLoading = false;
+                item.NotFound = true;
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMoreCandidates(MinifigResolutionItem item)
+    {
+        item.CurrentPage++;
+        try
+        {
+            var (_, more, _, hasMore) = await ImportData.ResolveMinifigId(item.Input, item.CurrentPage);
+            item.Candidates.AddRange(more.Select(c => new CandidateEntry { Candidate = c, Count = 0 }));
+            item.HasMore = hasMore;
+        }
+        catch { item.HasMore = false; }
+
+        StateHasChanged();
+    }
+
+    private async Task StartImport()
+    {
+        _step = Step.Importing;
+        StateHasChanged();
+
+        var userId = AuthService.CurrentUser?.UserId;
+
+        foreach (var item in _resolutions)
+        {
+            if (item.ResolvedCandidate != null && item.ResolvedCount > 0)
+            {
+                _statusMessage = $"Importing {item.ResolvedCandidate.Name}...";
+                StateHasChanged();
+                await ImportData.AddOwnedMinifig(item.ResolvedCandidate.MinifigId, userId, item.ResolvedCount);
+            }
+            else
+            {
+                foreach (var candidate in item.Candidates.Where(c => c.Count > 0))
+                {
+                    _statusMessage = $"Importing {candidate.Candidate.Name}...";
+                    StateHasChanged();
+                    await ImportData.AddOwnedMinifig(candidate.Candidate.MinifigId, userId, candidate.Count);
+                }
+            }
+        }
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private class MinifigImportEntry
+    {
+        public string SearchTerm { get; set; } = "";
+        public int Count { get; set; } = 1;
+    }
+
+    private class MinifigResolutionItem
+    {
+        public string Input { get; init; } = "";
+        public bool IsLoading { get; set; } = true;
+        public bool NotFound { get; set; }
+        public MinifigCandidate? ResolvedCandidate { get; set; }
+        public int ResolvedCount { get; set; }
+        public List<CandidateEntry> Candidates { get; set; } = [];
+        public bool HasMore { get; set; }
+        public int CurrentPage { get; set; } = 1;
+    }
+
+    private class CandidateEntry
+    {
+        public required MinifigCandidate Candidate { get; init; }
+        public int Count { get; set; }
+    }
+}
