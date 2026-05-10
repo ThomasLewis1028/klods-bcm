@@ -8,6 +8,7 @@ namespace LEGO_Inventory;
 
 public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger, ImageStorageService imageStorage)
 {
+    private readonly Dictionary<int, string> _themeCache = new();
     /// <summary>
     /// Imports set catalog info, bricks, and BOM data from Rebrickable.
     /// Does NOT create an owned set — call AddOwnedSet separately.
@@ -209,6 +210,9 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             setInfo!["set_img_url"]?.ToString(),
             $"sets/{setId}.jpg");
 
+        int? themeId = setInfo!["theme_id"] != null ? (int)setInfo["theme_id"]! : null;
+        var themeName = themeId.HasValue ? await ResolveThemeNameAsync(api, themeId.Value) : null;
+
         var existingSet = await setContext.FirstOrDefaultAsync(s => s.SetId == setId);
         if (existingSet != null)
         {
@@ -222,6 +226,8 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 existingSet.NumBricks = int.Parse(setInfo!["num_parts"]!.ToString());
                 existingSet.ReleaseYear = int.Parse(setInfo!["year"]!.ToString());
                 existingSet.ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId!.Split('-').First()}";
+                existingSet.ThemeId = themeId;
+                existingSet.ThemeName = themeName;
             }
         }
         else
@@ -236,6 +242,8 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 NumBricks = int.Parse(setInfo!["num_parts"]!.ToString()),
                 ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
                 ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId!.Split('-').First()}",
+                ThemeId = themeId,
+                ThemeName = themeName,
             });
         }
 
@@ -583,6 +591,66 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         node["year"] != null ? int.Parse(node["year"]!.ToString()) : 0,
         node["set_img_url"]?.ToString()
     );
+
+    private async Task<string?> ResolveThemeNameAsync(RebrickableApi api, int themeId)
+    {
+        if (_themeCache.TryGetValue(themeId, out var cached))
+            return cached;
+        try
+        {
+            var theme = await api.GetTheme(themeId);
+            var name = theme?["name"]?.ToString();
+            if (name != null)
+                _themeCache[themeId] = name;
+            return name;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Syncs the Colors reference table from Rebrickable. Safe to call repeatedly — upserts.
+    /// </summary>
+    public async Task<bool> ImportColors()
+    {
+        logger.LogInformation("Importing colors from Rebrickable");
+        var api = new RebrickableApi();
+        var colors = await api.GetColors();
+        if (colors == null)
+            return false;
+
+        await using var context = contextFactory.CreateDbContext();
+        var colorContext = context.Set<Color>();
+
+        foreach (var color in colors)
+        {
+            if (color == null) continue;
+            var id = color["id"]!.ToString();
+            var existing = await colorContext.FirstOrDefaultAsync(c => c.Id == id);
+            if (existing == null)
+            {
+                colorContext.Add(new Color
+                {
+                    Id = id,
+                    Name = color["name"]!.ToString(),
+                    Hex = color["rgb"]!.ToString(),
+                    IsTrans = color["is_trans"]!.GetValue<bool>(),
+                });
+            }
+            else
+            {
+                existing.Name = color["name"]!.ToString();
+                existing.Hex = color["rgb"]!.ToString();
+                existing.IsTrans = color["is_trans"]!.GetValue<bool>();
+            }
+        }
+
+        var saved = await context.SaveChangesAsync();
+        logger.LogInformation("Imported {Count} colors", colors.Count);
+        return saved > 0;
+    }
 
     public async Task BackfillImagesAsync(IProgress<(int done, int total)>? progress = null, CancellationToken ct = default)
     {
