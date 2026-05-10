@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using LEGO_Inventory.Database;
 using LEGO_Inventory.Services;
 using Microsoft.EntityFrameworkCore;
@@ -527,6 +528,61 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         await context.SaveChangesAsync();
         return brick;
     }
+
+    /// <summary>
+    /// Resolves a raw set ID input (e.g. "4502" or "75192-1") to one or more Rebrickable set candidates.
+    /// Returns a single resolved candidate, a list of variants to choose from, or a not-found result.
+    /// No DB access — purely API resolution.
+    /// </summary>
+    public async Task<(SetCandidate? Resolved, List<SetCandidate> Candidates, bool NotFound, bool HasMore)>
+        ResolveSetId(string input, int page = 1)
+    {
+        var api = new RebrickableApi();
+        var trimmed = input.Trim();
+
+        // On the first page only, try an exact match before falling back to search.
+        // A full variant ID like "75192-1" resolves instantly this way.
+        if (page == 1)
+        {
+            try
+            {
+                var setInfo = await api.GetSetInfo(trimmed);
+                if (setInfo != null)
+                    return (ToSetCandidate(setInfo), [], false, false);
+            }
+            catch { /* 404 or API error — fall through to search */ }
+        }
+
+        // Extract the base number: "4502-1" → "4502", "4502" → "4502"
+        var baseNum = trimmed.Contains('-') ? trimmed.Split('-')[0] : trimmed;
+        var pattern = new Regex($@"^{Regex.Escape(baseNum)}-\d+$");
+
+        var searchResult = await api.SearchSets(baseNum, page);
+        if (searchResult == null)
+            return (null, [], true, false);
+
+        var candidates = searchResult["results"]!.AsArray()
+            .Where(r => r != null && pattern.IsMatch(r!["set_num"]?.ToString() ?? ""))
+            .Select(r => ToSetCandidate(r!))
+            .ToList();
+
+        var hasMore = searchResult["next"] != null;
+
+        if (candidates.Count == 0 && !hasMore)
+            return (null, [], true, false);
+
+        if (candidates.Count == 1 && !hasMore)
+            return (candidates[0], [], false, false);
+
+        return (null, candidates, false, hasMore);
+    }
+
+    private static SetCandidate ToSetCandidate(JsonNode node) => new(
+        node["set_num"]!.ToString(),
+        node["name"]!.ToString(),
+        node["year"] != null ? int.Parse(node["year"]!.ToString()) : 0,
+        node["set_img_url"]?.ToString()
+    );
 
     public async Task BackfillImagesAsync(IProgress<(int done, int total)>? progress = null, CancellationToken ct = default)
     {

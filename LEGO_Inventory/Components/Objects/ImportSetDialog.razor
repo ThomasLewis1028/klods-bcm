@@ -5,102 +5,314 @@
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h6">Import Sets</MudText>
+        <MudText Typo="Typo.h6">
+            @(_step switch {
+                Step.Input     => "Import Sets",
+                Step.Confirming => "Review Sets",
+                _              => "Importing..."
+            })
+        </MudText>
     </TitleContent>
     <DialogContent>
         <MudStack Spacing="3">
-            @for (int i = 0; i < _entries.Count; i++)
+
+            @* ── Step 1: Input ──────────────────────────────────────────── *@
+            @if (_step == Step.Input)
             {
-                var entry = _entries[i];
-                var idx = i;
-                <MudPaper Elevation="1" Class="pa-3">
-                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
-                        <MudTextField @bind-Value="entry.SetId" Label="Set ID" Variant="Variant.Outlined"
-                                      Immediate="true" Style="flex: 1; min-width: 130px;" Disabled="_isLoading"/>
-                        <MudNumericField @bind-Value="entry.Owned" Label="Owned" Variant="Variant.Outlined"
-                                         Min="0" Style="max-width: 90px;" Disabled="_isLoading"/>
-                        <MudTooltip Text="Mark all bricks in this set as already in your inventory">
-                            <MudStack Spacing="0" AlignItems="AlignItems.Center">
-                                <MudText Typo="Typo.caption" Style="white-space: nowrap;">Full Stock</MudText>
-                                <MudSwitch @bind-Value="entry.ApplyBricks" Color="Color.Primary"
-                                           Disabled="@(_isLoading || entry.Owned == 0)"/>
-                            </MudStack>
-                        </MudTooltip>
-                        @if (_entries.Count > 1)
-                        {
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
-                                           OnClick="() => RemoveEntry(idx)" Disabled="_isLoading"/>
-                        }
-                    </MudStack>
-                </MudPaper>
+                @for (int i = 0; i < _entries.Count; i++)
+                {
+                    var entry = _entries[i];
+                    var idx = i;
+                    <MudPaper Elevation="1" Class="pa-3">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                            <MudTextField @bind-Value="entry.SetId" Label="Set ID" Variant="Variant.Outlined"
+                                          Immediate="true" Style="flex: 1; min-width: 130px;"/>
+                            <MudNumericField @bind-Value="entry.Owned" Label="Owned" Variant="Variant.Outlined"
+                                             Min="0" Style="max-width: 90px;"/>
+                            <MudTooltip Text="Mark all bricks in this set as already in your inventory">
+                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.caption" Style="white-space: nowrap;">Full Stock</MudText>
+                                    <MudSwitch @bind-Value="entry.ApplyBricks" Color="Color.Primary"
+                                               Disabled="@(entry.Owned == 0)"/>
+                                </MudStack>
+                            </MudTooltip>
+                            @if (_entries.Count > 1)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                               OnClick="() => RemoveEntry(idx)"/>
+                            }
+                        </MudStack>
+                    </MudPaper>
+                }
+                <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddEntry" Variant="Variant.Text">
+                    Add another
+                </MudButton>
             }
 
-            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddEntry"
-                       Variant="Variant.Text" Disabled="_isLoading">
-                Add another
-            </MudButton>
-
-            @if (_isLoading)
+            @* ── Step 2: Resolve + Confirm ──────────────────────────────── *@
+            else if (_step == Step.Confirming)
             {
-                <MudDivider/>
+                @foreach (var item in _resolutions.ToList())
+                {
+                    <MudPaper Elevation="1" Class="pa-3">
+                        @if (item.IsLoading)
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+                                <MudText>Resolving "@item.Input"...</MudText>
+                            </MudStack>
+                        }
+                        else if (item.NotFound)
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error"/>
+                                <MudText Style="flex:1">"@item.Input" could not be found on Rebrickable.</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                               Color="Color.Default"
+                                               OnClick="() => _resolutions.Remove(item)"/>
+                            </MudStack>
+                        }
+                        else if (item.ResolvedCandidate != null)
+                        {
+                            @* Single auto-resolved set *@
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                                @if (item.ResolvedCandidate.ImageUrl != null)
+                                {
+                                    <img src="@item.ResolvedCandidate.ImageUrl"
+                                         style="width:60px;height:60px;object-fit:contain;" alt=""/>
+                                }
+                                <MudStack Spacing="0" Style="flex:1">
+                                    <MudText Typo="Typo.body1">@item.ResolvedCandidate.Name</MudText>
+                                    <MudText Typo="Typo.caption">
+                                        @item.ResolvedCandidate.SetNum — @item.ResolvedCandidate.Year
+                                    </MudText>
+                                </MudStack>
+                                <MudNumericField @bind-Value="item.ResolvedOwned" Label="Owned"
+                                                 Min="0" Style="max-width:90px;" Variant="Variant.Outlined"/>
+                                <MudTooltip Text="Mark all bricks in this set as already in your inventory">
+                                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.caption" Style="white-space:nowrap;">Full Stock</MudText>
+                                        <MudSwitch @bind-Value="item.ApplyBricks" Color="Color.Primary"
+                                                   Disabled="@(item.ResolvedOwned == 0)"/>
+                                    </MudStack>
+                                </MudTooltip>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                               Color="Color.Default"
+                                               OnClick="() => _resolutions.Remove(item)"/>
+                            </MudStack>
+                        }
+                        else if (item.Variants.Any())
+                        {
+                            @* Multiple variants — user allocates copies across them *@
+                            <MudStack Spacing="2">
+                                <MudStack Row AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.subtitle2" Style="flex:1">
+                                        Multiple versions of "@item.Input" found — set how many of each you own:
+                                    </MudText>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                   Color="Color.Default"
+                                                   OnClick="() => _resolutions.Remove(item)"/>
+                                </MudStack>
+
+                                @foreach (var variant in item.Variants)
+                                {
+                                    <MudPaper Elevation="0" Class="pa-2"
+                                              Style="background:var(--mud-palette-background-grey);">
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                                            @if (variant.Candidate.ImageUrl != null)
+                                            {
+                                                <img src="@variant.Candidate.ImageUrl"
+                                                     style="width:50px;height:50px;object-fit:contain;" alt=""/>
+                                            }
+                                            <MudStack Spacing="0" Style="flex:1">
+                                                <MudText Typo="Typo.body2">@variant.Candidate.Name</MudText>
+                                                <MudText Typo="Typo.caption">
+                                                    @variant.Candidate.SetNum — @variant.Candidate.Year
+                                                </MudText>
+                                            </MudStack>
+                                            <MudNumericField @bind-Value="variant.Owned" Label="Owned"
+                                                             Min="0" Style="max-width:90px;"
+                                                             Variant="Variant.Outlined"/>
+                                        </MudStack>
+                                    </MudPaper>
+                                }
+
+                                @if (item.HasMoreVariants)
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small"
+                                               OnClick="() => LoadMoreVariants(item)">
+                                        Load more versions
+                                    </MudButton>
+                                }
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Sets with 0 owned will be added to the catalog only.
+                                </MudText>
+                            </MudStack>
+                        }
+                    </MudPaper>
+                }
+
+                @if (!_resolutions.Any())
+                {
+                    <MudAlert Severity="Severity.Info">All sets removed. Click Back to start over.</MudAlert>
+                }
+            }
+
+            @* ── Step 3: Import progress ────────────────────────────────── *@
+            else if (_step == Step.Importing)
+            {
                 <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
                 <MudText Typo="Typo.caption" Align="Align.Center">@_statusMessage</MudText>
             }
+
         </MudStack>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Variant="Variant.Filled" Disabled="_isLoading">Cancel</MudButton>
-        <MudSpacer/>
-        <MudButton OnClick="Import" Color="Color.Primary" Variant="Variant.Filled"
-                   Disabled="@(_isLoading || !_entries.Any(e => !string.IsNullOrWhiteSpace(e.SetId)))">
-            Import
-        </MudButton>
+        @if (_step == Step.Input)
+        {
+            <MudButton OnClick="Cancel" Variant="Variant.Filled">Cancel</MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartResolving"
+                       Disabled="@(!_entries.Any(e => !string.IsNullOrWhiteSpace(e.SetId)))">
+                Resolve
+            </MudButton>
+        }
+        else if (_step == Step.Confirming)
+        {
+            <MudButton Variant="Variant.Filled" OnClick="@(() => _step = Step.Input)"
+                       Disabled="@IsResolving">
+                Back
+            </MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartImport"
+                       Disabled="@(!CanImport)">
+                Import
+            </MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
+    private enum Step { Input, Confirming, Importing }
+
+    private Step _step = Step.Input;
     private List<SetImportEntry> _entries = [new SetImportEntry()];
-    private bool _isLoading;
+    private List<SetResolutionItem> _resolutions = [];
     private string _statusMessage = "";
 
+    private bool IsResolving => _resolutions.Any(r => r.IsLoading);
+
+    private bool CanImport =>
+        !IsResolving &&
+        _resolutions.Any() &&
+        _resolutions.All(r => !r.NotFound);
+
     private void AddEntry() => _entries.Add(new SetImportEntry());
-
     private void RemoveEntry(int index) => _entries.RemoveAt(index);
-
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task Import()
+    private async Task StartResolving()
     {
-        var validEntries = _entries
+        _resolutions = _entries
             .Where(e => !string.IsNullOrWhiteSpace(e.SetId))
-            .Select(e => new SetImportEntry { SetId = e.SetId.Trim(), Owned = e.Owned, ApplyBricks = e.ApplyBricks })
+            .Select(e => new SetResolutionItem
+            {
+                Input = e.SetId.Trim(),
+                ResolvedOwned = e.Owned,
+                ApplyBricks = e.ApplyBricks
+            })
             .ToList();
 
-        if (!validEntries.Any()) return;
+        _step = Step.Confirming;
+        StateHasChanged();
 
-        _isLoading = true;
+        foreach (var item in _resolutions)
+        {
+            try
+            {
+                var (resolved, candidates, notFound, hasMore) =
+                    await ImportData.ResolveSetId(item.Input);
+
+                item.IsLoading = false;
+                item.NotFound = notFound;
+                item.ResolvedCandidate = resolved;
+                item.HasMoreVariants = hasMore;
+
+                if (candidates.Count > 0)
+                {
+                    item.Variants = candidates
+                        .Select((c, i) => new VariantEntry
+                        {
+                            Candidate = c,
+                            Owned = i == 0 ? item.ResolvedOwned : 0
+                        })
+                        .ToList();
+                }
+            }
+            catch
+            {
+                item.IsLoading = false;
+                item.NotFound = true;
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMoreVariants(SetResolutionItem item)
+    {
+        item.CurrentPage++;
+        try
+        {
+            var (_, moreCandidates, _, hasMore) =
+                await ImportData.ResolveSetId(item.Input, item.CurrentPage);
+
+            item.Variants.AddRange(moreCandidates.Select(c => new VariantEntry { Candidate = c, Owned = 0 }));
+            item.HasMoreVariants = hasMore;
+        }
+        catch { item.HasMoreVariants = false; }
+
+        StateHasChanged();
+    }
+
+    private async Task StartImport()
+    {
+        _step = Step.Importing;
         StateHasChanged();
 
         var userId = AuthService.CurrentUser?.UserId;
 
-        foreach (var entry in validEntries)
+        foreach (var item in _resolutions)
         {
-            _statusMessage = $"Importing catalog for {entry.SetId}...";
-            StateHasChanged();
-            await ImportData.ImportAll([entry.SetId]);
-
-            for (int i = 0; i < entry.Owned; i++)
+            if (item.ResolvedCandidate != null)
             {
-                _statusMessage = $"Adding copy {i + 1} of {entry.Owned} for {entry.SetId}...";
-                StateHasChanged();
-                await ImportData.AddOwnedSet(entry.SetId, userId, entry.ApplyBricks);
+                await ImportSingleSet(item.ResolvedCandidate.SetNum, item.ResolvedOwned, item.ApplyBricks, userId);
+            }
+            else
+            {
+                foreach (var variant in item.Variants)
+                    await ImportSingleSet(variant.Candidate.SetNum, variant.Owned, item.ApplyBricks, userId);
             }
         }
 
-        _isLoading = false;
         MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private async Task ImportSingleSet(string setNum, int owned, bool applyBricks, int? userId)
+    {
+        _statusMessage = $"Importing catalog for {setNum}...";
+        StateHasChanged();
+        await ImportData.ImportAll([setNum]);
+
+        for (int i = 0; i < owned; i++)
+        {
+            _statusMessage = $"Adding copy {i + 1} of {owned} for {setNum}...";
+            StateHasChanged();
+            await ImportData.AddOwnedSet(setNum, userId, applyBricks);
+        }
     }
 
     private class SetImportEntry
@@ -108,5 +320,27 @@
         public string SetId { get; set; } = "";
         public int Owned { get; set; } = 0;
         public bool ApplyBricks { get; set; } = false;
+    }
+
+    private class SetResolutionItem
+    {
+        public string Input { get; init; } = "";
+        public bool ApplyBricks { get; set; }
+
+        public bool IsLoading { get; set; } = true;
+        public bool NotFound { get; set; }
+
+        public SetCandidate? ResolvedCandidate { get; set; }
+        public int ResolvedOwned { get; set; }
+
+        public List<VariantEntry> Variants { get; set; } = [];
+        public bool HasMoreVariants { get; set; }
+        public int CurrentPage { get; set; } = 1;
+    }
+
+    private class VariantEntry
+    {
+        public required SetCandidate Candidate { get; init; }
+        public int Owned { get; set; }
     }
 }
