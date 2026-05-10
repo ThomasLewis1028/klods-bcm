@@ -8,36 +8,26 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="AspNet.Security.OAuth.Discord" Version="10.0.0" />
-      <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
-      <PackageReference Include="DotNetEnv" Version="3.1.1" />
-      <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.3.0" />
-      <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.0" />
-      <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="10.0.0" />
-      <PackageReference Include="Microsoft.AspNetCore.Authentication.OAuth" Version="2.3.0" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
-      <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
-      <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
-      <PackageReference Include="Minio" Version="7.0.0" />
-      <PackageReference Include="MSTest.TestAdapter" Version="4.0.2" />
-      <PackageReference Include="MSTest.TestFramework" Version="4.0.2" />
-      <PackageReference Include="MudBlazor" Version="8.15.0" />
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+        <ProjectReference Include="..\LEGO_Inventory.Core\LEGO_Inventory.Core.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Migrations\" />
+        <PackageReference Include="AspNet.Security.OAuth.Discord" Version="10.0.0" />
+        <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
+        <PackageReference Include="DotNetEnv" Version="3.1.1" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="10.0.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+        <PackageReference Include="MSTest.TestAdapter" Version="4.0.2" />
+        <PackageReference Include="MSTest.TestFramework" Version="4.0.2" />
+        <PackageReference Include="MudBlazor" Version="8.15.0" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     </ItemGroup>
 
     <ItemGroup>
-      <None Include="wwwroot\images\lit.ico" />
-      <None Include="wwwroot\images\lit.png" />
-      <None Include="wwwroot\images\lit.xcf" />
+        <None Include="wwwroot\images\lit.ico" />
+        <None Include="wwwroot\images\lit.png" />
+        <None Include="wwwroot\images\lit.xcf" />
     </ItemGroup>
 
 </Project>

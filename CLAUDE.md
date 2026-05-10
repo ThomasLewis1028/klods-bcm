@@ -14,6 +14,13 @@
 - Run `dotnet ef migrations add <Name>` then `dotnet ef database update` for schema changes — never modify migration files by hand.
 - Prefer `var` when the type is obvious from the right-hand side.
 
+## Solution Structure
+- Solution file: `LEGO_Inventory_Tracker.sln` at the repo root
+- `LEGO_Inventory.Core/` — class library; all EF models, InventoryContext, migrations, ImportData, UpdateData, DeleteData, RebrickableApi, ImageStorageService, InventoryAggregates, ColorHelper
+- `LEGO_Inventory/` — Blazor Server app; references Core; contains all Components, AuthService, PendingAuthService, ThemeService
+- `LEGO_Inventory.Api/` — ASP.NET Core Web API (Phase 6 Stage B, not yet created); will reference Core; JWT auth; minimal API endpoints
+- EF migrations live in `LEGO_Inventory.Core/Migrations/`. Run: `dotnet ef migrations add <Name> --project LEGO_Inventory.Core`
+
 ## Blazor / MudBlazor
 - This is a **Blazor Server** app — avoid patterns that only work in Blazor WebAssembly.
 - MudBlazor version is **8.15.0** — `MudColorPicker` does not exist; use `<input type="color">` + `MudTextField` instead.

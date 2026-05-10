@@ -9,8 +9,7 @@ public class RebrickableApi
 
     private static readonly HttpClient _httpClient = new();
 
-    private readonly ILogger<RebrickableApi> _logger =
-        LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<RebrickableApi>();
+    private readonly ILogger<RebrickableApi> _logger = NullLogger<RebrickableApi>.Instance;
 
     // ── Single-object endpoints ──────────────────────────────────────────────
 

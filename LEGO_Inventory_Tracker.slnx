@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="LEGO_Inventory.Core/LEGO_Inventory.Core.csproj" />
+  <Project Path="LEGO_Inventory/LEGO_Inventory.csproj" />
+</Solution>
