@@ -1,12 +1,11 @@
-using System.Security.Cryptography;
 using LEGO_Inventory.Database;
+using LEGO_Inventory.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace LEGO_Inventory.Services;
 
 public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
 {
-    private const int PasswordHashIterations = 100_000;
     public User? CurrentUser { get; private set; }
     public bool IsSessionRestored { get; private set; }
     public event Action? OnChange;
@@ -159,22 +158,7 @@ public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
         return true;
     }
 
-    internal static string HashPassword(string password)
-    {
-        var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordHashIterations, HashAlgorithmName.SHA256, 32);
-        return $"{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
-    }
+    internal static string HashPassword(string password) => PasswordHasher.Hash(password);
 
-    private static bool VerifyPassword(string password, string storedHash)
-    {
-        var parts = storedHash.Split('.');
-        if (parts.Length != 2) return false;
-
-        var salt = Convert.FromBase64String(parts[0]);
-        var expectedHash = Convert.FromBase64String(parts[1]);
-        var actualHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, PasswordHashIterations, HashAlgorithmName.SHA256, 32);
-
-        return CryptographicOperations.FixedTimeEquals(expectedHash, actualHash);
-    }
+    private static bool VerifyPassword(string password, string storedHash) => PasswordHasher.Verify(password, storedHash);
 }
