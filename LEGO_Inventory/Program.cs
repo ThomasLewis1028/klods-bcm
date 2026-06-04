@@ -97,7 +97,7 @@ if (!await db.Users.AnyAsync(u => u.Role == "Admin"))
     db.Users.Add(new User
     {
         UserName = "admin",
-        PasswordHash = AuthService.HashPassword(defaultPassword),
+        PasswordHash = PasswordHasher.Hash(defaultPassword),
         Role = "Admin"
     });
     await db.SaveChangesAsync();
