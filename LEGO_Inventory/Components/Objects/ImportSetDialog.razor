@@ -1,5 +1,5 @@
 @inject AuthService AuthService
-@inject ImportData ImportData
+@inject ApiClient Api
 @using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 
@@ -233,23 +233,32 @@
         {
             try
             {
-                var (resolved, candidates, notFound, hasMore) =
-                    await ImportData.ResolveSetId(item.Input);
+                var response = await Api.ResolveSetIdPostAsync(item.Input);
 
                 item.IsLoading = false;
-                item.NotFound = notFound;
-                item.ResolvedCandidate = resolved;
-                item.HasMoreVariants = hasMore;
-
-                if (candidates.Count > 0)
+                if (response == null)
                 {
-                    item.Variants = candidates
-                        .Select((c, i) => new VariantEntry
-                        {
-                            Candidate = c,
-                            Owned = i == 0 ? item.ResolvedOwned : 0
-                        })
-                        .ToList();
+                    item.NotFound = true;
+                }
+                else
+                {
+                    item.NotFound = !response.Resolved && response.Results.Count == 0;
+                    item.HasMoreVariants = response.HasMore;
+
+                    if (response.Resolved && response.Results.Count == 1)
+                    {
+                        item.ResolvedCandidate = response.Results[0];
+                    }
+                    else if (response.Results.Count > 0)
+                    {
+                        item.Variants = response.Results
+                            .Select((c, i) => new VariantEntry
+                            {
+                                Candidate = c,
+                                Owned = i == 0 ? item.ResolvedOwned : 0
+                            })
+                            .ToList();
+                    }
                 }
             }
             catch
@@ -267,11 +276,12 @@
         item.CurrentPage++;
         try
         {
-            var (_, moreCandidates, _, hasMore) =
-                await ImportData.ResolveSetId(item.Input, item.CurrentPage);
-
-            item.Variants.AddRange(moreCandidates.Select(c => new VariantEntry { Candidate = c, Owned = 0 }));
-            item.HasMoreVariants = hasMore;
+            var response = await Api.ResolveSetIdPostAsync(item.Input, item.CurrentPage);
+            if (response != null)
+            {
+                item.Variants.AddRange(response.Results.Select(c => new VariantEntry { Candidate = c, Owned = 0 }));
+                item.HasMoreVariants = response.HasMore;
+            }
         }
         catch { item.HasMoreVariants = false; }
 
@@ -283,35 +293,33 @@
         _step = Step.Importing;
         StateHasChanged();
 
-        var userId = AuthService.CurrentUser?.UserId;
-
         foreach (var item in _resolutions)
         {
             if (item.ResolvedCandidate != null)
             {
-                await ImportSingleSet(item.ResolvedCandidate.SetNum, item.ResolvedOwned, item.ApplyBricks, userId);
+                await ImportSingleSet(item.ResolvedCandidate.SetNum, item.ResolvedOwned, item.ApplyBricks);
             }
             else
             {
                 foreach (var variant in item.Variants)
-                    await ImportSingleSet(variant.Candidate.SetNum, variant.Owned, item.ApplyBricks, userId);
+                    await ImportSingleSet(variant.Candidate.SetNum, variant.Owned, item.ApplyBricks);
             }
         }
 
         MudDialog.Close(DialogResult.Ok(true));
     }
 
-    private async Task ImportSingleSet(string setNum, int owned, bool applyBricks, int? userId)
+    private async Task ImportSingleSet(string setNum, int owned, bool applyBricks)
     {
         _statusMessage = $"Importing catalog for {setNum}...";
         StateHasChanged();
-        await ImportData.ImportAll([setNum]);
+        await Api.ImportSetAsync(setNum);
 
         for (int i = 0; i < owned; i++)
         {
             _statusMessage = $"Adding copy {i + 1} of {owned} for {setNum}...";
             StateHasChanged();
-            await ImportData.AddOwnedSet(setNum, userId, applyBricks);
+            await Api.AddOwnedSetAsync(setNum, applyBricks);
         }
     }
 
@@ -330,7 +338,7 @@
         public bool IsLoading { get; set; } = true;
         public bool NotFound { get; set; }
 
-        public SetCandidate? ResolvedCandidate { get; set; }
+        public ApiClient.SetCandidateDto? ResolvedCandidate { get; set; }
         public int ResolvedOwned { get; set; }
 
         public List<VariantEntry> Variants { get; set; } = [];
@@ -340,7 +348,7 @@
 
     private class VariantEntry
     {
-        public required SetCandidate Candidate { get; init; }
+        public required ApiClient.SetCandidateDto Candidate { get; init; }
         public int Owned { get; set; }
     }
 }

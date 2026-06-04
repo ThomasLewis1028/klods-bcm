@@ -1,15 +1,40 @@
-using LEGO_Inventory.Database;
-using LEGO_Inventory.Services;
-using Microsoft.EntityFrameworkCore;
+using System.Text;
+using System.Text.Json;
 
 namespace LEGO_Inventory.Services;
 
-public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
+/// <summary>
+/// Scoped per-circuit auth state. Stores the JWT and decoded user profile.
+/// Does not touch the database — all persistence goes through the API.
+/// </summary>
+public class AuthService
 {
-    public User? CurrentUser { get; private set; }
+    public UserInfo? CurrentUser { get; private set; }
+    public string? Token { get; private set; }
     public bool IsSessionRestored { get; private set; }
+
     public event Action? OnChange;
     public event Action? SessionRestored;
+
+    public void SetSession(UserInfo user, string token)
+    {
+        CurrentUser = user;
+        Token = token;
+        OnChange?.Invoke();
+    }
+
+    public void UpdateCurrentUser(UserInfo user)
+    {
+        CurrentUser = user;
+        OnChange?.Invoke();
+    }
+
+    public void Logout()
+    {
+        CurrentUser = null;
+        Token = null;
+        OnChange?.Invoke();
+    }
 
     public void MarkSessionRestored()
     {
@@ -17,148 +42,18 @@ public class AuthService(IDbContextFactory<InventoryContext> contextFactory)
         SessionRestored?.Invoke();
     }
 
-    public bool Login(string username, string password)
+    /// <summary>
+    /// Decodes the JWT payload without signature verification.
+    /// Used only to bootstrap the token before the API profile call confirms identity.
+    /// </summary>
+    public static Dictionary<string, string> ParseJwtClaims(string jwt)
     {
-        using var context = contextFactory.CreateDbContext();
-        var user = context.Users.FirstOrDefault(u => u.UserName == username);
-        if (user == null || string.IsNullOrEmpty(user.PasswordHash) || !VerifyPassword(password, user.PasswordHash))
-            return false;
-
-        CurrentUser = user;
-        OnChange?.Invoke();
-        return true;
+        var parts = jwt.Split('.');
+        if (parts.Length != 3) return [];
+        var base64 = parts[1].Replace('-', '+').Replace('_', '/');
+        base64 = base64.PadRight((base64.Length + 3) / 4 * 4, '=');
+        var json = Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+        return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)?
+            .ToDictionary(kv => kv.Key, kv => kv.Value.ToString()) ?? [];
     }
-
-    public void Logout()
-    {
-        CurrentUser = null;
-        OnChange?.Invoke();
-    }
-
-    public void RestoreUser(int userId)
-    {
-        using var context = contextFactory.CreateDbContext();
-        var user = context.Users.FirstOrDefault(u => u.UserId == userId);
-        if (user != null)
-        {
-            CurrentUser = user;
-            OnChange?.Invoke();
-        }
-    }
-
-    public bool Register(string username, string password)
-    {
-        using var context = contextFactory.CreateDbContext();
-        if (context.Users.Any(u => u.UserName == username))
-            return false;
-
-        var user = new User
-        {
-            UserName = username,
-            PasswordHash = HashPassword(password)
-        };
-
-        context.Users.Add(user);
-        context.SaveChanges();
-
-        CurrentUser = user;
-        OnChange?.Invoke();
-        return true;
-    }
-
-    public bool ChangeUsername(string newUsername)
-    {
-        if (CurrentUser == null) return false;
-
-        using var context = contextFactory.CreateDbContext();
-        if (context.Users.Any(u => u.UserName == newUsername && u.UserId != CurrentUser.UserId))
-            return false;
-
-        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
-        if (user == null) return false;
-        user.UserName = newUsername;
-        try { context.SaveChanges(); } catch { return false; }
-
-        CurrentUser.UserName = newUsername;
-        OnChange?.Invoke();
-        return true;
-    }
-
-    public bool ChangePassword(string currentPassword, string newPassword)
-    {
-        if (CurrentUser == null) return false;
-        if (!VerifyPassword(currentPassword, CurrentUser.PasswordHash)) return false;
-
-        using var context = contextFactory.CreateDbContext();
-        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
-        if (user == null) return false;
-        user.PasswordHash = HashPassword(newPassword);
-        try { context.SaveChanges(); } catch { return false; }
-
-        CurrentUser.PasswordHash = user.PasswordHash;
-        return true;
-    }
-
-    public List<UserExternalLogin> GetLinkedLogins()
-    {
-        if (CurrentUser == null) return [];
-        using var context = contextFactory.CreateDbContext();
-        return context.UserExternalLogins
-            .Where(l => l.UserId == CurrentUser.UserId)
-            .ToList();
-    }
-
-    public bool UnlinkExternalLogin(string provider)
-    {
-        if (CurrentUser == null) return false;
-
-        using var context = contextFactory.CreateDbContext();
-        var logins = context.UserExternalLogins
-            .Where(l => l.UserId == CurrentUser.UserId)
-            .ToList();
-
-        var hasPassword = !string.IsNullOrEmpty(CurrentUser.PasswordHash);
-        if (!hasPassword && logins.Count <= 1) return false; // last auth method
-
-        var login = logins.FirstOrDefault(l => l.Provider == provider);
-        if (login == null) return false;
-
-        context.UserExternalLogins.Remove(login);
-        context.SaveChanges();
-        return true;
-    }
-
-    public bool ChangeThemeColor(string? hex)
-    {
-        if (CurrentUser == null) return false;
-
-        using var context = contextFactory.CreateDbContext();
-        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
-        if (user == null) return false;
-        user.PrimaryColor = hex;
-        try { context.SaveChanges(); } catch { return false; }
-
-        CurrentUser.PrimaryColor = hex;
-        OnChange?.Invoke();
-        return true;
-    }
-
-    public bool ChangeProfilePicture(string? url)
-    {
-        if (CurrentUser == null) return false;
-
-        using var context = contextFactory.CreateDbContext();
-        var user = context.Users.FirstOrDefault(u => u.UserId == CurrentUser.UserId);
-        if (user == null) return false;
-        user.ProfilePictureUrl = url;
-        try { context.SaveChanges(); } catch { return false; }
-
-        CurrentUser.ProfilePictureUrl = url;
-        OnChange?.Invoke();
-        return true;
-    }
-
-    internal static string HashPassword(string password) => PasswordHasher.Hash(password);
-
-    private static bool VerifyPassword(string password, string storedHash) => PasswordHasher.Verify(password, storedHash);
 }

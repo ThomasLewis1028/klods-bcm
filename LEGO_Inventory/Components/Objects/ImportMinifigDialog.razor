@@ -1,5 +1,5 @@
 @inject AuthService AuthService
-@inject ImportData ImportData
+@inject ApiClient Api
 @using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 
@@ -222,23 +222,32 @@
         {
             try
             {
-                var (resolved, candidates, notFound, hasMore) =
-                    await ImportData.ResolveMinifigId(item.Input);
+                var response = await Api.ResolveMinifigIdPostAsync(item.Input);
 
                 item.IsLoading = false;
-                item.NotFound = notFound;
-                item.ResolvedCandidate = resolved;
-                item.HasMore = hasMore;
-
-                if (candidates.Count > 0)
+                if (response == null)
                 {
-                    item.Candidates = candidates
-                        .Select((c, i) => new CandidateEntry
-                        {
-                            Candidate = c,
-                            Count = i == 0 ? item.ResolvedCount : 0
-                        })
-                        .ToList();
+                    item.NotFound = true;
+                }
+                else
+                {
+                    item.NotFound = !response.Resolved && response.Results.Count == 0;
+                    item.HasMore = response.HasMore;
+
+                    if (response.Resolved && response.Results.Count == 1)
+                    {
+                        item.ResolvedCandidate = response.Results[0];
+                    }
+                    else if (response.Results.Count > 0)
+                    {
+                        item.Candidates = response.Results
+                            .Select((c, i) => new CandidateEntry
+                            {
+                                Candidate = c,
+                                Count = i == 0 ? item.ResolvedCount : 0
+                            })
+                            .ToList();
+                    }
                 }
             }
             catch
@@ -256,9 +265,12 @@
         item.CurrentPage++;
         try
         {
-            var (_, more, _, hasMore) = await ImportData.ResolveMinifigId(item.Input, item.CurrentPage);
-            item.Candidates.AddRange(more.Select(c => new CandidateEntry { Candidate = c, Count = 0 }));
-            item.HasMore = hasMore;
+            var response = await Api.ResolveMinifigIdPostAsync(item.Input, item.CurrentPage);
+            if (response != null)
+            {
+                item.Candidates.AddRange(response.Results.Select(c => new CandidateEntry { Candidate = c, Count = 0 }));
+                item.HasMore = response.HasMore;
+            }
         }
         catch { item.HasMore = false; }
 
@@ -270,15 +282,13 @@
         _step = Step.Importing;
         StateHasChanged();
 
-        var userId = AuthService.CurrentUser?.UserId;
-
         foreach (var item in _resolutions)
         {
             if (item.ResolvedCandidate != null && item.ResolvedCount > 0)
             {
                 _statusMessage = $"Importing {item.ResolvedCandidate.Name}...";
                 StateHasChanged();
-                await ImportData.AddOwnedMinifig(item.ResolvedCandidate.MinifigId, userId, item.ResolvedCount);
+                await Api.AddOwnedMinifigAsync(item.ResolvedCandidate.MinifigId, item.ResolvedCount);
             }
             else
             {
@@ -286,7 +296,7 @@
                 {
                     _statusMessage = $"Importing {candidate.Candidate.Name}...";
                     StateHasChanged();
-                    await ImportData.AddOwnedMinifig(candidate.Candidate.MinifigId, userId, candidate.Count);
+                    await Api.AddOwnedMinifigAsync(candidate.Candidate.MinifigId, candidate.Count);
                 }
             }
         }
@@ -305,7 +315,7 @@
         public string Input { get; init; } = "";
         public bool IsLoading { get; set; } = true;
         public bool NotFound { get; set; }
-        public MinifigCandidate? ResolvedCandidate { get; set; }
+        public ApiClient.MinifigCandidateDto? ResolvedCandidate { get; set; }
         public int ResolvedCount { get; set; }
         public List<CandidateEntry> Candidates { get; set; } = [];
         public bool HasMore { get; set; }
@@ -314,7 +324,7 @@
 
     private class CandidateEntry
     {
-        public required MinifigCandidate Candidate { get; init; }
+        public required ApiClient.MinifigCandidateDto Candidate { get; init; }
         public int Count { get; set; }
     }
 }

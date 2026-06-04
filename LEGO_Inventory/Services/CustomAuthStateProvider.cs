@@ -23,10 +23,12 @@ public class CustomAuthStateProvider : AuthenticationStateProvider, IDisposable
 
         var identity = new ClaimsIdentity(
         [
-            new Claim(ClaimTypes.NameIdentifier, _authService.CurrentUser.UserId.ToString()),
-            new Claim(ClaimTypes.Name, _authService.CurrentUser.UserName ?? string.Empty),
-            new Claim(ClaimTypes.Role, _authService.CurrentUser.Role)
-        ], "Custom");
+            new Claim("sub",  _authService.CurrentUser.UserId.ToString()),
+            new Claim("name", _authService.CurrentUser.UserName),
+            new Claim("role", _authService.CurrentUser.Role),
+        ], "Custom",
+        nameType: "name",
+        roleType: "role");
 
         return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity)));
     }

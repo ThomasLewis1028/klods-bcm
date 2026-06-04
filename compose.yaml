@@ -56,6 +56,27 @@ services:
       timeout: 20s
       retries: 3
 
+  lego_inventory_api:
+    image: lego_inventory_api
+    build:
+      context: .
+      dockerfile: LEGO_Inventory.Api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      BLAZOR_ORIGIN: "http://localhost:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      minio:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "8090:8080"
+    networks:
+      - lego-network
+
   lego_inventory:
     image: lego_inventory
     build:
@@ -63,12 +84,17 @@ services:
       dockerfile: LEGO_Inventory/Dockerfile
     env_file:
       - .env
+    environment:
+      API_BASE_URL: "http://lego_inventory_api:8080"
     depends_on:
       postgres:
         condition: service_healthy
         restart: true
       minio:
         condition: service_healthy
+        restart: true
+      lego_inventory_api:
+        condition: service_started
         restart: true
     ports:
       - "8080:8080"

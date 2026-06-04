@@ -2,6 +2,7 @@
 @inject AuthService AuthService
 @inject ThemeService ThemeService
 @inject PendingAuthService PendingAuth
+@inject ApiClient Api
 @inject NavigationManager Nav
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject ProtectedLocalStorage LocalStorage
@@ -17,15 +18,23 @@
     {
         if (!firstRender || Token is null) return;
 
-        var userId = PendingAuth.Consume(Token);
-        if (userId.HasValue)
+        var jwt = PendingAuth.Consume(Token);
+        if (jwt is not null)
         {
-            AuthService.RestoreUser(userId.Value);
-            try { await LocalStorage.SetAsync("userId", userId.Value); } catch { }
+            // Bootstrap the token so ApiClient can make the profile call.
+            AuthService.SetSession(new UserInfo(0, "", "User", null, null, false), jwt);
 
-            var color = AuthService.CurrentUser?.PrimaryColor;
-            if (color != null)
-                ThemeService.SetPrimaryColor(color);
+            var profile = await Api.GetMyProfileAsync();
+            if (profile is not null)
+            {
+                var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
+                    profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword);
+                AuthService.SetSession(user, jwt);
+                try { await LocalStorage.SetAsync("jwt", jwt); } catch { }
+
+                if (profile.PrimaryColor is not null)
+                    ThemeService.SetPrimaryColor(profile.PrimaryColor);
+            }
         }
 
         Nav.NavigateTo(Linked ? "/profile?linked=true" : "/");

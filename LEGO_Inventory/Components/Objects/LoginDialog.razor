@@ -1,8 +1,11 @@
 @inject AuthService AuthService
+@inject ApiClient Api
 @inject PendingAuthService PendingAuth
 @inject NavigationManager Nav
 @inject IDialogService DialogService
 @using Color = MudBlazor.Color
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage LocalStorage
 
 <MudDialog>
     <TitleContent>
@@ -74,7 +77,7 @@
     private bool _isRegister = false;
     private string? _errorMessage;
 
-    private void Submit()
+    private async Task Submit()
     {
         _errorMessage = null;
 
@@ -84,20 +87,25 @@
             return;
         }
 
-        if (_isRegister)
+        var jwt = _isRegister
+            ? await Api.RegisterAsync(_username, _password)
+            : await Api.LoginAsync(_username, _password);
+
+        if (jwt is null)
         {
-            if (!AuthService.Register(_username, _password))
-                _errorMessage = "Username already taken.";
-            else
-                MudDialog.Close(DialogResult.Ok(true));
+            _errorMessage = _isRegister ? "Username already taken." : "Invalid username or password.";
+            return;
         }
-        else
-        {
-            if (!AuthService.Login(_username, _password))
-                _errorMessage = "Invalid username or password.";
-            else
-                MudDialog.Close(DialogResult.Ok(true));
-        }
+
+        var profile = await Api.GetMyProfileAsync();
+        if (profile is null) { _errorMessage = "Login succeeded but could not load profile."; return; }
+
+        var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
+            profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword);
+        AuthService.SetSession(user, jwt);
+        try { await LocalStorage.SetAsync("jwt", jwt); } catch { }
+
+        MudDialog.Close(DialogResult.Ok(true));
     }
 
     private void Cancel() => MudDialog.Cancel();
@@ -108,9 +116,9 @@
         _errorMessage = null;
     }
 
-    private void OnKeyDown(KeyboardEventArgs args)
+    private async Task OnKeyDown(KeyboardEventArgs args)
     {
-        if (args.Key == "Enter") Submit();
+        if (args.Key == "Enter") await Submit();
     }
 
     private void SignInWithProvider(string provider)

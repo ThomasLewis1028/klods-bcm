@@ -10,19 +10,21 @@ using MudBlazor.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Core services ──────────────────────────────────────────────────────────
+// DbContextFactory + ImageStorageService stay: AuthController (OAuth) still needs the DB.
 builder.Services.AddDbContextFactory<InventoryContext>();
 builder.Services.AddSingleton<ImageStorageService>();
-builder.Services.AddScoped<ImportData>();
-builder.Services.AddScoped<UpdateData>();
-builder.Services.AddScoped<DeleteData>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddMudServices();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddControllers();
-builder.Services.AddHttpClient();
-builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri("https://rebrickable.com/") });
+
+// Named client for the API — URL comes from config (API_BASE_URL env var).
+var apiBase = builder.Configuration["API_BASE_URL"] ?? "http://lego_inventory_api:8080";
+builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBase));
+builder.Services.AddScoped<ApiClient>();
 
 // ── OAuth (External cookie scheme + optional providers) ────────────────────
 const string ExternalScheme = "External";
