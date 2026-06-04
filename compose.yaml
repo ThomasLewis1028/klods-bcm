@@ -1,3 +1,5 @@
+name: lego_inventory
+
 services:
   # https://github.com/felipewom/docker-compose-postgres/blob/main/README.md
   postgres:
