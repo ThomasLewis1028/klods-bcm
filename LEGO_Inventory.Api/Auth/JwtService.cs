@@ -17,11 +17,12 @@ public class JwtService(IConfiguration config)
 
     public string Generate(User user)
     {
+        // Use short JWT claim names so they round-trip cleanly with MapInboundClaims = false.
         Claim[] claims =
         [
-            new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-            new(ClaimTypes.Name, user.UserName),
-            new(ClaimTypes.Role, user.Role),
+            new("sub",  user.UserId.ToString()),
+            new("name", user.UserName),
+            new("role", user.Role),
         ];
 
         var token = new JwtSecurityToken(

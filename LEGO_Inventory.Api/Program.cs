@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContextFactory<InventoryContext>();
 
 // ── Business services ──────────────────────────────────────────────────────
+builder.Services.AddScoped<RebrickableApi>();
 builder.Services.AddScoped<ImportData>();
 builder.Services.AddScoped<UpdateData>();
 builder.Services.AddScoped<DeleteData>();
@@ -35,7 +36,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = false,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            // Match the short claim names used in JwtService.Generate().
+            RoleClaimType = "role",
+            NameClaimType = "name",
         };
     });
 
@@ -64,10 +68,14 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuth();
+app.MapAuthProfile();
 app.MapSets();
 app.MapMinifigs();
 app.MapBricks();
+app.MapMyCatalog();
 app.MapBom();
 app.MapAdmin();
+app.MapUsers();
+app.MapHome();
 
 app.Run();

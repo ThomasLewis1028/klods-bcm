@@ -1,5 +1,5 @@
 @inject AuthService AuthService
-@inject ImportData ImportData
+@inject ApiClient Api
 @using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 
@@ -119,15 +119,15 @@
 
         try
         {
-            var (partName, colors, notFound) = await ImportData.ResolvePartColors(_partNum);
-            if (notFound || partName == null)
+            var response = await Api.ResolvePartColorsPostAsync(_partNum);
+            if (response == null || response.PartName == null)
             {
                 _notFound = true;
                 return;
             }
 
-            _partName = partName;
-            _colorEntries = colors.Select(c => new ColorEntry { Color = c, Quantity = 0 }).ToList();
+            _partName = response.PartName;
+            _colorEntries = response.Colors.Select(c => new ColorEntry { Color = c, Quantity = 0 }).ToList();
             _step = Step.Colors;
         }
         catch
@@ -146,8 +146,7 @@
         _step = Step.Importing;
         StateHasChanged();
 
-        var userId = AuthService.CurrentUser?.UserId;
-        if (userId == null)
+        if (AuthService.CurrentUser == null)
         {
             MudDialog.Cancel();
             return;
@@ -157,7 +156,7 @@
         {
             _statusMessage = $"Adding {entry.Color.ColorName}...";
             StateHasChanged();
-            await ImportData.AddLooseBrick(_partNum.Trim(), _partName!, entry.Color, entry.Quantity, userId.Value);
+            await Api.AddLooseBrickAsync(_partNum.Trim(), _partName!, entry.Color, entry.Quantity);
         }
 
         MudDialog.Close(DialogResult.Ok(true));
@@ -165,7 +164,7 @@
 
     private class ColorEntry
     {
-        public required PartColorInfo Color { get; init; }
+        public required ApiClient.PartColorInfoDto Color { get; init; }
         public int Quantity { get; set; }
     }
 }

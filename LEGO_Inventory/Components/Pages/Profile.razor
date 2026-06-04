@@ -1,12 +1,11 @@
 @page "/profile"
 @inject AuthService AuthService
+@inject ApiClient Api
 @inject ThemeService ThemeService
 @inject PendingAuthService PendingAuth
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject IDbContextFactory<InventoryContext> DbContextFactory
 @inject ImageStorageService ImageStorage
-@using LEGO_Inventory.Database
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
 @attribute [Authorize]
@@ -221,10 +220,10 @@
                     @foreach (var fig in FilteredMinifigs)
                     {
                         var fig1 = fig;
-                        var isSelected = AuthService.CurrentUser.ProfilePictureUrl == fig1.MinifigImgUrl;
-                        <div @onclick="() => SelectProfilePicture(fig1.MinifigImgUrl!)"
+                        var isSelected = AuthService.CurrentUser.ProfilePictureUrl == fig1.ImgUrl;
+                        <div @onclick="() => SelectProfilePicture(fig1.ImgUrl!)"
                              style="cursor: pointer; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px solid @(isSelected ? "var(--mud-palette-primary)" : "transparent"); background: @(isSelected ? "color-mix(in srgb, var(--mud-palette-primary) 10%, transparent)" : "transparent"); transition: all 0.15s;">
-                            <MudImage Src="@ImageStorage.ResolveUrl(fig1.MinifigImgUrl)" Alt="@fig1.MinifigName"
+                            <MudImage Src="@ImageStorage.ResolveUrl(fig1.ImgUrl)" Alt="@fig1.MinifigName"
                                       Style="width: 60px; height: 60px; object-fit: contain;"/>
                             <MudText Typo="Typo.caption" Style="text-align: center; line-height: 1.2; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@fig1.MinifigName</MudText>
                         </div>
@@ -238,7 +237,7 @@
 
 @code {
     // Linked accounts
-    private List<UserExternalLogin> _linkedLogins = [];
+    private List<ApiClient.LinkedLoginDto> _linkedLogins = [];
     private bool _hasPassword;
 
     private record ColorSwatch(string Name, string Hex);
@@ -278,7 +277,7 @@
     }
 
     // Profile picture
-    private List<Minifig> _minifigs = [];
+    private List<ApiClient.MinifigDto> _minifigs = [];
     private string _minifigSearch = string.Empty;
 
     private bool _isLoading = true;
@@ -288,15 +287,15 @@
         !string.IsNullOrEmpty(_newPassword) &&
         _newPassword == _confirmPassword;
 
-    private IEnumerable<Minifig> FilteredMinifigs => string.IsNullOrWhiteSpace(_minifigSearch)
+    private IEnumerable<ApiClient.MinifigDto> FilteredMinifigs => string.IsNullOrWhiteSpace(_minifigSearch)
         ? _minifigs
         : _minifigs.Where(m => m.MinifigName.Contains(_minifigSearch, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
         _customColorHex = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
-        _linkedLogins   = AuthService.GetLinkedLogins();
-        _hasPassword    = !string.IsNullOrEmpty(AuthService.CurrentUser?.PasswordHash);
+        _linkedLogins   = (await Api.GetLinkedLoginsAsync())?.ToList() ?? [];
+        _hasPassword    = AuthService.CurrentUser?.HasPassword ?? false;
 
         // Show feedback if we just came back from a link flow
         var uri  = new Uri(Nav.Uri);
@@ -306,35 +305,35 @@
         else if (qs["link_error"] == "already_linked")
             Snackbar.Add("That account is already linked to another user.", Severity.Error);
 
-        using var context = DbContextFactory.CreateDbContext();
-        _minifigs = await context.Set<Minifig>()
-            .Where(m => m.MinifigImgUrl != null && m.MinifigImgUrl != "")
+        _minifigs = (await Api.GetMinifigsAsync())
+            ?.Where(m => m.ImgUrl is not null && m.ImgUrl != "")
             .OrderBy(m => m.MinifigName)
-            .ToListAsync();
+            .ToList() ?? [];
         _isLoading = false;
     }
 
-    private void SaveUsername()
+    private async Task SaveUsername()
     {
         if (string.IsNullOrWhiteSpace(_newUsername)) return;
-
-        if (AuthService.ChangeUsername(_newUsername))
+        var (ok, taken) = await Api.ChangeUsernameAsync(_newUsername);
+        if (ok)
         {
+            AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { UserName = _newUsername });
             Snackbar.Add("Username updated.", Severity.Success);
             _newUsername = string.Empty;
         }
         else
         {
-            Snackbar.Add("That username is already taken.", Severity.Error);
+            Snackbar.Add(taken ? "That username is already taken." : "Failed to update username.", Severity.Error);
         }
     }
 
-    private void SavePassword()
+    private async Task SavePassword()
     {
         if (!CanSavePassword) return;
-
-        if (AuthService.ChangePassword(_currentPassword, _newPassword))
+        if (await Api.ChangePasswordAsync(_currentPassword, _newPassword))
         {
+            AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { HasPassword = true });
             Snackbar.Add("Password updated.", Severity.Success);
             _currentPassword = _newPassword = _confirmPassword = string.Empty;
         }
@@ -344,12 +343,11 @@
         }
     }
 
-    private void SelectProfilePicture(string url)
+    private async Task SelectProfilePicture(string url)
     {
-        if (AuthService.ChangeProfilePicture(url))
-            Snackbar.Add("Profile picture updated.", Severity.Success);
-        else
-            Snackbar.Add("Failed to update profile picture.", Severity.Error);
+        await Api.ChangePictureAsync(url);
+        AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { ProfilePictureUrl = url });
+        Snackbar.Add("Profile picture updated.", Severity.Success);
     }
 
     private void LinkProvider(string provider)
@@ -358,11 +356,11 @@
         Nav.NavigateTo($"/auth/challenge?provider={provider}&linkUserId={userId}", forceLoad: true);
     }
 
-    private void Unlink(string provider)
+    private async Task Unlink(string provider)
     {
-        if (AuthService.UnlinkExternalLogin(provider))
+        if (await Api.UnlinkLoginAsync(provider))
         {
-            _linkedLogins = AuthService.GetLinkedLogins();
+            _linkedLogins = (await Api.GetLinkedLoginsAsync())?.ToList() ?? [];
             Snackbar.Add($"{provider} account unlinked.", Severity.Success);
         }
         else
@@ -379,30 +377,24 @@
         _           => Icons.Material.Filled.Login
     };
 
-    private void ApplyCustomColor()
+    private async Task ApplyCustomColor()
     {
         var hex = _customColorHex.StartsWith('#') ? _customColorHex : "#" + _customColorHex;
-        SelectColor(hex);
+        await SelectColor(hex);
     }
 
-    private void SelectColor(string hex)
+    private async Task SelectColor(string hex)
     {
-        if (AuthService.ChangeThemeColor(hex))
-        {
-            ThemeService.SetPrimaryColor(hex);
-            Snackbar.Add("Theme color updated.", Severity.Success);
-        }
-        else
-        {
-            Snackbar.Add("Failed to update theme color.", Severity.Error);
-        }
+        await Api.ChangeThemeAsync(hex);
+        AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { PrimaryColor = hex });
+        ThemeService.SetPrimaryColor(hex);
+        Snackbar.Add("Theme color updated.", Severity.Success);
     }
 
-    private void ClearProfilePicture()
+    private async Task ClearProfilePicture()
     {
-        if (AuthService.ChangeProfilePicture(null))
-            Snackbar.Add("Profile picture removed.", Severity.Success);
-        else
-            Snackbar.Add("Failed to remove profile picture.", Severity.Error);
+        await Api.ChangePictureAsync(null);
+        AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { ProfilePictureUrl = null });
+        Snackbar.Add("Profile picture removed.", Severity.Success);
     }
 }

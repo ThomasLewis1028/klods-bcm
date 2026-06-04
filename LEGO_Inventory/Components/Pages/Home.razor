@@ -2,10 +2,9 @@
 @layout FullPageLayout
 @inject NavigationManager Nav
 @inject AuthService AuthService
-@inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject ApiClient Api
 @inject IDialogService DialogService
 @inject ImageStorageService ImageStorage
-@using LEGO_Inventory.Database
 @using LEGO_Inventory.Components.Layout
 @using LEGO_Inventory.Components.Objects
 @using LEGO_Inventory.Services
@@ -239,49 +238,26 @@
             FullWidth = true
         });
 
-    protected override Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync()
     {
-        using var context = DbContextFactory.CreateDbContext();
+        var preview = await Api.GetHomePreviewAsync();
+        if (preview == null) return;
 
-        var sets = context.Set<Set>().Where(s => s.SetImg != null).ToList();
-        if (sets.Count >= 3)
-        {
-            var picks = PickDistinct(sets, 3);
-            (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(picks[0].SetImg), picks[0].Name);
-            (_mySetImg, _mySetName)           = (ImageStorage.ResolveUrl(picks[1].SetImg), picks[1].Name);
-            (_myBomImg, _myBomName)           = (ImageStorage.ResolveUrl(picks[2].SetImg), picks[2].Name);
-        }
+        if (preview.Sets.Count >= 1)
+            (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(preview.Sets[0].ImgUrl), preview.Sets[0].Name);
+        if (preview.Sets.Count >= 2)
+            (_mySetImg, _mySetName) = (ImageStorage.ResolveUrl(preview.Sets[1].ImgUrl), preview.Sets[1].Name);
+        if (preview.Sets.Count >= 3)
+            (_myBomImg, _myBomName) = (ImageStorage.ResolveUrl(preview.Sets[2].ImgUrl), preview.Sets[2].Name);
 
-        var bricks = context.Set<Brick>().Where(b => b.PartImg != null).ToList();
-        if (bricks.Count >= 2)
-        {
-            var picks = PickDistinct(bricks, 2);
-            (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(picks[0].PartImg), picks[0].Name);
-            (_myBrickImg, _myBrickName)           = (ImageStorage.ResolveUrl(picks[1].PartImg), picks[1].Name);
-        }
+        if (preview.Bricks.Count >= 1)
+            (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(preview.Bricks[0].ImgUrl), preview.Bricks[0].Name);
+        if (preview.Bricks.Count >= 2)
+            (_myBrickImg, _myBrickName) = (ImageStorage.ResolveUrl(preview.Bricks[1].ImgUrl), preview.Bricks[1].Name);
 
-        var minifigs = context.Set<Minifig>().Where(m => m.MinifigImgUrl != null).ToList();
-        if (minifigs.Count >= 2)
-        {
-            var picks = PickDistinct(minifigs, 2);
-            (_catalogMinifigImg, _catalogMinifigName) = (ImageStorage.ResolveUrl(picks[0].MinifigImgUrl), picks[0].MinifigName);
-            (_myMinifigImg, _myMinifigName)           = (ImageStorage.ResolveUrl(picks[1].MinifigImgUrl), picks[1].MinifigName);
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private static List<T> PickDistinct<T>(List<T> source, int count)
-    {
-        count = Math.Min(count, source.Count);
-        var indices = new HashSet<int>();
-        var result = new List<T>(count);
-        while (result.Count < count)
-        {
-            var i = Random.Shared.Next(source.Count);
-            if (indices.Add(i))
-                result.Add(source[i]);
-        }
-        return result;
+        if (preview.Minifigs.Count >= 1)
+            (_catalogMinifigImg, _catalogMinifigName) = (ImageStorage.ResolveUrl(preview.Minifigs[0].ImgUrl), preview.Minifigs[0].Name);
+        if (preview.Minifigs.Count >= 2)
+            (_myMinifigImg, _myMinifigName) = (ImageStorage.ResolveUrl(preview.Minifigs[1].ImgUrl), preview.Minifigs[1].Name);
     }
 }
