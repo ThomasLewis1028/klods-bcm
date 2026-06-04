@@ -88,7 +88,7 @@ public class InventoryTests
         public async Task ImportSetInfoTest()
         {
             var factory = CreateFactory();
-            var importData = new ImportData(factory, NullLogger<ImportData>.Instance, CreateImageStorage());
+            var importData = new ImportData(factory, NullLogger<ImportData>.Instance, CreateImageStorage(), new RebrickableApi());
 
             Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
 
@@ -108,7 +108,7 @@ public class InventoryTests
 
             try
             {
-                var importData = new ImportData(factory, NullLogger<ImportData>.Instance, CreateImageStorage());
+                var importData = new ImportData(factory, NullLogger<ImportData>.Instance, CreateImageStorage(), new RebrickableApi());
 
                 Assert.IsTrue(await importData.ImportSetInfo("4502-1"));
                 Assert.IsTrue(await importData.AddOwnedSet("4502-1", userId));

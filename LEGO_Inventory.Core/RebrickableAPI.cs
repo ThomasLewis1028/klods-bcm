@@ -9,7 +9,12 @@ public class RebrickableApi
 
     private static readonly HttpClient _httpClient = new();
 
-    private readonly ILogger<RebrickableApi> _logger = NullLogger<RebrickableApi>.Instance;
+    private readonly ILogger<RebrickableApi> _logger;
+
+    public RebrickableApi(ILogger<RebrickableApi>? logger = null)
+    {
+        _logger = logger ?? NullLogger<RebrickableApi>.Instance;
+    }
 
     // ── Single-object endpoints ──────────────────────────────────────────────
 
@@ -120,7 +125,7 @@ public class RebrickableApi
 
     private async Task<JsonObject?> SendQuery(string url)
     {
-        _logger.LogTrace("API Call {Url}", url);
+        _logger.LogInformation("API Call {Url}", url);
         string? apiKey = Environment.GetEnvironmentVariable("LEGO_API_KEY");
         return await FetchAsync(new Uri($"{url}key={apiKey}"));
     }
@@ -137,10 +142,13 @@ public class RebrickableApi
             if (diff < 1000)
                 await Task.Delay(1000 - (int)diff);
 
-            if (response.IsSuccessStatusCode)
-                return JsonNode.Parse(await response.Content.ReadAsStringAsync())?.AsObject();
+            var body = await response.Content.ReadAsStringAsync();
 
-            throw new Exception($"Rebrickable API returned status code {(int)response.StatusCode}.");
+            if (response.IsSuccessStatusCode)
+                return JsonNode.Parse(body)?.AsObject();
+
+            var safeUri = uri.GetLeftPart(UriPartial.Path);
+            throw new Exception($"Rebrickable API {(int)response.StatusCode} at {safeUri} — {body}");
         }
         catch (Exception e)
         {

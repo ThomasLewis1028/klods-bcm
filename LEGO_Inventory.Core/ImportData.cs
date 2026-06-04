@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LEGO_Inventory;
 
-public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger, ImageStorageService imageStorage)
+public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger, ImageStorageService imageStorage, RebrickableApi rebrickable)
 {
     private readonly Dictionary<int, string> _themeCache = new();
     /// <summary>
@@ -199,7 +199,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<bool> ImportSetInfo(string? setId)
     {
         logger.LogInformation("Importing set info for {SetId}", setId);
-        var api = new RebrickableApi();
+        var api = rebrickable;
 
         var setInfo = await api.GetSetInfo(setId);
 
@@ -257,7 +257,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<bool> ImportSetBOM(string setId)
     {
         logger.LogInformation("Importing SetBrick BOM for {SetId}", setId);
-        var api = new RebrickableApi();
+        var api = rebrickable;
 
         var setParts = await api.GetSetParts(setId);
 
@@ -315,7 +315,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task ImportSetMinifigBOM(string setId)
     {
         logger.LogInformation("Importing SetMinifig BOM for {SetId}", setId);
-        var api = new RebrickableApi();
+        var api = rebrickable;
 
         var minifigs = await api.GetSetMinifigs(setId);
 
@@ -333,7 +333,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<bool> ImportMinifig(string minifigId)
     {
         logger.LogInformation("Importing minifig {MinifigId}", minifigId);
-        var api = new RebrickableApi();
+        var api = rebrickable;
 
         await using var context = contextFactory.CreateDbContext();
         var minifigContext = context.Set<Minifig>();
@@ -420,7 +420,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<bool> LinkMinifigBricks(string minifigId)
     {
         logger.LogInformation("Linking minifig bricks for {MinifigId}", minifigId);
-        var api = new RebrickableApi();
+        var api = rebrickable;
 
         await using var context = contextFactory.CreateDbContext();
         var minifigBrickContext = context.Set<MinifigBrick>();
@@ -473,7 +473,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
         try
         {
-            var api = new RebrickableApi();
+            var api = rebrickable;
             var setParts = await api.GetSetParts(setId);
 
             await using var context = contextFactory.CreateDbContext();
@@ -545,7 +545,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<(SetCandidate? Resolved, List<SetCandidate> Candidates, bool NotFound, bool HasMore)>
         ResolveSetId(string input, int page = 1)
     {
-        var api = new RebrickableApi();
+        var api = rebrickable;
         var trimmed = input.Trim();
 
         // On the first page only, try an exact match before falling back to search.
@@ -616,7 +616,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<bool> ImportColors()
     {
         logger.LogInformation("Importing colors from Rebrickable");
-        var api = new RebrickableApi();
+        var api = rebrickable;
         var colors = await api.GetColors();
         if (colors == null)
             return false;
@@ -659,7 +659,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<(MinifigCandidate? Resolved, List<MinifigCandidate> Candidates, bool NotFound, bool HasMore)>
         ResolveMinifigId(string input, int page = 1)
     {
-        var api = new RebrickableApi();
+        var api = rebrickable;
         var trimmed = input.Trim();
 
         if (page == 1)
@@ -772,7 +772,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<(string? PartName, List<PartColorInfo> Colors, bool NotFound)>
         ResolvePartColors(string partNum)
     {
-        var api = new RebrickableApi();
+        var api = rebrickable;
         var trimmed = partNum.Trim();
 
         JsonObject? partInfo;
