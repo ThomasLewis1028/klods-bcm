@@ -9,7 +9,7 @@ namespace LEGO_Inventory.Services;
 /// Scoped per-circuit HTTP client for the LEGO Inventory API.
 /// All data operations go through here; nothing in this class touches the database.
 /// </summary>
-public class ApiClient(IHttpClientFactory factory, AuthService auth)
+public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfiguration config)
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -51,7 +51,25 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth)
     private Task<(bool Ok, HttpStatusCode Status)> PutAsync(string url, object? body = null)   => SendAsync(HttpMethod.Put,    url, body);
     private Task<(bool Ok, HttpStatusCode Status)> DeleteAsync(string url)                     => SendAsync(HttpMethod.Delete, url);
 
-    // ── Auth ──────────────────────────────────────────────────────────────────
+    // ── Auth / OAuth ──────────────────────────────────────────────────────────
+
+    // Used for browser-navigated URLs — must be the publicly reachable API address.
+    private string ApiPublicBase => (config["API_PUBLIC_URL"] ?? config["API_BASE_URL"] ?? "http://localhost:8090").TrimEnd('/');
+
+    /// <summary>Returns the URL to navigate the browser to for an OAuth challenge.</summary>
+    public string ChallengeUrl(string provider, int? linkUserId = null)
+    {
+        var url = $"{ApiPublicBase}/auth/challenge?provider={Uri.EscapeDataString(provider)}";
+        return linkUserId.HasValue ? $"{url}&link_user_id={linkUserId}" : url;
+    }
+
+    public Task<string[]?> GetProvidersAsync() => GetAsync<string[]>("/api/auth/providers");
+
+    public async Task<string?> ExchangePendingTokenAsync(string token)
+    {
+        var resp = await GetAsync<TokenResponse>($"/api/auth/exchange/{token}");
+        return resp?.Token;
+    }
 
     public async Task<string?> LoginAsync(string username, string password)
     {

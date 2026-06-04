@@ -1,7 +1,6 @@
 @page "/auth/complete"
 @inject AuthService AuthService
 @inject ThemeService ThemeService
-@inject PendingAuthService PendingAuth
 @inject ApiClient Api
 @inject NavigationManager Nav
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
@@ -16,9 +15,9 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || Token is null) return;
+        if (!firstRender) return;
 
-        var jwt = PendingAuth.Consume(Token);
+        var jwt = Token is not null ? await Api.ExchangePendingTokenAsync(Token) : null;
         if (jwt is not null)
         {
             // Bootstrap the token so ApiClient can make the profile call.

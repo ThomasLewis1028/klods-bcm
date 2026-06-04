@@ -26,22 +26,66 @@ var jwtSecret = builder.Configuration["JWT_SECRET"]
 
 builder.Services.AddScoped<JwtService>();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// ── Authentication: JWT Bearer (API default) + External cookie (OAuth flow) ──
+const string ExternalScheme = "External";
+
+var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuer = false,
-            ValidateAudience = false,
-            ValidateLifetime = true,
+            ValidateIssuer           = false,
+            ValidateAudience         = false,
+            ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-            // Match the short claim names used in JwtService.Generate().
-            RoleClaimType = "role",
-            NameClaimType = "name",
+            IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            RoleClaimType            = "role",
+            NameClaimType            = "name",
         };
+    })
+    .AddCookie(ExternalScheme, options =>
+    {
+        options.Cookie.Name     = "ExternalLogin";
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.ExpireTimeSpan  = TimeSpan.FromMinutes(10);
     });
+
+var enabledProviders = new List<string>();
+
+var googleId     = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+var googleSecret = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
+if (!string.IsNullOrEmpty(googleId) && !string.IsNullOrEmpty(googleSecret))
+{
+    authBuilder.AddGoogle(o => { o.SignInScheme = ExternalScheme; o.ClientId = googleId; o.ClientSecret = googleSecret; });
+    enabledProviders.Add("Google");
+}
+
+var msId     = Environment.GetEnvironmentVariable("MICROSOFT_CLIENT_ID");
+var msSecret = Environment.GetEnvironmentVariable("MICROSOFT_CLIENT_SECRET");
+if (!string.IsNullOrEmpty(msId) && !string.IsNullOrEmpty(msSecret))
+{
+    authBuilder.AddMicrosoftAccount(o => { o.SignInScheme = ExternalScheme; o.ClientId = msId; o.ClientSecret = msSecret; });
+    enabledProviders.Add("Microsoft");
+}
+
+var discordId     = Environment.GetEnvironmentVariable("DISCORD_CLIENT_ID");
+var discordSecret = Environment.GetEnvironmentVariable("DISCORD_CLIENT_SECRET");
+if (!string.IsNullOrEmpty(discordId) && !string.IsNullOrEmpty(discordSecret))
+{
+    authBuilder.AddDiscord(o => { o.SignInScheme = ExternalScheme; o.ClientId = discordId; o.ClientSecret = discordSecret; });
+    enabledProviders.Add("Discord");
+}
+
+var githubId     = Environment.GetEnvironmentVariable("GITHUB_CLIENT_ID");
+var githubSecret = Environment.GetEnvironmentVariable("GITHUB_CLIENT_SECRET");
+if (!string.IsNullOrEmpty(githubId) && !string.IsNullOrEmpty(githubSecret))
+{
+    authBuilder.AddGitHub(o => { o.SignInScheme = ExternalScheme; o.ClientId = githubId; o.ClientSecret = githubSecret; });
+    enabledProviders.Add("GitHub");
+}
+
+builder.Services.AddSingleton(new PendingAuthService { EnabledProviders = enabledProviders });
 
 builder.Services.AddAuthorization(options =>
 {
@@ -58,15 +102,33 @@ var app = builder.Build();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InventoryContext>>();
-    await using var ctx = db.CreateDbContext();
+    var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InventoryContext>>();
+    await using var ctx = dbFactory.CreateDbContext();
     await ctx.Database.MigrateAsync();
+
+    if (!await ctx.Users.AnyAsync(u => u.Role == "Admin"))
+    {
+        var defaultPassword = builder.Configuration["ADMIN_DEFAULT_PASSWORD"] ?? "admin";
+        ctx.Users.Add(new User
+        {
+            UserName     = "admin",
+            PasswordHash = PasswordHasher.Hash(defaultPassword),
+            Role         = "Admin"
+        });
+        await ctx.SaveChangesAsync();
+        var seedLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+        seedLogger.LogWarning("No admin user found — created default admin. Username: admin, Password: {Password}. Change this immediately.", defaultPassword);
+    }
 }
+
+var imageStorage = app.Services.GetRequiredService<ImageStorageService>();
+await imageStorage.InitializeAsync();
 
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapOAuth();
 app.MapAuth();
 app.MapAuthProfile();
 app.MapSets();

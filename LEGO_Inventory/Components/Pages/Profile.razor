@@ -2,7 +2,6 @@
 @inject AuthService AuthService
 @inject ApiClient Api
 @inject ThemeService ThemeService
-@inject PendingAuthService PendingAuth
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject ImageStorageService ImageStorage
@@ -108,13 +107,13 @@
     </MudItem>
 
     @* ── Linked Accounts ── *@
-    @if (PendingAuth.EnabledProviders.Count > 0)
+    @if (_providers.Length > 0)
     {
         <MudItem xs="12" md="4">
             <MudPaper Class="pa-4" Elevation="2" Style="height: 100%;">
                 <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Linked Accounts</MudText>
                 <MudStack Spacing="2">
-                    @foreach (var provider in PendingAuth.EnabledProviders)
+                    @foreach (var provider in _providers)
                     {
                         var p = provider;
                         var linked = _linkedLogins.Any(l => l.Provider == p);
@@ -237,6 +236,7 @@
 
 @code {
     // Linked accounts
+    private string[] _providers = [];
     private List<ApiClient.LinkedLoginDto> _linkedLogins = [];
     private bool _hasPassword;
 
@@ -294,6 +294,7 @@
     protected override async Task OnInitializedAsync()
     {
         _customColorHex = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
+        _providers      = await Api.GetProvidersAsync() ?? [];
         _linkedLogins   = (await Api.GetLinkedLoginsAsync())?.ToList() ?? [];
         _hasPassword    = AuthService.CurrentUser?.HasPassword ?? false;
 
@@ -352,8 +353,7 @@
 
     private void LinkProvider(string provider)
     {
-        var userId = AuthService.CurrentUser!.UserId;
-        Nav.NavigateTo($"/auth/challenge?provider={provider}&linkUserId={userId}", forceLoad: true);
+        Nav.NavigateTo(Api.ChallengeUrl(provider, AuthService.CurrentUser!.UserId), forceLoad: true);
     }
 
     private async Task Unlink(string provider)
