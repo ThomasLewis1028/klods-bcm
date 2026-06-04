@@ -86,6 +86,7 @@ services:
       - .env
     environment:
       API_BASE_URL: "http://lego_inventory_api:8080"
+      API_PUBLIC_URL: "http://localhost:8090"
     depends_on:
       postgres:
         condition: service_healthy

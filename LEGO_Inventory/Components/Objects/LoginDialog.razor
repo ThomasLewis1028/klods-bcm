@@ -1,6 +1,5 @@
 @inject AuthService AuthService
 @inject ApiClient Api
-@inject PendingAuthService PendingAuth
 @inject NavigationManager Nav
 @inject IDialogService DialogService
 @using Color = MudBlazor.Color
@@ -21,10 +20,10 @@
                 <MudAlert Severity="Severity.Error" Dense="true">@_errorMessage</MudAlert>
             }
 
-            @if (!_isRegister && PendingAuth.EnabledProviders.Count > 0)
+            @if (!_isRegister && _providers.Length > 0)
             {
                 <MudStack Spacing="2">
-                    @foreach (var provider in PendingAuth.EnabledProviders)
+                    @foreach (var provider in _providers)
                     {
                         var p = provider;
                         <MudButton FullWidth="true" Variant="Variant.Outlined"
@@ -71,11 +70,17 @@
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
+    private string[] _providers = [];
     private string _username = string.Empty;
     private string _password = string.Empty;
     private bool _showPassword = false;
     private bool _isRegister = false;
     private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _providers = await Api.GetProvidersAsync() ?? [];
+    }
 
     private async Task Submit()
     {
@@ -124,7 +129,7 @@
     private void SignInWithProvider(string provider)
     {
         MudDialog.Cancel();
-        Nav.NavigateTo($"/auth/challenge?provider={provider}", forceLoad: true);
+        Nav.NavigateTo(Api.ChallengeUrl(provider), forceLoad: true);
     }
 
     private static string ProviderIcon(string provider) => provider switch

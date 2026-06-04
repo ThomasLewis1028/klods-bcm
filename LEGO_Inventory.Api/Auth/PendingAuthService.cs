@@ -1,9 +1,8 @@
-namespace LEGO_Inventory.Services;
+namespace LEGO_Inventory.Api.Auth;
 
 /// <summary>
-/// Singleton that bridges the HTTP OAuth redirect back to the Blazor circuit.
-/// After a successful OAuth callback the controller stores a short-lived one-time
-/// token here mapped to the user's JWT; the /auth/complete page consumes it.
+/// Bridges the HTTP OAuth redirect back to whatever client is waiting (Blazor circuit, mobile deep link, etc.).
+/// Stores a short-lived one-time token mapped to the user's JWT; the client exchanges it via /api/auth/exchange/{token}.
 /// </summary>
 public class PendingAuthService
 {
