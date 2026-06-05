@@ -57,10 +57,26 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     private string ApiPublicBase => (config["API_PUBLIC_URL"] ?? config["API_BASE_URL"] ?? "http://localhost:8090").TrimEnd('/');
 
     /// <summary>Returns the URL to navigate the browser to for an OAuth challenge.</summary>
-    public string ChallengeUrl(string provider, int? linkUserId = null)
+    public string ChallengeUrl(string provider, string? linkToken = null)
     {
         var url = $"{ApiPublicBase}/auth/challenge?provider={Uri.EscapeDataString(provider)}";
-        return linkUserId.HasValue ? $"{url}&link_user_id={linkUserId}" : url;
+        return linkToken is not null ? $"{url}&link_token={Uri.EscapeDataString(linkToken)}" : url;
+    }
+
+    /// <summary>
+    /// Registers a link intent on the server (requires authentication) and returns a short-lived opaque token
+    /// to be passed to ChallengeUrl. The server binds the token to the current user's ID so the OAuth callback
+    /// can resolve the link target without trusting user-supplied parameters.
+    /// </summary>
+    public async Task<string?> CreateLinkIntentAsync()
+    {
+        try
+        {
+            var resp = await Http().PostAsJsonAsync("/api/auth/link-intent", new { }, JsonOpts);
+            if (!resp.IsSuccessStatusCode) return null;
+            return (await resp.Content.ReadFromJsonAsync<LinkIntentResponse>(JsonOpts))?.Token;
+        }
+        catch { return null; }
     }
 
     public Task<string[]?> GetProvidersAsync() => GetAsync<string[]>("/api/auth/providers");
@@ -231,6 +247,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Response models ───────────────────────────────────────────────────────
 
     public record TokenResponse(string Token);
+    public record LinkIntentResponse(string Token);
     public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword);
     public record LinkedLoginDto(string Provider);
     public record HomePreviewDto(List<PreviewItemDto> Sets, List<PreviewItemDto> Bricks, List<PreviewItemDto> Minifigs);

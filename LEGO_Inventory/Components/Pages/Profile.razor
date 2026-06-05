@@ -351,9 +351,15 @@
         Snackbar.Add("Profile picture updated.", Severity.Success);
     }
 
-    private void LinkProvider(string provider)
+    private async Task LinkProvider(string provider)
     {
-        Nav.NavigateTo(Api.ChallengeUrl(provider, AuthService.CurrentUser!.UserId), forceLoad: true);
+        var linkToken = await Api.CreateLinkIntentAsync();
+        if (linkToken is null)
+        {
+            Snackbar.Add("Could not initiate account linking. Please try again.", Severity.Error);
+            return;
+        }
+        Nav.NavigateTo(Api.ChallengeUrl(provider, linkToken), forceLoad: true);
     }
 
     private async Task Unlink(string provider)
