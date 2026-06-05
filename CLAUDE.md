@@ -1,4 +1,4 @@
-# LEGO Inventory Tracker — Claude Instructions
+# Klods - A Brick Collection Manager — Claude Instructions
 
 ## Secrets & Sensitive Files
 - **Never read `.env` files.** If understanding config is needed, ask the user to describe the relevant variables.
