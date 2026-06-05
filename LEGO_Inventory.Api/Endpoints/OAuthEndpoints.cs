@@ -11,12 +11,13 @@ public static class OAuthEndpoints
     public static void MapOAuth(this IEndpointRouteBuilder app)
     {
         // Browser-navigated — initiates the external provider challenge.
-        app.MapGet("/auth/challenge", (string provider, int? link_user_id) =>
+        // link_token is an opaque short-lived token previously issued by POST /api/auth/link-intent
+        // (which requires authentication). Never accept a user ID directly here.
+        app.MapGet("/auth/challenge", (string provider, string? link_token) =>
         {
-            // RedirectUri is where ASP.NET Core sends us after validating the external callback.
             var properties = new AuthenticationProperties { RedirectUri = "/auth/finalize" };
-            if (link_user_id.HasValue)
-                properties.Items["link_user_id"] = link_user_id.Value.ToString();
+            if (link_token is not null)
+                properties.Items["link_token"] = link_token;
             return Results.Challenge(properties, [provider]);
         });
 
@@ -41,8 +42,12 @@ public static class OAuthEndpoints
             if (string.IsNullOrEmpty(provider) || string.IsNullOrEmpty(providerKey))
                 return Results.Redirect(BlazorUrl(config, "/?auth_error=missing_claims"));
 
-            result.Properties!.Items.TryGetValue("link_user_id", out var linkUserIdStr);
-            var linkUserId = int.TryParse(linkUserIdStr, out var id) ? (int?)id : null;
+            result.Properties!.Items.TryGetValue("link_token", out var linkToken);
+
+            // Resolve the intended link target from the server-side pending store — never from user input.
+            int? linkUserId = linkToken is not null ? pending.ConsumeLinkIntent(linkToken) : null;
+            if (linkToken is not null && linkUserId is null)
+                return Results.Redirect(BlazorUrl(config, "/profile?link_error=intent_expired"));
 
             await ctx.SignOutAsync(ExternalScheme);
 
@@ -105,18 +110,27 @@ public static class OAuthEndpoints
             return Results.Redirect(BlazorUrl(config, $"/auth/complete?token={token}&linked={linkUserId.HasValue}"));
         });
 
+        var apiGroup = app.MapGroup("/api/auth");
+
+        // JSON API — authenticated users call this before starting an OAuth link flow.
+        // Returns a short-lived opaque token that the browser passes to /auth/challenge as link_token.
+        apiGroup.MapPost("/link-intent", (HttpContext http, PendingAuthService pending) =>
+        {
+            var userId = http.UserId();
+            var token  = pending.StoreLinkIntent(userId);
+            return Results.Ok(new LinkIntentResponse(token));
+        }).RequireAuthorization();
+
         // JSON API — client exchanges the one-time token for a JWT.
-        app.MapGroup("/api/auth")
-            .MapGet("/exchange/{token}", (string token, PendingAuthService pending) =>
-            {
-                var jwt = pending.Consume(token);
-                return jwt is not null ? Results.Ok(new TokenResponse(jwt)) : Results.NotFound();
-            });
+        apiGroup.MapGet("/exchange/{token}", (string token, PendingAuthService pending) =>
+        {
+            var jwt = pending.Consume(token);
+            return jwt is not null ? Results.Ok(new TokenResponse(jwt)) : Results.NotFound();
+        });
 
         // JSON API — returns the list of enabled OAuth providers.
-        app.MapGroup("/api/auth")
-            .MapGet("/providers", (PendingAuthService pending) =>
-                Results.Ok(pending.EnabledProviders));
+        apiGroup.MapGet("/providers", (PendingAuthService pending) =>
+            Results.Ok(pending.EnabledProviders));
     }
 
     private static string BlazorUrl(IConfiguration config, string path)
@@ -126,4 +140,5 @@ public static class OAuthEndpoints
     }
 
     public record TokenResponse(string Token);
+    public record LinkIntentResponse(string Token);
 }
