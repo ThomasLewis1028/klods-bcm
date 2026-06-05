@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Klods.Api/Klods.Api.csproj" />
+  <Project Path="Klods.Core/Klods.Core.csproj" />
+  <Project Path="Klods.Web/Klods.Web.csproj" />
+  <Project Path="Klods.Tests/Klods.Tests.csproj" />
+</Solution>
