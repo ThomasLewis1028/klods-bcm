@@ -20,4 +20,8 @@ public class Set
     public DateTime DateModified { get; set; }
     
     public string ManualUrl { get; set; }
+
+    public int? ThemeId { get; set; }
+
+    public string? ThemeName { get; set; }
 }

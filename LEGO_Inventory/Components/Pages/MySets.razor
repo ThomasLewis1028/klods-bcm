@@ -4,11 +4,9 @@
 @inject IJSRuntime JsRuntime
 @inject AuthService AuthService
 @inject NavigationManager Nav
-@inject IDbContextFactory<InventoryContext> DbContextFactory
-@inject ImportData ImportData
+@inject ApiClient Api
 @inject ImageStorageService ImageStorage
 @using LEGO_Inventory.Components.Objects
-@using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
@@ -92,16 +90,16 @@
                         @if (setContext.Item.OwnedSets.Count > 0)
                         {
                             <MudCard>
-                                <MudDataGrid T="SetOwned" Items="setContext.Item.OwnedSets">
+                                <MudDataGrid T="ApiClient.OwnedInstanceDto" Items="setContext.Item.OwnedSets">
                                     <Columns>
                                         <PropertyColumn Title="Index" Property="x => x.SetIndex"/>
-                                        <PropertyColumn Title="Stock" Property="x => GetStockCount(x)"/>
-                                        <PropertyColumn Title="Missing" Property="x => GetMissingPieceCount(x)"/>
+                                        <PropertyColumn Title="Stock" Property="x => x.StockCount"/>
+                                        <PropertyColumn Title="Missing" Property="x => x.MissingPieceCount"/>
                                         <TemplateColumn Title="BoM" Editable="false">
                                             <CellTemplate>
                                                 <MudStack Row>
                                                     <MudIconButton
-                                                        href=@($"/bom/{context.Item.SetId}/{context.Item.SetIndex}")
+                                                        href=@($"/bom/{setContext.Item.Set.SetId}/{context.Item.SetIndex}")
                                                         Icon="@Icons.Material.Filled.List"
                                                         Variant="Variant.Filled" Color="Color.Primary"
                                                         Size="Size.Small"></MudIconButton>
@@ -116,7 +114,7 @@
                                                         Variant="Variant.Filled"
                                                         Color="Color.Error"
                                                         Size="Size.Small"
-                                                        OnClick="() => DeleteOwnedSet(context.Item.SetId, context.Item.SetIndex, setContext.Item.Set.Name, ImageStorage.ResolveUrl(setContext.Item.Set.SetImg))"/>
+                                                        OnClick="() => DeleteOwnedSet(setContext.Item.Set.SetId, context.Item.SetIndex, setContext.Item.Set.Name, ImageStorage.ResolveUrl(setContext.Item.Set.SetImg))"/>
                                                 </MudStack>
                                             </CellTemplate>
                                         </TemplateColumn>
@@ -137,10 +135,8 @@
 </MudGrid>
 
 @code {
-    private string _pageTitle = "My Sets";
-    private List<Set>? _sets;
-    private List<SetInfo>? _setInfos = [];
-    private string searchString;
+    private List<SetInfo> _setInfos = [];
+    private string searchString = "";
     private bool _isLoading = true;
 
     protected override void OnInitialized()
@@ -174,25 +170,8 @@
 
     private async Task LoadDataAsync()
     {
-        using var context = DbContextFactory.CreateDbContext();
-        var userId = AuthService.CurrentUser?.UserId;
-
-        var sets = await context.Set<Set>().ToListAsync();
-        var allOwned = userId.HasValue
-            ? await context.Set<SetOwned>().Where(so => so.UserId == userId.Value).ToListAsync()
-            : new List<SetOwned>();
-        var ownedBySetId = allOwned.GroupBy(so => so.SetId).ToDictionary(g => g.Key, g => g.ToList());
-
-        _sets = sets;
-        _setInfos!.Clear();
-
-        foreach (var set in sets)
-        {
-            var ownedSets = ownedBySetId.GetValueOrDefault(set.SetId, []);
-            if (userId.HasValue && ownedSets.Count == 0) continue;
-            _setInfos.Add(new SetInfo { Set = set, OwnedSets = ownedSets });
-        }
-
+        var owned = await Api.GetMyOwnedSetsAsync();
+        _setInfos = owned?.Select(s => new SetInfo { Set = s, OwnedSets = s.Instances }).ToList() ?? [];
         _isLoading = false;
     }
 
@@ -207,18 +186,8 @@
 
     private async Task AddOwnedSet(string setId)
     {
-        await ImportData.AddOwnedSet(setId, AuthService.CurrentUser?.UserId);
-
-        using (var context = DbContextFactory.CreateDbContext())
-        {
-            var userId = AuthService.CurrentUser?.UserId;
-            var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
-            if (setInfo != null && userId.HasValue)
-                setInfo.OwnedSets = await context.Set<SetOwned>()
-                    .Where(so => so.SetId == setId && so.UserId == userId.Value)
-                    .ToListAsync();
-        }
-
+        await Api.AddOwnedSetAsync(setId);
+        await LoadDataAsync();
         StateHasChanged();
     }
 
@@ -251,44 +220,12 @@
 
     void CommittedItemChanges(SetInfo setInfo) { }
 
-    private int GetMissingPieceCount(SetOwned setOwned)
-    {
-        using var context = DbContextFactory.CreateDbContext();
-        var totalNeeded = context.Set<SetBrick>()
-            .Where(sb => sb.SetId == setOwned.SetId)
-            .Sum(sb => sb.Count);
-        var totalStock = context.Set<SetBrickOwned>()
-            .Where(sbo => sbo.UserId == setOwned.UserId && sbo.SetId == setOwned.SetId && sbo.SetIndex == setOwned.SetIndex)
-            .Sum(sbo => sbo.Stock);
-        return Math.Max(0, totalNeeded - totalStock);
-    }
-
-    private int GetStockCount(SetOwned setOwned)
-    {
-        using var context = DbContextFactory.CreateDbContext();
-        return context.Set<SetBrickOwned>()
-            .Where(sbo => sbo.UserId == setOwned.UserId && sbo.SetId == setOwned.SetId && sbo.SetIndex == setOwned.SetIndex)
-            .Sum(sbo => sbo.Stock);
-    }
-
-    private Task OpenErrorPopup(string errorMessage)
-    {
-        var errorPopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
-
-        var parameters = new DialogParameters<ErrorPopup>
-        {
-            { x => x._errorMessage, errorMessage }
-        };
-
-        return DialogService.ShowAsync<ErrorPopup>("Error Popup", parameters, errorPopup);
-    }
-
     private void OpenBuildingInstructions(string url)
     {
         JsRuntime.InvokeVoidAsync("open", url, "_blank");
     }
 
-    private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string setImgUrl)
+    private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string? setImgUrl)
     {
         var deletePopup = new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true };
 
@@ -297,23 +234,20 @@
             { x => x._id, setId },
             { x => x._setIndex, setIndex },
             { x => x._name, setName },
-            { x => x._imgUrl, setImgUrl },
-            { x => x._userId, AuthService.CurrentUser?.UserId ?? 0 }
+            { x => x._imgUrl, setImgUrl }
         };
 
         var dialog = DialogService.Show<DeleteIndexPopup>("Delete Popup", parameters, deletePopup);
-
         var result = await dialog.Result;
 
         if (!result.Canceled)
         {
             var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
-
             if (setInfo != null)
             {
-                var removeSet = setInfo.OwnedSets.FirstOrDefault(os => os.SetId == setId && os.SetIndex == setIndex);
-                if (removeSet != null)
-                    setInfo.OwnedSets.Remove(removeSet);
+                var removeInst = setInfo.OwnedSets.FirstOrDefault(i => i.SetIndex == setIndex);
+                if (removeInst != null)
+                    setInfo.OwnedSets.Remove(removeInst);
 
                 if (setInfo.OwnedSets.Count == 0)
                     _setInfos.Remove(setInfo);
@@ -325,7 +259,7 @@
 
     private class SetInfo
     {
-        public Set Set { get; set; }
-        public List<SetOwned> OwnedSets { get; set; }
+        public ApiClient.MyOwnedSetDto Set { get; set; } = null!;
+        public List<ApiClient.OwnedInstanceDto> OwnedSets { get; set; } = [];
     }
 }
