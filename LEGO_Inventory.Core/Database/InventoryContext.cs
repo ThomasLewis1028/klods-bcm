@@ -5,6 +5,10 @@ namespace LEGO_Inventory.Database;
 
 public class InventoryContext : DbContext
 {
+    public InventoryContext() { }
+
+    public InventoryContext(DbContextOptions<InventoryContext> options) : base(options) { }
+
     public DbSet<Brick> Bricks { get; set; }
     public DbSet<SetBrick> SetBricks { get; set; }
     public DbSet<SetBrickOwned> SetBrickOwneds { get; set; }
@@ -161,6 +165,9 @@ public class InventoryContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
+        if (optionsBuilder.IsConfigured)
+            return;
+
         var host = Environment.GetEnvironmentVariable("POSTGRES_HOST")
             ?? throw new InvalidOperationException("Required environment variable POSTGRES_HOST is not set.");
         var user = Environment.GetEnvironmentVariable("POSTGRES_USER")

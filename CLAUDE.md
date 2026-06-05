@@ -1,4 +1,4 @@
-# LEGO Inventory Tracker — Claude Instructions
+# Klods - A Brick Collection Manager — Claude Instructions
 
 ## Secrets & Sensitive Files
 - **Never read `.env` files.** If understanding config is needed, ask the user to describe the relevant variables.
@@ -13,6 +13,13 @@
 - Use EF Core conventions and data annotations before reaching for raw SQL.
 - Run `dotnet ef migrations add <Name>` then `dotnet ef database update` for schema changes — never modify migration files by hand.
 - Prefer `var` when the type is obvious from the right-hand side.
+
+## Solution Structure
+- Solution file: `LEGO_Inventory_Tracker.sln` at the repo root
+- `LEGO_Inventory.Core/` — class library; all EF models, InventoryContext, migrations, ImportData, UpdateData, DeleteData, RebrickableApi, ImageStorageService, InventoryAggregates, ColorHelper
+- `LEGO_Inventory/` — Blazor Server app; references Core; contains all Components, AuthService, PendingAuthService, ThemeService
+- `LEGO_Inventory.Api/` — ASP.NET Core Web API (Phase 6 Stage B, not yet created); will reference Core; JWT auth; minimal API endpoints
+- EF migrations live in `LEGO_Inventory.Core/Migrations/`. Run: `dotnet ef migrations add <Name> --project LEGO_Inventory.Core`
 
 ## Blazor / MudBlazor
 - This is a **Blazor Server** app — avoid patterns that only work in Blazor WebAssembly.

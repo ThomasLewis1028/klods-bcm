@@ -2,11 +2,9 @@
 @inject IDialogService DialogService
 @inject AuthService AuthService
 @inject NavigationManager Nav
-@inject IDbContextFactory<InventoryContext> DbContextFactory
-@inject UpdateData UpdateData
+@inject ApiClient Api
 @inject ImageStorageService ImageStorage
 @using LEGO_Inventory.Components.Objects
-@using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 @using Size = MudBlazor.Size
@@ -35,39 +33,47 @@
             <ToolBarContent>
                 <MudText Typo="Typo.h6">My Minifigs: @_minifigInfos.Count</MudText>
                 <MudSpacer/>
-                <MudText Typo="Typo.h6">In Stock: @_minifigInfos.Sum(m => m.MinifigOwned.Stock)</MudText>
+                <MudText Typo="Typo.h6">In Stock: @_minifigInfos.Sum(m => m.Stock)</MudText>
                 <MudSpacer/>
-                <MudText Typo="Typo.h6">Needed: @_minifigInfos.Sum(m => m.UserNeeded)</MudText>
+                <MudText Typo="Typo.h6">Needed: @_minifigInfos.Sum(m => m.Minifig.UserNeeded)</MudText>
                 <MudSpacer/>
                 <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
                               Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
                               IconSize="Size.Medium" Class="mt-0"/>
+                <MudTooltip Text="@(AuthService.CurrentUser == null ? "Sign in to import" : "Import a minifig")">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                               StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Download)"
+                               Disabled="@(AuthService.CurrentUser == null)"
+                               OnClick="OpenImportMinifigDialog">
+                        Import
+                    </MudButton>
+                </MudTooltip>
             </ToolBarContent>
             <Columns>
-                <HierarchyColumn T="MyMinifigInfo" ButtonDisabledFunc="@(info => info.PartCount == 0)"/>
+                <HierarchyColumn T="MyMinifigInfo" ButtonDisabledFunc="@(info => info.Minifig.PartCount == 0)"/>
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
                             <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                      Src="@ImageStorage.ResolveUrl(context.Item.Minifig.MinifigImgUrl)" Height="50"
-                                      @onclick="() => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.MinifigName, ImageStorage.ResolveUrl(context.Item.Minifig.MinifigImgUrl))"/>
+                                      Src="@ImageStorage.ResolveUrl(context.Item.Minifig.ImgUrl)" Height="50"
+                                      @onclick="() => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.MinifigName, ImageStorage.ResolveUrl(context.Item.Minifig.ImgUrl))"/>
                         </MudStack>
                     </CellTemplate>
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Id" Editable="false"/>
                 <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name" Editable="false"/>
-                <TemplateColumn Title="My Stock" Editable="false" Sortable="true" SortBy="x => x.MinifigOwned.Stock">
+                <TemplateColumn Title="My Stock" Editable="false" Sortable="true" SortBy="x => x.Stock">
                     <CellTemplate>
                         <MudNumericField T="int"
-                                         Value="@context.Item.MinifigOwned.Stock"
+                                         Value="@context.Item.Stock"
                                          ValueChanged="@(v => SaveMinifigOwnedStock(context.Item, v))"
                                          Min="0"
                                          Variant="Variant.Text"/>
                     </CellTemplate>
                 </TemplateColumn>
-                <PropertyColumn Property="x => x.UserNeeded" Title="Needed" Editable="false"/>
-                <PropertyColumn Property="x => x.UserSetCount" Title="Sets" Editable="false"/>
-                <PropertyColumn Property="x => x.PartCount" Title="Parts" Editable="false"/>
+                <PropertyColumn Property="x => x.Minifig.UserNeeded" Title="Needed" Editable="false"/>
+                <PropertyColumn Property="x => x.Minifig.UserSetCount" Title="Sets" Editable="false"/>
+                <PropertyColumn Property="x => x.Minifig.PartCount" Title="Parts" Editable="false"/>
             </Columns>
 
             <ChildRowContent Context="minifigContext">
@@ -86,29 +92,29 @@
                 else if (minifigContext.Item.Bricks.Any())
                 {
                     <MudCard>
-                        <MudDataGrid T="BrickEntry" Items="minifigContext.Item.Bricks.OrderBy(b => b.Brick.PartNum)">
+                        <MudDataGrid T="BrickEntry" Items="minifigContext.Item.Bricks.OrderBy(b => b.BrickId)">
                             <Columns>
                                 <TemplateColumn Title="Image" Editable="false">
                                     <CellTemplate>
                                         <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                                             <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                      Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)" Height="50"
-                                                      @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg))"/>
+                                                      Src="@ImageStorage.ResolveUrl(context.Item.PartImg)" Height="50"
+                                                      @onclick="() => OpenImagePopup(context.Item.BrickId, context.Item.Name, ImageStorage.ResolveUrl(context.Item.PartImg))"/>
                                         </MudStack>
                                     </CellTemplate>
                                 </TemplateColumn>
-                                <PropertyColumn Title="Part Id" Property="x => x.Brick.PartNum"/>
-                                <PropertyColumn Title="Name" Property="x => x.Brick.Name"/>
-                                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
+                                <PropertyColumn Title="Part Id" Property="x => x.BrickId"/>
+                                <PropertyColumn Title="Name" Property="x => x.Name"/>
+                                <TemplateColumn Title="Color" SortBy="x => x.ColorId" Sortable="true" Editable="false">
                                     <CellTemplate>
                                         <MudStack Row>
-                                            @if (context.Item.Brick.HexColor != null)
+                                            @if (context.Item.HexColor != null)
                                             {
                                                 <MudChip T="string"
-                                                    OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
+                                                    OnClick="() => OpenColorPopup(context.Item.HexColor, context.Item.ColorName)"
                                                     class="mud-elevation-2"
-                                                    Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
-                                                    @context.Item.Brick.ColorName
+                                                    Style="@ColorHelper.ColorChipStyle(context.Item.HexColor)">
+                                                    @context.Item.ColorName
                                                 </MudChip>
                                             }
                                             else
@@ -159,58 +165,19 @@
 
     protected override async Task OnInitializedAsync() => await LoadDataAsync();
 
+    private async Task OpenImportMinifigDialog()
+    {
+        var dialog = await DialogService.ShowAsync<ImportMinifigDialog>("Import Minifigs",
+            new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+            await OnInitializedAsync();
+    }
+
     private async Task LoadDataAsync()
     {
-        if (AuthService.CurrentUser == null) return;
-        var userId = AuthService.CurrentUser.UserId;
-
-        using var context = DbContextFactory.CreateDbContext();
-
-        var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(context, userId);
-        var userSetIds = userSetCopies.Keys.ToList();
-
-        var setMinifigs = await context.Set<SetMinifig>()
-            .AsNoTracking()
-            .Where(sm => userSetIds.Contains(sm.SetId))
-            .ToListAsync();
-
-        var neededDict = InventoryAggregates.GetMinifigNeededDict(setMinifigs, userSetCopies);
-        var setCountDict = InventoryAggregates.GetMinifigSetCountDict(setMinifigs);
-
-        var minifigOwnedDict = (await context.Set<MinifigOwned>()
-            .AsNoTracking()
-            .Where(mo => mo.UserId == userId)
-            .ToListAsync())
-            .ToDictionary(mo => mo.MinifigId);
-
-        var allMinifigIds = neededDict.Keys.Union(minifigOwnedDict.Keys).ToHashSet();
-
-        var partCounts = (await context.Set<MinifigBrick>()
-            .AsNoTracking()
-            .Where(mb => allMinifigIds.Contains(mb.MinifigID))
-            .ToListAsync())
-            .GroupBy(mb => mb.MinifigID)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        var allMinifigs = await context.Set<Minifig>()
-            .AsNoTracking()
-            .Where(m => allMinifigIds.Contains(m.MinifigId))
-            .ToListAsync();
-
-        _minifigInfos = allMinifigs.Select(m =>
-        {
-            minifigOwnedDict.TryGetValue(m.MinifigId, out var mo);
-            return new MyMinifigInfo
-            {
-                Minifig = m,
-                MinifigOwned = mo ?? new MinifigOwned { UserId = userId, MinifigId = m.MinifigId, Stock = 0 },
-                IsNewMinifigOwned = mo == null,
-                UserNeeded = neededDict.GetValueOrDefault(m.MinifigId, 0),
-                UserSetCount = setCountDict.GetValueOrDefault(m.MinifigId, 0),
-                PartCount = partCounts.GetValueOrDefault(m.MinifigId, 0)
-            };
-        }).ToList();
-
+        var minifigs = await Api.GetMyMinifigsAsync();
+        _minifigInfos = minifigs?.Select(m => new MyMinifigInfo { Minifig = m, Stock = m.Stock }).ToList() ?? [];
         _isLoading = false;
         StateHasChanged();
     }
@@ -218,40 +185,26 @@
     private async Task LoadMinifigBricksAsync(MyMinifigInfo info)
     {
         if (info.IsLoaded) return;
-
-        await using var context = DbContextFactory.CreateDbContext();
-
-        var joined = await context.Set<MinifigBrick>()
-            .AsNoTracking()
-            .Where(mb => mb.MinifigID == info.Minifig.MinifigId)
-            .Join(context.Set<Brick>().AsNoTracking(),
-                mb => new { PartNum = mb.BrickID, mb.ColorId },
-                b  => new { b.PartNum, b.ColorId },
-                (mb, b) => new { Brick = b, mb.Quantity })
-            .ToListAsync();
-
-        info.Bricks = joined.Select(e => new BrickEntry { Brick = e.Brick, Quantity = e.Quantity }).ToList();
+        var bricks = await Api.GetMyMinifigBricksAsync(info.Minifig.MinifigId);
+        info.Bricks = bricks?.Select(b => new BrickEntry
+        {
+            BrickId = b.BrickId,
+            ColorId = b.ColorId,
+            Name = b.Name,
+            PartImg = b.PartImg,
+            ColorName = b.ColorName,
+            HexColor = b.HexColor,
+            Quantity = b.Quantity
+        }).ToList() ?? [];
         info.IsLoaded = true;
         StateHasChanged();
     }
 
-    private void SaveMinifigOwnedStock(MyMinifigInfo info, int newValue)
+    private async void SaveMinifigOwnedStock(MyMinifigInfo info, int newValue)
     {
         if (newValue < 0) return;
-        info.MinifigOwned.Stock = newValue;
-
-        if (info.IsNewMinifigOwned)
-        {
-            using var context = DbContextFactory.CreateDbContext();
-            context.Set<MinifigOwned>().Add(info.MinifigOwned);
-            context.SaveChanges();
-            info.IsNewMinifigOwned = false;
-        }
-        else
-        {
-            UpdateData.UpdateMinifigOwned(info.MinifigOwned, AuthService.CurrentUser?.UserId ?? 0);
-        }
-
+        info.Stock = newValue;
+        await Api.UpsertMinifigStockAsync(info.Minifig.MinifigId, newValue);
         StateHasChanged();
     }
 
@@ -281,19 +234,20 @@
 
     private class MyMinifigInfo
     {
-        public Minifig Minifig { get; set; }
-        public MinifigOwned MinifigOwned { get; set; }
-        public bool IsNewMinifigOwned { get; set; }
-        public int UserNeeded { get; set; }
-        public int UserSetCount { get; set; }
-        public int PartCount { get; set; }
+        public ApiClient.MyMinifigDto Minifig { get; set; } = null!;
+        public int Stock { get; set; }
         public bool IsLoaded { get; set; }
         public List<BrickEntry> Bricks { get; set; } = [];
     }
 
     private class BrickEntry
     {
-        public Brick Brick { get; set; }
+        public string BrickId { get; set; } = "";
+        public string ColorId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? PartImg { get; set; }
+        public string? ColorName { get; set; }
+        public string? HexColor { get; set; }
         public int Quantity { get; set; }
     }
 }

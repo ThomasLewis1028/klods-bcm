@@ -20,4 +20,6 @@ public class Brick
     public string? HexColor { get; set; }
     
     public bool IsTrans { get; set; }
+
+    public string? BricklinkId { get; set; }
 }

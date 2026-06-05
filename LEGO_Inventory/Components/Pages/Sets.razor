@@ -3,12 +3,9 @@
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
 @inject AuthService AuthService
-@inject IDbContextFactory<InventoryContext> DbContextFactory
+@inject ApiClient Api
 @inject ImageStorageService ImageStorage
-@inject ImportData ImportData
-@inject DeleteData DeleteData
 @using LEGO_Inventory.Components.Objects
-@using LEGO_Inventory.Database
 @using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
@@ -134,28 +131,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        using var context = DbContextFactory.CreateDbContext();
-        var userId = AuthService.CurrentUser?.UserId;
-
-        var sets = await context.Set<Set>().ToListAsync();
-        var ownedCounts = (await context.Set<SetOwned>()
-            .Where(so => userId.HasValue && so.UserId == userId.Value)
-            .ToListAsync())
-            .GroupBy(so => so.SetId)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        _rows = sets.Select(s => new SetCatalogRow
+        var response = await Api.GetSetsCatalogViewAsync();
+        if (response != null)
         {
-            Set = s,
-            UserOwnedCount = ownedCounts.GetValueOrDefault(s.SetId, 0)
-        }).ToList();
-
-        _totalSets = sets.Count;
-        _totalOwnedInstances = await context.Set<SetOwned>().CountAsync();
-        _totalOwners = await context.Set<SetOwned>().Select(so => so.UserId).Distinct().CountAsync();
-        _totalPieces = sets.Sum(s => s.NumBricks);
+            _rows = response.Sets.Select(s => new SetCatalogRow { Set = s, UserOwnedCount = s.UserOwnedCount }).ToList();
+            _totalSets = response.Sets.Count;
+            _totalOwnedInstances = response.TotalOwnedInstances;
+            _totalOwners = response.TotalOwners;
+            _totalPieces = response.TotalPieces;
+        }
         _isLoading = false;
-
         StateHasChanged();
     }
 
@@ -171,33 +156,23 @@
     private async Task IncrementOwned(SetCatalogRow row)
     {
         if (AuthService.CurrentUser == null) return;
-
-        await ImportData.AddOwnedSet(row.Set.SetId, AuthService.CurrentUser.UserId);
-
-        row.UserOwnedCount++;
-        _totalOwnedInstances++;
-        StateHasChanged();
+        if (await Api.AddOwnedSetAsync(row.Set.SetId))
+        {
+            row.UserOwnedCount++;
+            _totalOwnedInstances++;
+            StateHasChanged();
+        }
     }
 
     private async Task DecrementOwned(SetCatalogRow row)
     {
         if (AuthService.CurrentUser == null || row.UserOwnedCount == 0) return;
-
-        using var context = DbContextFactory.CreateDbContext();
-        var userId = AuthService.CurrentUser.UserId;
-
-        var toRemove = await context.Set<SetOwned>()
-            .Where(so => so.UserId == userId && so.SetId == row.Set.SetId)
-            .OrderByDescending(so => so.SetIndex)
-            .FirstOrDefaultAsync();
-
-        if (toRemove == null) return;
-
-        DeleteData.DeleteOwnedSetInfo(userId, row.Set.SetId, toRemove.SetIndex);
-
-        row.UserOwnedCount--;
-        _totalOwnedInstances--;
-        StateHasChanged();
+        if (await Api.DeleteLastOwnedSetAsync(row.Set.SetId))
+        {
+            row.UserOwnedCount--;
+            _totalOwnedInstances--;
+            StateHasChanged();
+        }
     }
 
     private bool FilterFunc(SetCatalogRow row)
@@ -227,7 +202,7 @@
 
     private class SetCatalogRow
     {
-        public Set Set { get; set; }
+        public ApiClient.SetCatalogViewDto Set { get; set; } = null!;
         public int UserOwnedCount { get; set; }
     }
 }

@@ -30,6 +30,9 @@ namespace LEGO_Inventory.Migrations
                     b.Property<string>("ColorId")
                         .HasColumnType("text");
 
+                    b.Property<string>("BricklinkId")
+                        .HasColumnType("text");
+
                     b.Property<string>("ColorName")
                         .HasColumnType("text");
 
@@ -236,6 +239,12 @@ namespace LEGO_Inventory.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("SetURL")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ThemeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ThemeName")
                         .HasColumnType("text");
 
                     b.HasKey("SetId");

@@ -1,4 +1,5 @@
-﻿@inject DeleteData DeleteData
+@inject ApiClient Api
+@using LEGO_Inventory.Services
 @using Color = MudBlazor.Color
 <MudDialog>
     <TitleContent>
@@ -28,24 +29,21 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
-    [Parameter] public string _id { get; set; }
+    [Parameter] public string _id { get; set; } = "";
 
-    [Parameter] public string _name { get; set; }
+    [Parameter] public string _name { get; set; } = "";
 
-    [Parameter] public string _imgUrl { get; set; }
+    [Parameter] public string? _imgUrl { get; set; }
 
     public bool MoveStock { get; set; } = false;
 
     private void Cancel() => MudDialog.Cancel();
 
-    private void DeleteSet(string id)
+    private async Task DeleteSet(string id)
     {
-        DeleteData.DeleteSetInfo(id, MoveStock);
-
-        Cancel();
-        OnInitializedAsync();
+        await Api.DeleteSetFromCatalogAsync(id);
+        MudDialog.Close(DialogResult.Ok(true));
     }
-
 }
