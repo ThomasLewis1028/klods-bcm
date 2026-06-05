@@ -141,3 +141,5 @@ app.MapUsers();
 app.MapHome();
 
 app.Run();
+
+public partial class Program;
