@@ -2,4 +2,5 @@
   <Project Path="LEGO_Inventory.Api/LEGO_Inventory.Api.csproj" />
   <Project Path="LEGO_Inventory.Core/LEGO_Inventory.Core.csproj" />
   <Project Path="LEGO_Inventory/LEGO_Inventory.csproj" />
+  <Project Path="LEGO_Inventory.Tests/LEGO_Inventory.Tests.csproj" />
 </Solution>
