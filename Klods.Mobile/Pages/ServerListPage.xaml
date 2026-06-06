@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:Klods.Mobile.Models"
+             x:Class="Klods.Mobile.Pages.ServerListPage"
+             Title="Klods">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="24,48,24,24">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="4" Margin="0,0,0,24">
+            <Label Text="Klods"
+                   FontSize="40"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Primary}" />
+            <Label Text="Select a server to connect to"
+                   FontSize="14"
+                   TextColor="{StaticResource Gray400}" />
+        </VerticalStackLayout>
+
+        <CollectionView x:Name="ServerList"
+                        Grid.Row="1"
+                        SelectionMode="None">
+            <CollectionView.EmptyView>
+                <Label Text="No servers added yet. Tap 'Add Server' to get started."
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{StaticResource Gray400}"
+                       Margin="0,40,0,0" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:ServerProfile">
+                    <Border Margin="0,0,0,12"
+                            Padding="16"
+                            StrokeShape="RoundRectangle 8">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                            <Label Grid.Row="0" Grid.Column="0"
+                                   Text="{Binding Name}"
+                                   FontSize="17"
+                                   FontAttributes="Bold" />
+                            <Label Grid.Row="1" Grid.Column="0"
+                                   Text="{Binding Url}"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray400}" />
+                            <Button Grid.Row="0" Grid.Column="1"
+                                    Grid.RowSpan="2"
+                                    Text="Connect"
+                                    VerticalOptions="Center"
+                                    Clicked="OnConnectClicked"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnServerTapped"
+                                                  CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Button Grid.Row="2"
+                Text="Add Server"
+                Clicked="OnAddServerClicked" />
+
+    </Grid>
+
+</ContentPage>

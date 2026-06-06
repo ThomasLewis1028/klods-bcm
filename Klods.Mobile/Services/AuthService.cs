@@ -1,48 +1,50 @@
 using System.Net.Http.Json;
+using Klods.Mobile.Models;
 
 namespace Klods.Mobile.Services;
 
 public class AuthService(HttpClient http)
 {
-    private const string TokenKey = "auth_token";
-    private const string ServerKey = "server_url";
+    public ServerProfile? ActiveServer { get; private set; }
 
-    public string? ServerUrl
-    {
-        get => Preferences.Get(ServerKey, null);
-        set
-        {
-            if (value is not null)
-                Preferences.Set(ServerKey, value);
-            else
-                Preferences.Remove(ServerKey);
-        }
-    }
+    private static string TokenKey(string serverId) => $"token_{serverId}";
 
-    public async Task<bool> LoginAsync(string serverUrl, string username, string password)
+    public async Task<bool> LoginAsync(ServerProfile server, string username, string password)
     {
-        ServerUrl = serverUrl.TrimEnd('/');
         var response = await http.PostAsJsonAsync(
-            $"{ServerUrl}/api/auth/login",
+            $"{server.Url.TrimEnd('/')}/api/auth/login",
             new { Username = username, Password = password });
 
         if (!response.IsSuccessStatusCode) return false;
-
         var result = await response.Content.ReadFromJsonAsync<TokenResponse>();
         if (result?.Token is null) return false;
 
-        await SecureStorage.SetAsync(TokenKey, result.Token);
+        await SecureStorage.SetAsync(TokenKey(server.Id), result.Token);
+        ActiveServer = server;
         return true;
     }
 
-    public Task<string?> GetTokenAsync() => SecureStorage.GetAsync(TokenKey);
-
-    public async Task<bool> IsAuthenticatedAsync() => await GetTokenAsync() is not null;
-
-    public void Logout()
+    public async Task<bool> TryResumeAsync(ServerProfile server)
     {
-        SecureStorage.Remove(TokenKey);
-        ServerUrl = null;
+        var token = await GetTokenAsync(server.Id);
+        if (token is null) return false;
+        ActiveServer = server;
+        return true;
+    }
+
+    public async Task<string?> GetTokenAsync(string serverId)
+    {
+        try { return await SecureStorage.GetAsync(TokenKey(serverId)); }
+        catch { SecureStorage.Remove(TokenKey(serverId)); return null; }
+    }
+
+    public async Task<bool> IsAuthenticatedAsync(string serverId) =>
+        await GetTokenAsync(serverId) is not null;
+
+    public void Logout(string serverId)
+    {
+        SecureStorage.Remove(TokenKey(serverId));
+        if (ActiveServer?.Id == serverId) ActiveServer = null;
     }
 
     private record TokenResponse(string Token);

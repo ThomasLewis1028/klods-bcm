@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.CommunityPage"
+             Title="Community">
+    <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+        <Label Text="&#xe7ef;"
+               FontFamily="MaterialIcons"
+               FontSize="64"
+               HorizontalOptions="Center"
+               TextColor="{StaticResource Gray300}" />
+        <Label Text="Coming Soon"
+               FontSize="22"
+               FontAttributes="Bold"
+               HorizontalOptions="Center" />
+        <Label Text="Social features are on the way."
+               FontSize="14"
+               TextColor="{StaticResource Gray400}"
+               HorizontalOptions="Center" />
+    </VerticalStackLayout>
+</ContentPage>

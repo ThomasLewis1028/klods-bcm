@@ -8,10 +8,10 @@ public partial class App : Application
 
     public App(IServiceProvider services)
     {
-        InitializeComponent(); // loads App.xaml resources first
+        InitializeComponent();
         _services = services;
     }
 
     protected override Window CreateWindow(IActivationState? activationState) =>
-        new(_services.GetRequiredService<LoginPage>()); // resolved after resources are ready
+        new(new NavigationPage(_services.GetRequiredService<ServerListPage>()));
 }

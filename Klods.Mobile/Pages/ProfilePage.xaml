@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.ProfilePage"
+             Title="Profile">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="0">
+
+            <!-- Avatar -->
+            <Grid HorizontalOptions="Center" Margin="0,32,0,16">
+                <Ellipse WidthRequest="96" HeightRequest="96"
+                         Fill="{StaticResource Secondary}" />
+                <Label x:Name="AvatarIcon"
+                       Text="&#xe7fd;"
+                       FontFamily="MaterialIcons"
+                       FontSize="56"
+                       TextColor="{StaticResource Primary}"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center" />
+                <Image x:Name="AvatarImage"
+                       WidthRequest="96" HeightRequest="96"
+                       Aspect="AspectFill"
+                       IsVisible="False">
+                    <Image.Clip>
+                        <EllipseGeometry Center="48,48" RadiusX="48" RadiusY="48" />
+                    </Image.Clip>
+                </Image>
+            </Grid>
+
+            <Label x:Name="UsernameLabel"
+                   Text="—"
+                   FontSize="22"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center" />
+
+            <Border HorizontalOptions="Center"
+                    Padding="10,4"
+                    Margin="0,6,0,0"
+                    StrokeShape="RoundRectangle 12"
+                    BackgroundColor="{StaticResource Secondary}"
+                    Stroke="Transparent">
+                <Label x:Name="RoleLabel"
+                       Text="—"
+                       FontSize="12"
+                       TextColor="{StaticResource Primary}" />
+            </Border>
+
+            <ActivityIndicator x:Name="Loader"
+                               IsRunning="True"
+                               IsVisible="True"
+                               HorizontalOptions="Center"
+                               Margin="0,24,0,0"
+                               Color="{StaticResource Primary}" />
+
+            <Label x:Name="ErrorLabel"
+                   IsVisible="False"
+                   TextColor="Red"
+                   HorizontalOptions="Center"
+                   Margin="0,16,0,0" />
+
+            <!-- ── Appearance ────────────────────────────────────────── -->
+            <Label Text="APPEARANCE"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   Margin="0,28,0,8"
+                   CharacterSpacing="1" />
+
+            <Border Padding="16" StrokeShape="RoundRectangle 8">
+                <Grid ColumnDefinitions="*,Auto" VerticalOptions="Center">
+                    <VerticalStackLayout Grid.Column="0" Spacing="2">
+                        <Label Text="Theme Colour" FontSize="15" />
+                        <Label x:Name="ThemeHexLabel"
+                               FontSize="12"
+                               TextColor="{StaticResource Gray400}" />
+                    </VerticalStackLayout>
+                    <Ellipse x:Name="ThemeSwatch"
+                             Grid.Column="1"
+                             WidthRequest="32" HeightRequest="32"
+                             Fill="{StaticResource Primary}" />
+                </Grid>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnChangeThemeTapped" />
+                </Border.GestureRecognizers>
+            </Border>
+
+            <!-- ── Account ─────────────────────────────────────────── -->
+            <Label Text="ACCOUNT"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   Margin="0,24,0,8"
+                   CharacterSpacing="1" />
+
+            <Border Padding="16" StrokeShape="RoundRectangle 8" Margin="0,0,0,1">
+                <Label Text="Change Profile Picture" FontSize="15" />
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnChangePictureTapped" />
+                </Border.GestureRecognizers>
+            </Border>
+
+            <Border x:Name="ChangePasswordRow"
+                    Padding="16" StrokeShape="RoundRectangle 8">
+                <Label Text="Change Password" FontSize="15" />
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnChangePasswordTapped" />
+                </Border.GestureRecognizers>
+            </Border>
+
+            <!-- ── Connected Accounts ──────────────────────────────── -->
+            <Label Text="CONNECTED ACCOUNTS"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   Margin="0,24,0,8"
+                   CharacterSpacing="1" />
+
+            <CollectionView x:Name="LinkedLoginsList">
+                <CollectionView.EmptyView>
+                    <Label Text="No linked accounts"
+                           FontSize="14"
+                           TextColor="{StaticResource Gray400}"
+                           Margin="16,12" />
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="16,12" StrokeShape="RoundRectangle 8" Margin="0,0,0,1">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0"
+                                       Text="{Binding Provider}"
+                                       FontSize="15"
+                                       VerticalOptions="Center" />
+                                <Button Grid.Column="1"
+                                        Text="Unlink"
+                                        FontSize="13"
+                                        Padding="12,6"
+                                        BackgroundColor="Transparent"
+                                        TextColor="Red"
+                                        BorderColor="Red"
+                                        BorderWidth="1"
+                                        CommandParameter="{Binding Provider}"
+                                        Clicked="OnUnlinkClicked" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <!-- ── Server ──────────────────────────────────────────── -->
+            <Label Text="SERVER"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   Margin="0,24,0,8"
+                   CharacterSpacing="1" />
+
+            <Border Padding="16" StrokeShape="RoundRectangle 8">
+                <VerticalStackLayout Spacing="2">
+                    <Label x:Name="ServerNameLabel" FontSize="15" FontAttributes="Bold" />
+                    <Label x:Name="ServerUrlLabel"  FontSize="12" TextColor="{StaticResource Gray400}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ── Log out ─────────────────────────────────────────── -->
+            <Button Text="Log Out"
+                    BackgroundColor="Transparent"
+                    TextColor="Red"
+                    BorderColor="Red"
+                    BorderWidth="1"
+                    Margin="0,28,0,8"
+                    Clicked="OnLogoutClicked" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

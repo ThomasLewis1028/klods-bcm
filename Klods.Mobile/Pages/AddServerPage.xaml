@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.AddServerPage"
+             Title="Add Server">
+
+    <VerticalStackLayout Padding="24,32,24,24" Spacing="16">
+
+        <Label x:Name="HeadingLabel"
+               Text="Add Server"
+               FontSize="28"
+               FontAttributes="Bold"
+               TextColor="{StaticResource Primary}" />
+
+        <Entry x:Name="NameEntry"
+               Placeholder="Server name (e.g. My Klods)" />
+
+        <Entry x:Name="UrlEntry"
+               Placeholder="Server URL (e.g. https://klods.example.com)"
+               Keyboard="Url" />
+
+        <Entry x:Name="UsernameEntry"
+               Placeholder="Username" />
+
+        <Entry x:Name="PasswordEntry"
+               Placeholder="Password"
+               IsPassword="True" />
+
+        <Label x:Name="ErrorLabel"
+               TextColor="Red"
+               FontSize="13"
+               HorizontalOptions="Center"
+               IsVisible="False" />
+
+        <Button x:Name="ConnectButton"
+                Text="Connect"
+                Clicked="OnConnectClicked"
+                Margin="0,8,0,0" />
+
+    </VerticalStackLayout>
+
+</ContentPage>

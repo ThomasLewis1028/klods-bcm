@@ -3,12 +3,50 @@
     x:Class="Klods.Mobile.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:local="clr-namespace:Klods.Mobile"
-    Title="Klods.Mobile">
+    xmlns:pages="clr-namespace:Klods.Mobile.Pages">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+    <TabBar>
+
+        <!-- My Inventory -->
+        <Tab Title="My Inventory">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialIcons" Glyph="&#xe1a1;"
+                                 Color="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}" />
+            </Tab.Icon>
+            <ShellContent Title="Sets"    Route="MySetsPage"    ContentTemplate="{DataTemplate pages:MySetsPage}" />
+            <ShellContent Title="Bricks"  Route="MyBricksPage"  ContentTemplate="{DataTemplate pages:MyBricksPage}" />
+            <ShellContent Title="Minifigs" Route="MyMinifigsPage" ContentTemplate="{DataTemplate pages:MyMinifigsPage}" />
+        </Tab>
+
+        <!-- Catalog -->
+        <Tab Title="Catalog">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialIcons" Glyph="&#xe865;"
+                                 Color="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}" />
+            </Tab.Icon>
+            <ShellContent Title="Sets"    Route="SetsPage"    ContentTemplate="{DataTemplate pages:SetsPage}" />
+            <ShellContent Title="Bricks"  Route="BricksPage"  ContentTemplate="{DataTemplate pages:BricksPage}" />
+            <ShellContent Title="Minifigs" Route="MinifigsPage" ContentTemplate="{DataTemplate pages:MinifigsPage}" />
+        </Tab>
+
+        <!-- Community (coming soon) -->
+        <Tab Title="Community">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialIcons" Glyph="&#xe7ef;"
+                                 Color="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+            </Tab.Icon>
+            <ShellContent Route="CommunityPage" ContentTemplate="{DataTemplate pages:CommunityPage}" />
+        </Tab>
+
+        <!-- Profile -->
+        <Tab Title="Profile">
+            <Tab.Icon>
+                <FontImageSource FontFamily="MaterialIcons" Glyph="&#xe7fd;"
+                                 Color="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}" />
+            </Tab.Icon>
+            <ShellContent Route="ProfilePage" ContentTemplate="{DataTemplate pages:ProfilePage}" />
+        </Tab>
+
+    </TabBar>
 
 </Shell>

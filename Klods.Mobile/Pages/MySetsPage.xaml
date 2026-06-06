@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.MySetsPage"
+             Title="My Sets">
+
+    <Grid>
+
+        <ActivityIndicator x:Name="Loader"
+                           IsRunning="True"
+                           IsVisible="True"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           Color="{StaticResource Primary}" />
+
+        <VerticalStackLayout x:Name="ErrorView"
+                             IsVisible="False"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center"
+                             Spacing="16"
+                             Padding="32">
+            <Label x:Name="ErrorLabel"
+                   TextColor="{StaticResource Gray400}"
+                   HorizontalOptions="Center"
+                   HorizontalTextAlignment="Center" />
+            <Button Text="Retry"
+                    HorizontalOptions="Center"
+                    Clicked="OnRetryClicked" />
+        </VerticalStackLayout>
+
+        <RefreshView x:Name="Refresher"
+                     Refreshing="OnRefreshing"
+                     IsVisible="False">
+            <CollectionView x:Name="SetsList"
+                            SelectionMode="None">
+
+                <CollectionView.EmptyView>
+                    <Label Text="No sets in your collection yet."
+                           TextColor="{StaticResource Gray400}"
+                           FontSize="15"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           Margin="0,60,0,0" />
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="12"
+                                Margin="16,4"
+                                StrokeShape="RoundRectangle 10">
+
+                            <Grid ColumnDefinitions="88,*" ColumnSpacing="12">
+
+                                <!-- Set image thumbnail -->
+                                <Border Grid.Column="0"
+                                        WidthRequest="80" HeightRequest="80"
+                                        BackgroundColor="{StaticResource Secondary}"
+                                        Stroke="Transparent"
+                                        StrokeShape="RoundRectangle 8"
+                                        VerticalOptions="Center">
+                                    <Image Source="{Binding SetImg}"
+                                           Aspect="AspectFill"
+                                           WidthRequest="80" HeightRequest="80" />
+                                </Border>
+
+                                <!-- Set details -->
+                                <VerticalStackLayout Grid.Column="1"
+                                                     Spacing="3"
+                                                     VerticalOptions="Center">
+                                    <Label Text="{Binding Name}"
+                                           FontSize="15"
+                                           FontAttributes="Bold"
+                                           LineBreakMode="TailTruncation"
+                                           MaxLines="2" />
+                                    <Label Text="{Binding SubtitleLine1}"
+                                           FontSize="12"
+                                           TextColor="{StaticResource Gray400}" />
+                                    <Label Text="{Binding PiecesLabel}"
+                                           FontSize="12"
+                                           TextColor="{StaticResource Gray400}" />
+                                    <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
+                                        <Border Padding="8,3"
+                                                StrokeShape="RoundRectangle 12"
+                                                BackgroundColor="{StaticResource Primary}"
+                                                Stroke="Transparent">
+                                            <Label Text="{Binding CopiesLabel}"
+                                                   FontSize="11"
+                                                   TextColor="White" />
+                                        </Border>
+                                        <Label Text="{Binding MissingLabel}"
+                                               FontSize="12"
+                                               TextColor="#F59E0B"
+                                               IsVisible="{Binding HasMissing}"
+                                               VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+        </RefreshView>
+
+    </Grid>
+
+</ContentPage>
