@@ -73,7 +73,7 @@ services:
         condition: service_healthy
         restart: true
     ports:
-      - "8090:8080"
+      - "8092:8080"
     networks:
       - klods-network
 
