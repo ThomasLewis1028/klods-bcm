@@ -14,7 +14,7 @@ builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 
-var apiBase = builder.Configuration["API_BASE_URL"] ?? "http://lego_inventory_api:8080";
+var apiBase = builder.Configuration["API_BASE_URL"] ?? "http://klods_api:8080";
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBase));
 builder.Services.AddScoped<ApiClient>();
 
