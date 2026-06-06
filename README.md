@@ -1,6 +1,6 @@
-# LIT – LEGO Inventory Tracker 
+# Klods - A Brick Collection Manager 
 
-Welcome to the LEGO Inventory Tracker. It's a tool to track your LEGO sets, the bricks you need, the bricks you have, move inventory between sets, link to the official instructions, and inform you what pieces you needed to buy.
+Welcome to Klods. It's a tool to track your LEGO sets, the bricks you need, the bricks you have, move inventory between sets, link to the official instructions, and inform you what pieces you needed to buy.
 
 It's open source, so if you want to fix my late-night, alcohol-fueled, sleep-deprived, "what if I did this" code, please do. I'll check PRs if there are any.
 

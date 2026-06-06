@@ -1,0 +1,27 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Klods;
+
+[Table("Sets")]
+public class Set
+{
+    public string SetId { get; set; }
+    
+    public string Name { get; set; }
+    
+    public string? SetURL { get; set; }
+    
+    public string? SetImg { get; set; }
+    
+    public int NumBricks { get; set; }
+    
+    public int ReleaseYear { get; set; }
+    
+    public DateTime DateModified { get; set; }
+    
+    public string ManualUrl { get; set; }
+
+    public int? ThemeId { get; set; }
+
+    public string? ThemeName { get; set; }
+}
