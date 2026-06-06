@@ -1,0 +1,234 @@
+@page "/my/bricks"
+@inject ILoggerFactory LoggerFactory
+@inject IDialogService DialogService
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@inject ApiClient Api
+@inject ImageStorageService ImageStorage
+@using System.Drawing
+@using Klods.Components.Objects
+@using Klods.Services
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@rendermode InteractiveServer
+@attribute [Authorize]
+@implements IDisposable
+
+<PageTitle>My Bricks</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Bricks</MudText>
+
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+    return;
+}
+
+<MudGrid>
+    <MudItem xs="12">
+        <MudDataGrid T="MyBrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
+                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
+                     QuickFilter="BrickFilterFunc"
+                     ReadOnly="false">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">My Bricks: @_brickInfos.Count</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.h6">In Stock: @_brickInfos.Sum(b => b.Stock)</MudText>
+                <MudSpacer/>
+                <MudText Typo="Typo.h6">Needed: @_brickInfos.Sum(b => b.Brick.UserNeeded)</MudText>
+                <MudSpacer/>
+                <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
+                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
+                              IconSize="Size.Medium" Class="mt-0"/>
+                <MudTooltip Text="@(AuthService.CurrentUser == null ? "Sign in to import" : "Add loose bricks by part number")">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                               StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Add)"
+                               Disabled="@(AuthService.CurrentUser == null)"
+                               OnClick="OpenImportBrickDialog">
+                        Add Bricks
+                    </MudButton>
+                </MudTooltip>
+            </ToolBarContent>
+            <Columns>
+                <HierarchyColumn T="MyBrickInfo" ButtonDisabledFunc="@(info => info.Brick.UserSetCount == 0)"/>
+                <TemplateColumn Title="Image" Editable="false">
+                    <CellTemplate>
+                        <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)"
+                                  Height="50"
+                                  @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg))"/>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.Brick.PartNum" Title="Id" Editable="false"/>
+                <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
+                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
+                    <CellTemplate>
+                        @if (context.Item.Brick.HexColor != null)
+                        {
+                            <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
+                                     class="mud-elevation-2"
+                                     Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
+                                @context.Item.Brick.ColorName
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip Color="default">N/A</MudChip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="My Stock" Editable="false" Sortable="true" SortBy="x => x.Stock">
+                    <CellTemplate>
+                        <MudNumericField T="int"
+                                         Value="@context.Item.Stock"
+                                         ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                         Min="0"
+                                         Variant="Variant.Text"/>
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.Brick.UserNeeded" Title="Needed" Editable="false"/>
+                <PropertyColumn Property="x => x.Brick.UserSetCount" Title="Sets" Editable="false"/>
+            </Columns>
+
+            <ChildRowContent Context="brickContext">
+                <div class="child-row-content">
+                @if (!brickContext.Item.IsLoaded)
+                {
+                    <MudText>Loading sets...</MudText>
+                    { _ = LoadSetBricksAsync(brickContext.Item); }
+                }
+                else if (brickContext.Item.SetDetails.Any())
+                {
+                    <MudCard>
+                        <MudDataGrid T="ApiClient.MyBrickSetDetailDto" Items="brickContext.Item.SetDetails.OrderBy(s => s.SetId)">
+                            <Columns>
+                                <TemplateColumn Title="Image">
+                                    <CellTemplate>
+                                        <MudImage class="cursor-pointer rounded-3" Elevation="2"
+                                                  Src="@ImageStorage.ResolveUrl(context.Item.SetImg)" Height="50"
+                                                  @onclick="() => OpenImagePopup(context.Item.SetId, context.Item.SetName, ImageStorage.ResolveUrl(context.Item.SetImg))"/>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
+                                <PropertyColumn Title="Name" Property="x => x.SetName"/>
+                                <TemplateColumn Title="Needed">
+                                    <CellTemplate>
+                                        <MudText>@context.Item.BrickCount × @context.Item.CopiesOwned = @(context.Item.BrickCount * context.Item.CopiesOwned)</MudText>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <TemplateColumn Title="BoM">
+                                    <CellTemplate>
+                                        <MudIconButton href="@($"/bom/{context.Item.SetId}")"
+                                                       Icon="@Icons.Material.Filled.List"
+                                                       Variant="Variant.Filled" Color="Color.Primary"
+                                                       Size="Size.Small"/>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                            </Columns>
+                        </MudDataGrid>
+                    </MudCard>
+                }
+                </div>
+            </ChildRowContent>
+
+            <PagerContent>
+                <MudDataGridPager T="MyBrickInfo"/>
+            </PagerContent>
+        </MudDataGrid>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<MyBrickInfo> _brickInfos = [];
+    private string _search = "";
+    private bool _isLoading = true;
+
+    protected override void OnInitialized()
+    {
+        AuthService.SessionRestored += OnSessionRestored;
+        if (AuthService.IsSessionRestored) InvokeAsync(LoadDataAsync);
+    }
+
+    private void OnSessionRestored() => InvokeAsync(async () =>
+    {
+        if (AuthService.CurrentUser == null)
+            Nav.NavigateTo("/not-authorized");
+        else
+        {
+            await LoadDataAsync();
+            StateHasChanged();
+        }
+    });
+
+    public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
+
+    protected override async Task OnInitializedAsync() => await LoadDataAsync();
+
+    private async Task OpenImportBrickDialog()
+    {
+        var dialog = await DialogService.ShowAsync<ImportBrickDialog>("Add Loose Bricks",
+            new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+            await OnInitializedAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var bricks = await Api.GetMyBricksAsync();
+        _brickInfos = bricks?.Select(b => new MyBrickInfo { Brick = b, Stock = b.Stock }).ToList() ?? [];
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadSetBricksAsync(MyBrickInfo info)
+    {
+        if (info.IsLoaded) return;
+        var details = await Api.GetUserSetsForBrickAsync(info.Brick.PartNum, info.Brick.ColorId ?? "");
+        info.SetDetails = details?.ToList() ?? [];
+        info.IsLoaded = true;
+        StateHasChanged();
+    }
+
+    private async void SaveBrickOwnedStock(MyBrickInfo info, int newValue)
+    {
+        if (newValue < 0) return;
+        info.Stock = newValue;
+        await Api.UpsertBrickStockAsync(info.Brick.PartNum, info.Brick.ColorId ?? "", newValue);
+        StateHasChanged();
+    }
+
+    private bool BrickFilterFunc(MyBrickInfo b)
+    {
+        if (string.IsNullOrWhiteSpace(_search)) return true;
+        if (b.Brick.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Brick.PartNum.Contains(_search, StringComparison.OrdinalIgnoreCase)) return true;
+        if (b.Brick.ColorName?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true) return true;
+        return false;
+    }
+
+    private Task OpenImagePopup(string id, string name, string? imgUrl) =>
+        DialogService.ShowAsync<ImagePopup>("Image Popup",
+            new DialogParameters<ImagePopup>
+            {
+                { x => x._id, id }, { x => x._name, name }, { x => x._imgUrl, imgUrl }
+            },
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+
+    private Task OpenColorPopup(string hex, string name) =>
+        DialogService.ShowAsync<ColorPopup>("Color Popup",
+            new DialogParameters<ColorPopup>
+            {
+                { x => x._hexColor, hex }, { x => x._name, name }
+            },
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+
+    private class MyBrickInfo
+    {
+        public ApiClient.MyBrickDto Brick { get; set; } = null!;
+        public int Stock { get; set; }
+        public bool IsLoaded { get; set; }
+        public List<ApiClient.MyBrickSetDetailDto> SetDetails { get; set; } = [];
+    }
+}

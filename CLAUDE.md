@@ -15,11 +15,11 @@
 - Prefer `var` when the type is obvious from the right-hand side.
 
 ## Solution Structure
-- Solution file: `LEGO_Inventory_Tracker.sln` at the repo root
-- `LEGO_Inventory.Core/` — class library; all EF models, InventoryContext, migrations, ImportData, UpdateData, DeleteData, RebrickableApi, ImageStorageService, InventoryAggregates, ColorHelper
-- `LEGO_Inventory/` — Blazor Server app; references Core; contains all Components, AuthService, PendingAuthService, ThemeService
-- `LEGO_Inventory.Api/` — ASP.NET Core Web API (Phase 6 Stage B, not yet created); will reference Core; JWT auth; minimal API endpoints
-- EF migrations live in `LEGO_Inventory.Core/Migrations/`. Run: `dotnet ef migrations add <Name> --project LEGO_Inventory.Core`
+- Solution file: `Klods.slnx` at the repo root
+- `Klods.Core/` — class library; all EF models, InventoryContext, migrations, ImportData, UpdateData, DeleteData, RebrickableApi, ImageStorageService, InventoryAggregates, ColorHelper
+- `Klods.Web/` — Blazor Server app; references Core; contains all Components, AuthService, PendingAuthService, ThemeService
+- `Klods.Api/` — ASP.NET Core Web API; references Core; JWT auth; minimal API endpoints
+- EF migrations live in `Klods.Core/Migrations/`. Run: `dotnet ef migrations add <Name> --project Klods.Core`
 
 ## Blazor / MudBlazor
 - This is a **Blazor Server** app — avoid patterns that only work in Blazor WebAssembly.
