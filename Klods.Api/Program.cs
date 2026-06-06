@@ -124,6 +124,14 @@ await using (var scope = app.Services.CreateAsyncScope())
 var imageStorage = app.Services.GetRequiredService<ImageStorageService>();
 await imageStorage.InitializeAsync();
 
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+};
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -64,7 +64,7 @@ services:
     env_file:
       - .env
     environment:
-      BLAZOR_ORIGIN: "http://localhost:5100"
+      BLAZOR_ORIGIN: "${BLAZOR_ORIGIN:-http://localhost:5100}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,7 +86,7 @@ services:
       - .env
     environment:
       API_BASE_URL: "http://klods_api:8080"
-      API_PUBLIC_URL: "http://localhost:5101"
+      API_PUBLIC_URL: "${API_PUBLIC_URL:-http://localhost:5101}"
     depends_on:
       postgres:
         condition: service_healthy
