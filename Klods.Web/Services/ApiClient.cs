@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace Klods.Services;
 
 /// <summary>
-/// Scoped per-circuit HTTP client for the LEGO Inventory API.
+/// Scoped per-circuit HTTP client for the Klods API.
 /// All data operations go through here; nothing in this class touches the database.
 /// </summary>
 public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfiguration config)
