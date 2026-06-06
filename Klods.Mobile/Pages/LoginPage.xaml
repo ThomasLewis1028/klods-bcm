@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.LoginPage"
+             Title="Login"
+             Shell.NavBarIsVisible="False">
+
+    <VerticalStackLayout Padding="40,80,40,40" Spacing="16" VerticalOptions="Center">
+
+        <Label Text="Klods"
+               FontSize="48"
+               FontAttributes="Bold"
+               HorizontalOptions="Center"
+               TextColor="{StaticResource Primary}" />
+
+        <Label Text="A Brick Collection Manager"
+               FontSize="14"
+               HorizontalOptions="Center"
+               TextColor="{StaticResource Gray400}"
+               Margin="0,0,0,24" />
+
+        <Entry x:Name="ServerEntry"
+               Placeholder="Server URL (e.g. https://klods.example.com)"
+               Keyboard="Url"
+               ReturnType="Next" />
+
+        <Entry x:Name="UsernameEntry"
+               Placeholder="Username"
+               ReturnType="Next"
+               ReturnCommand="{Binding Source={x:Reference PasswordEntry}, Path=Focus}" />
+
+        <Entry x:Name="PasswordEntry"
+               Placeholder="Password"
+               IsPassword="True"
+               ReturnType="Go"
+               ReturnCommand="{Binding Source={x:Reference LoginButton}, Path=Command}" />
+
+        <Label x:Name="ErrorLabel"
+               TextColor="Red"
+               FontSize="13"
+               HorizontalOptions="Center"
+               IsVisible="False" />
+
+        <Button x:Name="LoginButton"
+                Text="Log In"
+                Clicked="OnLoginClicked"
+                Margin="0,8,0,0" />
+
+    </VerticalStackLayout>
+
+</ContentPage>
