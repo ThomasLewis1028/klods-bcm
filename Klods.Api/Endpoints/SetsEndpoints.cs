@@ -43,7 +43,7 @@ public static class SetsEndpoints
 
         group.MapPost("/import", async (ImportSetRequest req, ImportData importer) =>
         {
-            var ok = await importer.ImportSetInfo(req.SetId);
+            var ok = await importer.ImportAll([req.SetId]);
             return ok ? Results.Ok() : Results.BadRequest("Import failed.");
         });
 
