@@ -5,7 +5,7 @@ services:
   postgres:
     image: 'postgres:17'
     ports:
-      - 5432:5432
+      - 5105:5432
     env_file:
       - .env
     networks:
@@ -26,7 +26,7 @@ services:
   pgwebadmin:
     image: dpage/pgadmin4
     ports:
-      - 8888:80
+      - 5102:80
     env_file:
       - .env
     depends_on:
@@ -42,8 +42,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "5103:9000"
+      - "5104:9001"
     env_file:
       - .env
     networks:
@@ -64,7 +64,7 @@ services:
     env_file:
       - .env
     environment:
-      BLAZOR_ORIGIN: "http://localhost:8080"
+      BLAZOR_ORIGIN: "http://localhost:5100"
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,7 +73,7 @@ services:
         condition: service_healthy
         restart: true
     ports:
-      - "8092:8080"
+      - "5101:8080"
     networks:
       - klods-network
 
@@ -86,7 +86,7 @@ services:
       - .env
     environment:
       API_BASE_URL: "http://klods_api:8080"
-      API_PUBLIC_URL: "http://localhost:8090"
+      API_PUBLIC_URL: "http://localhost:5101"
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,7 +98,7 @@ services:
         condition: service_started
         restart: true
     ports:
-      - "8080:8080"
+      - "5100:8080"
     networks:
       - klods-network
     volumes:
