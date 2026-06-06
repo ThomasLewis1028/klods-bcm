@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.BrickDetailPage"
+             Title="Brick Detail">
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="0">
+
+            <!-- Brick image -->
+            <Grid HeightRequest="200" BackgroundColor="{StaticResource Secondary}">
+                <Image x:Name="BrickImage"
+                       Aspect="AspectFit"
+                       HeightRequest="200"
+                       Margin="24" />
+                <Label x:Name="PlaceholderIcon"
+                       Text="&#xe1a1;"
+                       FontFamily="MaterialIcons"
+                       FontSize="72"
+                       TextColor="{StaticResource Gray300}"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center" />
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnImageTapped" />
+                </Grid.GestureRecognizers>
+            </Grid>
+
+            <VerticalStackLayout Padding="20,16,20,0" Spacing="4">
+                <Label x:Name="PartNumLabel"
+                       FontSize="12"
+                       TextColor="{StaticResource Gray400}" />
+                <Label x:Name="NameLabel"
+                       FontSize="20"
+                       FontAttributes="Bold"
+                       LineBreakMode="WordWrap" />
+                <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
+                    <Ellipse x:Name="ColorSwatch"
+                             WidthRequest="18" HeightRequest="18"
+                             VerticalOptions="Center" />
+                    <Label x:Name="ColorNameLabel"
+                           FontSize="14"
+                           TextColor="{StaticResource Gray400}"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+
+            <!-- In this set -->
+            <Label Text="IN THIS SET"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   CharacterSpacing="1"
+                   Margin="20,24,20,8" />
+
+            <Border Margin="16,0" Padding="16" StrokeShape="RoundRectangle 10">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="Required" FontSize="14" />
+                        <Label x:Name="RequiredLabel" Grid.Column="1" FontSize="14" FontAttributes="Bold" />
+                    </Grid>
+                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="Spare" FontSize="14" TextColor="{StaticResource Gray400}" />
+                        <Label x:Name="SpareLabel" Grid.Column="1" FontSize="14" TextColor="{StaticResource Gray400}" />
+                    </Grid>
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="You have" FontSize="14" />
+                        <Label x:Name="SetStockLabel" Grid.Column="1" FontSize="14" FontAttributes="Bold" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- In your collection -->
+            <Label Text="IN YOUR COLLECTION"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   CharacterSpacing="1"
+                   Margin="20,20,20,8" />
+
+            <Border Margin="16,0" Padding="16" StrokeShape="RoundRectangle 10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Grid.Column="0" Text="Loose stock" FontSize="14" />
+                    <Label x:Name="LooseStockLabel" Grid.Column="1" FontSize="14" FontAttributes="Bold" />
+                </Grid>
+            </Border>
+
+            <!-- BrickLink button -->
+            <Button x:Name="BricklinkButton"
+                    Text="View on BrickLink"
+                    BackgroundColor="Transparent"
+                    TextColor="{StaticResource Primary}"
+                    BorderColor="{StaticResource Primary}"
+                    BorderWidth="1"
+                    Margin="16,16,16,0"
+                    IsVisible="False"
+                    Clicked="OnBricklinkClicked" />
+
+            <BoxView HeightRequest="32" Color="Transparent" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

@@ -74,6 +74,16 @@ public class ApiClient(HttpClient http, AuthService auth)
     public Task<MyOwnedSetDto[]?> GetMyOwnedSetsAsync() =>
         GetAsync<MyOwnedSetDto[]>("/api/sets/my-owned");
 
+    // ── BoM ───────────────────────────────────────────────────────────────────
+
+    public Task<BomDto?> GetBomAsync(string setId, int setIndex) =>
+        GetAsync<BomDto>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}");
+
+    public Task<bool> UpdateSetBrickStockAsync(string setId, int setIndex, string partNum, string colorId, int stock) =>
+        SendAsync(HttpMethod.Patch,
+            $"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}",
+            new { Stock = stock });
+
     // Mirrors ImageStorageService.ResolveUrl but turns server-relative paths into absolute URLs
     // using the active server's base URL, since the mobile app has no implicit origin.
     public string? ResolveImageUrl(string? stored) =>
@@ -99,4 +109,14 @@ public class ApiClient(HttpClient http, AuthService auth)
         string SetId, string Name, string? SetImg, int NumBricks,
         int ReleaseYear, string? ThemeName, string ManualUrl,
         List<OwnedInstanceDto> Instances);
+
+    public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg,
+        string? ColorName, string? HexColor, int Count, int SpareCount,
+        int SetStock, int LooseStock, string? BricklinkId);
+
+    public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
+
+    public record BomDto(string SetId, int SetIndex, string SetName, string ManualUrl,
+        List<int> OwnedInstances, List<string> OwnedSetIds,
+        List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs);
 }

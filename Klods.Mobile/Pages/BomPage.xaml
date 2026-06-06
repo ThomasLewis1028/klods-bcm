@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.BomPage">
+
+    <Grid>
+
+        <ActivityIndicator x:Name="Loader"
+                           IsRunning="True"
+                           IsVisible="True"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           Color="{StaticResource Primary}" />
+
+        <VerticalStackLayout x:Name="ErrorView"
+                             IsVisible="False"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center"
+                             Spacing="16" Padding="32">
+            <Label x:Name="ErrorLabel"
+                   TextColor="{StaticResource Gray400}"
+                   HorizontalOptions="Center"
+                   HorizontalTextAlignment="Center" />
+            <Button Text="Retry" HorizontalOptions="Center" Clicked="OnRetryClicked" />
+        </VerticalStackLayout>
+
+        <RefreshView x:Name="Refresher"
+                     Refreshing="OnRefreshing"
+                     IsVisible="False">
+            <CollectionView x:Name="BrickList" SelectionMode="None">
+
+                <CollectionView.EmptyView>
+                    <Label Text="No bricks found for this set."
+                           TextColor="{StaticResource Gray400}"
+                           FontSize="15"
+                           HorizontalOptions="Center"
+                           Margin="0,60,0,0" />
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="16,3" Padding="12,10" StrokeShape="RoundRectangle 10">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+
+                                <!-- Tappable: image + text → BrickDetailPage -->
+                                <Grid Grid.Column="0"
+                                      ColumnDefinitions="52,*" ColumnSpacing="10">
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnBrickTapped" />
+                                    </Grid.GestureRecognizers>
+
+                                    <!-- Brick image -->
+                                    <Border Grid.Column="0"
+                                            WidthRequest="48" HeightRequest="48"
+                                            BackgroundColor="{StaticResource Secondary}"
+                                            Stroke="Transparent"
+                                            StrokeShape="RoundRectangle 6"
+                                            VerticalOptions="Center">
+                                        <Image Source="{Binding PartImgUrl}"
+                                               Aspect="AspectFit"
+                                               WidthRequest="48" HeightRequest="48" />
+                                    </Border>
+
+                                    <!-- Brick details -->
+                                    <VerticalStackLayout Grid.Column="1"
+                                                         Spacing="3"
+                                                         VerticalOptions="Center">
+                                        <Label Text="{Binding Name}"
+                                               FontSize="13"
+                                               FontAttributes="Bold"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2" />
+                                        <HorizontalStackLayout Spacing="6">
+                                            <Ellipse Fill="{Binding SwatchBrush}"
+                                                     WidthRequest="12" HeightRequest="12"
+                                                     VerticalOptions="Center" />
+                                            <Label Text="{Binding ColorName}"
+                                                   FontSize="11"
+                                                   TextColor="{StaticResource Gray400}"
+                                                   VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                        <Label Text="{Binding LooseLabel}"
+                                               FontSize="11"
+                                               TextColor="{StaticResource Gray400}" />
+                                    </VerticalStackLayout>
+                                </Grid>
+
+                                <!-- Stock controls -->
+                                <VerticalStackLayout Grid.Column="1"
+                                                     Spacing="2"
+                                                     VerticalOptions="Center"
+                                                     HorizontalOptions="Center"
+                                                     WidthRequest="60">
+                                    <Button Text="+"
+                                            FontSize="18"
+                                            Padding="0"
+                                            HeightRequest="36" WidthRequest="36"
+                                            HorizontalOptions="Center"
+                                            Clicked="OnPlusClicked" />
+                                    <Label Text="{Binding StockLabel}"
+                                           FontSize="13"
+                                           FontAttributes="Bold"
+                                           HorizontalOptions="Center"
+                                           HorizontalTextAlignment="Center">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding IsComplete}"
+                                                         Value="True">
+                                                <Setter Property="TextColor" Value="#22C55E" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding IsComplete}"
+                                                         Value="False">
+                                                <Setter Property="TextColor" Value="{StaticResource Gray400}" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                    <Button Text="−"
+                                            FontSize="18"
+                                            Padding="0"
+                                            HeightRequest="36" WidthRequest="36"
+                                            HorizontalOptions="Center"
+                                            Clicked="OnMinusClicked" />
+                                </VerticalStackLayout>
+
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+        </RefreshView>
+
+    </Grid>
+
+</ContentPage>

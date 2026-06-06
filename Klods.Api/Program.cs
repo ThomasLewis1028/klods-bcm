@@ -148,6 +148,22 @@ app.MapAdmin();
 app.MapUsers();
 app.MapHome();
 
+var minioEndpoint = builder.Configuration["MINIO_ENDPOINT"] ?? "http://minio:9000";
+app.MapGet("/media/{**path}", async (string path, IHttpClientFactory factory, CancellationToken ct) =>
+{
+    try
+    {
+        var client   = factory.CreateClient();
+        var response = await client.GetAsync($"{minioEndpoint.TrimEnd('/')}/{path}", ct);
+        if (!response.IsSuccessStatusCode) return Results.NotFound();
+        var stream      = await response.Content.ReadAsStreamAsync(ct);
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
+        return Results.Stream(stream, contentType);
+    }
+    catch (OperationCanceledException) { return Results.StatusCode(499); }
+    catch { return Results.StatusCode(502); }
+});
+
 app.Run();
 
 public partial class Program;

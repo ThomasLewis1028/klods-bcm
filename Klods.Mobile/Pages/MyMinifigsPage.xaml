@@ -2,6 +2,8 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Klods.Mobile.Pages.MyMinifigsPage"
-             Title="My Minifigs">
-    <Label Text="My Minifigs" HorizontalOptions="Center" VerticalOptions="Center" FontSize="24" TextColor="{StaticResource Gray400}" />
+             Shell.NavBarIsVisible="False">
+    <VerticalStackLayout>
+        <Label Text="My Minifigs" FontSize="26" FontAttributes="Bold" Margin="16,16,16,8" />
+    </VerticalStackLayout>
 </ContentPage>

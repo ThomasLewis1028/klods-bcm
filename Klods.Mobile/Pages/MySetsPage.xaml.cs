@@ -6,6 +6,7 @@ public partial class MySetsPage : ContentPage
 {
     private readonly ApiClient _api;
     private bool _loaded;
+    private ApiClient.MyOwnedSetDto[] _rawSets = [];
 
     public MySetsPage() : this(ServiceHelper.Get<ApiClient>()) { }
 
@@ -53,6 +54,7 @@ public partial class MySetsPage : ContentPage
         }
 
         _loaded = true;
+        _rawSets = sets;
         ErrorView.IsVisible = false;
         Refresher.IsVisible = true;
 
@@ -67,6 +69,15 @@ public partial class MySetsPage : ContentPage
                 Copies: s.Instances.Count,
                 TotalMissing: s.Instances.Sum(i => i.MissingPieceCount)))
             .ToList();
+    }
+
+    private async void OnSetSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is not SetItem item) return;
+        SetsList.SelectedItem = null;
+        var raw = _rawSets.FirstOrDefault(s => s.SetId == item.SetId);
+        if (raw is null) return;
+        await Navigation.PushAsync(new SetDetailPage(raw, _api));
     }
 
     private sealed record SetItem(

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.SetDetailPage"
+             Title="">
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="0">
+
+            <!-- Hero image -->
+            <Grid HeightRequest="220" BackgroundColor="{StaticResource Secondary}">
+                <Image x:Name="HeroImage"
+                       Aspect="AspectFill"
+                       HeightRequest="220" />
+                <Label x:Name="PlaceholderIcon"
+                       Text="&#xe1a1;"
+                       FontFamily="MaterialIcons"
+                       FontSize="72"
+                       TextColor="{StaticResource Gray300}"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center" />
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnHeroTapped" />
+                </Grid.GestureRecognizers>
+            </Grid>
+
+            <!-- Set metadata -->
+            <VerticalStackLayout Padding="20,16,20,0" Spacing="4">
+                <Label x:Name="SetNameLabel"
+                       FontSize="22"
+                       FontAttributes="Bold"
+                       LineBreakMode="WordWrap" />
+                <Label x:Name="SubtitleLabel"
+                       FontSize="13"
+                       TextColor="{StaticResource Gray400}" />
+                <Label x:Name="PiecesLabel"
+                       FontSize="13"
+                       TextColor="{StaticResource Gray400}" />
+            </VerticalStackLayout>
+
+            <!-- Owned copies -->
+            <Label Text="OWNED COPIES"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   CharacterSpacing="1"
+                   Margin="20,24,20,8" />
+
+            <VerticalStackLayout x:Name="CopiesLayout" Spacing="8" Padding="16,0,16,32">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="16" StrokeShape="RoundRectangle 10">
+                            <VerticalStackLayout Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Grid.Column="0"
+                                           Text="{Binding CopyLabel}"
+                                           FontSize="15"
+                                           FontAttributes="Bold" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding PercentLabel}"
+                                           FontSize="13"
+                                           TextColor="{StaticResource Gray400}"
+                                           VerticalOptions="Center" />
+                                </Grid>
+                                <ProgressBar Progress="{Binding Progress}"
+                                             ProgressColor="{StaticResource Primary}"
+                                             HeightRequest="6" />
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Grid.Column="0"
+                                           Text="{Binding ProgressLabel}"
+                                           FontSize="12"
+                                           TextColor="{StaticResource Gray400}"
+                                           VerticalOptions="Center" />
+                                    <Button Grid.Column="1"
+                                            Text="View Bricks"
+                                            FontSize="13"
+                                            Padding="14,6"
+                                            CommandParameter="{Binding SetIndex}"
+                                            Clicked="OnViewBricksClicked" />
+                                </Grid>
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
