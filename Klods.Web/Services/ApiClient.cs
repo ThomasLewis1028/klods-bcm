@@ -113,7 +113,23 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         catch { return null; }
     }
 
-    public Task<UserProfileDto?> GetMyProfileAsync() => GetAsync<UserProfileDto>("/api/auth/me");
+    public Task<UserProfileDto?> GetMyProfileAsync(string? bearerToken = null)
+    {
+        if (bearerToken is null) return GetAsync<UserProfileDto>("/api/auth/me");
+        return GetWithTokenAsync<UserProfileDto>("/api/auth/me", bearerToken);
+    }
+
+    private async Task<T?> GetWithTokenAsync<T>(string url, string bearerToken)
+    {
+        try
+        {
+            var client = factory.CreateClient("api");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+            var resp = await client.GetAsync(url);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<T>(JsonOpts) : default;
+        }
+        catch { return default; }
+    }
 
     public async Task<(bool Success, bool UsernameTaken)> ChangeUsernameAsync(string newUsername)
     {
