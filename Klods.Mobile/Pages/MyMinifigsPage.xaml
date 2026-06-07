@@ -3,7 +3,124 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Klods.Mobile.Pages.MyMinifigsPage"
              Shell.NavBarIsVisible="False">
-    <VerticalStackLayout>
-        <Label Text="My Minifigs" FontSize="26" FontAttributes="Bold" Margin="16,16,16,8" />
-    </VerticalStackLayout>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <Label Grid.Row="0"
+               Text="My Minifigs"
+               FontSize="26"
+               FontAttributes="Bold"
+               Margin="16,16,16,8" />
+
+        <Grid Grid.Row="1">
+
+            <ActivityIndicator x:Name="Loader"
+                               IsRunning="True"
+                               IsVisible="True"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               Color="{StaticResource Primary}" />
+
+            <VerticalStackLayout x:Name="ErrorView"
+                                 IsVisible="False"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 Spacing="16" Padding="32">
+                <Label x:Name="ErrorLabel"
+                       TextColor="{StaticResource Gray400}"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" />
+                <Button Text="Retry" HorizontalOptions="Center" Clicked="OnRetryClicked" />
+            </VerticalStackLayout>
+
+            <RefreshView x:Name="Refresher"
+                         Refreshing="OnRefreshing"
+                         IsVisible="False"
+                         VerticalOptions="Fill">
+                <CollectionView x:Name="MinifigsList"
+                                SelectionMode="None">
+
+                    <CollectionView.EmptyView>
+                        <Label Text="No minifigs in your collection yet."
+                               TextColor="{StaticResource Gray400}"
+                               FontSize="15"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               Margin="0,60,0,0" />
+                    </CollectionView.EmptyView>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="16,3" Padding="12,10" StrokeShape="RoundRectangle 10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+
+                                    <Grid Grid.Column="0"
+                                          ColumnDefinitions="60,*" ColumnSpacing="12">
+
+                                        <Border Grid.Column="0"
+                                                WidthRequest="56" HeightRequest="56"
+                                                BackgroundColor="{StaticResource Secondary}"
+                                                Stroke="Transparent"
+                                                StrokeShape="RoundRectangle 8"
+                                                VerticalOptions="Center">
+                                            <Image Source="{Binding ImgUrl}"
+                                                   Aspect="AspectFit"
+                                                   WidthRequest="56" HeightRequest="56" />
+                                        </Border>
+
+                                        <VerticalStackLayout Grid.Column="1"
+                                                             Spacing="3"
+                                                             VerticalOptions="Center">
+                                            <Label Text="{Binding Name}"
+                                                   FontSize="13"
+                                                   FontAttributes="Bold"
+                                                   LineBreakMode="TailTruncation"
+                                                   MaxLines="2" />
+                                            <Label Text="{Binding SubtitleLine}"
+                                                   FontSize="11"
+                                                   TextColor="{StaticResource Gray400}" />
+                                            <Label Text="{Binding NeededLabel}"
+                                                   FontSize="11"
+                                                   TextColor="#F59E0B"
+                                                   IsVisible="{Binding HasNeeded}" />
+                                        </VerticalStackLayout>
+
+                                    </Grid>
+
+                                    <VerticalStackLayout Grid.Column="1"
+                                                         Spacing="2"
+                                                         VerticalOptions="Center"
+                                                         HorizontalOptions="Center"
+                                                         WidthRequest="60">
+                                        <Button Text="+"
+                                                FontSize="18"
+                                                Padding="0"
+                                                HeightRequest="36" WidthRequest="36"
+                                                HorizontalOptions="Center"
+                                                Clicked="OnPlusClicked" />
+                                        <Label Text="{Binding Stock}"
+                                               FontSize="15"
+                                               FontAttributes="Bold"
+                                               HorizontalOptions="Center"
+                                               HorizontalTextAlignment="Center" />
+                                        <Button Text="−"
+                                                FontSize="18"
+                                                Padding="0"
+                                                HeightRequest="36" WidthRequest="36"
+                                                HorizontalOptions="Center"
+                                                Clicked="OnMinusClicked" />
+                                    </VerticalStackLayout>
+
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+            </RefreshView>
+
+        </Grid>
+
+    </Grid>
+
 </ContentPage>

@@ -88,6 +88,16 @@ public class ApiClient(HttpClient http, AuthService auth)
     public Task<MyBrickSetDetailDto[]?> GetBrickSetsAsync(string partNum, string colorId) =>
         GetAsync<MyBrickSetDetailDto[]>($"/api/mybricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}/sets");
 
+    // ── Minifigs ──────────────────────────────────────────────────────────────
+
+    public Task<MyMinifigDto[]?> GetMyMinifigsAsync() =>
+        GetAsync<MyMinifigDto[]>("/api/myminifigs");
+
+    public Task<bool> UpdateMinifigStockAsync(string minifigId, int stock) =>
+        SendAsync(HttpMethod.Put,
+            $"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/stock",
+            new { Stock = stock });
+
     // ── BoM ───────────────────────────────────────────────────────────────────
 
     public Task<BomDto?> GetBomAsync(string setId, int setIndex) =>
@@ -129,6 +139,9 @@ public class ApiClient(HttpClient http, AuthService auth)
         int Stock, int UserNeeded, int UserSetCount);
 
     public record MyBrickSetDetailDto(string SetId, string SetName, string? SetImg, int BrickCount, int CopiesOwned);
+
+    public record MyMinifigDto(string MinifigId, string MinifigName, string? ImgUrl,
+        int Stock, int UserNeeded, int UserSetCount, int PartCount);
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg,
         string? ColorName, string? HexColor, int Count, int SpareCount,
