@@ -8,13 +8,15 @@ public partial class ServerListPage : ContentPage
     private readonly AuthService _auth;
     private readonly ServerStore _store;
     private readonly IServiceProvider _services;
+    private readonly ThemeService _theme;
 
-    public ServerListPage(AuthService auth, ServerStore store, IServiceProvider services)
+    public ServerListPage(AuthService auth, ServerStore store, IServiceProvider services, ThemeService theme)
     {
         InitializeComponent();
         _auth = auth;
         _store = store;
         _services = services;
+        _theme = theme;
     }
 
     protected override void OnAppearing()
@@ -39,16 +41,17 @@ public partial class ServerListPage : ContentPage
     {
         if (await _auth.TryResumeAsync(server))
         {
+            _theme.LoadCached(server.Id);
             NavigateToShell();
             return;
         }
 
-        await Navigation.PushAsync(new AddServerPage(_auth, _store, _services, server));
+        await Navigation.PushAsync(new AddServerPage(_auth, _store, _services, _theme, server));
     }
 
     private async void OnAddServerClicked(object? sender, EventArgs e)
     {
-        await Navigation.PushAsync(new AddServerPage(_auth, _store, _services, null));
+        await Navigation.PushAsync(new AddServerPage(_auth, _store, _services, _theme, null));
     }
 
     private void NavigateToShell()

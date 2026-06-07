@@ -10,7 +10,7 @@
                Text="Add Server"
                FontSize="28"
                FontAttributes="Bold"
-               TextColor="{StaticResource Primary}" />
+               TextColor="{DynamicResource Primary}" />
 
         <Entry x:Name="NameEntry"
                Placeholder="Server name (e.g. My Klods)" />

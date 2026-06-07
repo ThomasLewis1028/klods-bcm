@@ -8,14 +8,16 @@ public partial class AddServerPage : ContentPage
     private readonly AuthService _auth;
     private readonly ServerStore _store;
     private readonly IServiceProvider _services;
+    private readonly ThemeService _theme;
     private readonly ServerProfile? _existing;
 
-    public AddServerPage(AuthService auth, ServerStore store, IServiceProvider services, ServerProfile? existing)
+    public AddServerPage(AuthService auth, ServerStore store, IServiceProvider services, ThemeService theme, ServerProfile? existing)
     {
         InitializeComponent();
         _auth = auth;
         _store = store;
         _services = services;
+        _theme = theme;
         _existing = existing;
 
         if (existing is not null)
@@ -63,6 +65,7 @@ public partial class AddServerPage : ContentPage
             }
 
             _store.Upsert(server);
+            _theme.LoadCached(server.Id);
             Application.Current!.Windows[0].Page = _services.GetRequiredService<AppShell>();
         }
         catch

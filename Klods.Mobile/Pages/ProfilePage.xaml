@@ -10,12 +10,12 @@
             <!-- Avatar -->
             <Grid HorizontalOptions="Center" Margin="0,32,0,16">
                 <Ellipse WidthRequest="96" HeightRequest="96"
-                         Fill="{StaticResource Secondary}" />
+                         Fill="{DynamicResource Secondary}" />
                 <Label x:Name="AvatarIcon"
                        Text="&#xe7fd;"
                        FontFamily="MaterialIcons"
                        FontSize="56"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{DynamicResource Primary}"
                        HorizontalOptions="Center"
                        VerticalOptions="Center" />
                 <Image x:Name="AvatarImage"
@@ -38,12 +38,12 @@
                     Padding="10,4"
                     Margin="0,6,0,0"
                     StrokeShape="RoundRectangle 12"
-                    BackgroundColor="{StaticResource Secondary}"
+                    BackgroundColor="{DynamicResource Secondary}"
                     Stroke="Transparent">
                 <Label x:Name="RoleLabel"
                        Text="—"
                        FontSize="12"
-                       TextColor="{StaticResource Primary}" />
+                       TextColor="{DynamicResource Primary}" />
             </Border>
 
             <ActivityIndicator x:Name="Loader"
@@ -51,7 +51,7 @@
                                IsVisible="True"
                                HorizontalOptions="Center"
                                Margin="0,24,0,0"
-                               Color="{StaticResource Primary}" />
+                               Color="{DynamicResource Primary}" />
 
             <Label x:Name="ErrorLabel"
                    IsVisible="False"
@@ -78,7 +78,7 @@
                     <Ellipse x:Name="ThemeSwatch"
                              Grid.Column="1"
                              WidthRequest="32" HeightRequest="32"
-                             Fill="{StaticResource Primary}" />
+                             Fill="{DynamicResource Primary}" />
                 </Grid>
                 <Border.GestureRecognizers>
                     <TapGestureRecognizer Tapped="OnChangeThemeTapped" />

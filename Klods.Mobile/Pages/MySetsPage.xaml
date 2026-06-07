@@ -19,7 +19,7 @@
                                IsVisible="True"
                                HorizontalOptions="Center"
                                VerticalOptions="Center"
-                               Color="{StaticResource Primary}" />
+                               Color="{DynamicResource Primary}" />
 
             <VerticalStackLayout x:Name="ErrorView"
                                  IsVisible="False"
@@ -41,6 +41,7 @@
                          IsVisible="False"
                          VerticalOptions="Fill">
                 <CollectionView x:Name="SetsList"
+                                Margin="0,0,0,80"
                                 SelectionMode="Single"
                                 SelectionChanged="OnSetSelected">
 
@@ -63,7 +64,7 @@
 
                                     <Border Grid.Column="0"
                                             WidthRequest="80" HeightRequest="80"
-                                            BackgroundColor="{StaticResource Secondary}"
+                                            BackgroundColor="{DynamicResource Secondary}"
                                             Stroke="Transparent"
                                             StrokeShape="RoundRectangle 8"
                                             VerticalOptions="Center">
@@ -89,7 +90,7 @@
                                         <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
                                             <Border Padding="8,3"
                                                     StrokeShape="RoundRectangle 12"
-                                                    BackgroundColor="{StaticResource Primary}"
+                                                    BackgroundColor="{DynamicResource Primary}"
                                                     Stroke="Transparent">
                                                 <Label Text="{Binding CopiesLabel}"
                                                        FontSize="11"
@@ -110,6 +111,17 @@
 
                 </CollectionView>
             </RefreshView>
+
+            <!-- FAB -->
+            <Button Text="&#xe145;"
+                    FontFamily="MaterialIcons"
+                    FontSize="28"
+                    WidthRequest="56" HeightRequest="56"
+                    CornerRadius="28"
+                    HorizontalOptions="End"
+                    VerticalOptions="End"
+                    Margin="0,0,24,24"
+                    Clicked="OnImportClicked" />
 
         </Grid>
 

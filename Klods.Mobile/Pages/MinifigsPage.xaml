@@ -3,7 +3,90 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Klods.Mobile.Pages.MinifigsPage"
              Shell.NavBarIsVisible="False">
-    <VerticalStackLayout>
-        <Label Text="Minifigs" FontSize="26" FontAttributes="Bold" Margin="16,16,16,8" />
-    </VerticalStackLayout>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <Label Grid.Row="0"
+               Text="Minifigs"
+               FontSize="26"
+               FontAttributes="Bold"
+               Margin="16,16,16,8" />
+
+        <Grid Grid.Row="1">
+
+            <ActivityIndicator x:Name="Loader"
+                               IsRunning="True"
+                               IsVisible="True"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+
+            <VerticalStackLayout x:Name="ErrorView"
+                                 IsVisible="False"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 Spacing="16" Padding="32">
+                <Label x:Name="ErrorLabel"
+                       TextColor="{StaticResource Gray400}"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" />
+                <Button Text="Retry" HorizontalOptions="Center" Clicked="OnRetryClicked" />
+            </VerticalStackLayout>
+
+            <RefreshView x:Name="Refresher"
+                         Refreshing="OnRefreshing"
+                         IsVisible="False"
+                         VerticalOptions="Fill">
+                <CollectionView x:Name="MinifigsList"
+                                SelectionMode="None">
+
+                    <CollectionView.EmptyView>
+                        <Label Text="No minifigs in the catalog yet."
+                               TextColor="{StaticResource Gray400}"
+                               FontSize="15"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               Margin="0,60,0,0" />
+                    </CollectionView.EmptyView>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="16,3" Padding="12,10" StrokeShape="RoundRectangle 10">
+                                <Grid ColumnDefinitions="60,*" ColumnSpacing="12">
+
+                                    <Border Grid.Column="0"
+                                            WidthRequest="56" HeightRequest="56"
+                                            BackgroundColor="{DynamicResource Secondary}"
+                                            Stroke="Transparent"
+                                            StrokeShape="RoundRectangle 8"
+                                            VerticalOptions="Center">
+                                        <Image Source="{Binding ImgUrl}"
+                                               Aspect="AspectFit"
+                                               WidthRequest="56" HeightRequest="56" />
+                                    </Border>
+
+                                    <VerticalStackLayout Grid.Column="1"
+                                                         Spacing="3"
+                                                         VerticalOptions="Center">
+                                        <Label Text="{Binding Name}"
+                                               FontSize="13"
+                                               FontAttributes="Bold"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2" />
+                                        <Label Text="{Binding SubtitleLine}"
+                                               FontSize="11"
+                                               TextColor="{StaticResource Gray400}" />
+                                    </VerticalStackLayout>
+
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+            </RefreshView>
+
+        </Grid>
+
+    </Grid>
+
 </ContentPage>

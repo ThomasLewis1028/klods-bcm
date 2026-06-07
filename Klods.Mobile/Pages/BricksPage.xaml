@@ -3,7 +3,106 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Klods.Mobile.Pages.BricksPage"
              Shell.NavBarIsVisible="False">
-    <VerticalStackLayout>
-        <Label Text="Bricks" FontSize="26" FontAttributes="Bold" Margin="16,16,16,8" />
-    </VerticalStackLayout>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <Label Grid.Row="0"
+               Text="Bricks"
+               FontSize="26"
+               FontAttributes="Bold"
+               Margin="16,16,16,8" />
+
+        <Grid Grid.Row="1">
+
+            <ActivityIndicator x:Name="Loader"
+                               IsRunning="True"
+                               IsVisible="True"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+
+            <VerticalStackLayout x:Name="ErrorView"
+                                 IsVisible="False"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 Spacing="16" Padding="32">
+                <Label x:Name="ErrorLabel"
+                       TextColor="{StaticResource Gray400}"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" />
+                <Button Text="Retry" HorizontalOptions="Center" Clicked="OnRetryClicked" />
+            </VerticalStackLayout>
+
+            <RefreshView x:Name="Refresher"
+                         Refreshing="OnRefreshing"
+                         IsVisible="False"
+                         VerticalOptions="Fill">
+                <CollectionView x:Name="BricksList"
+                                SelectionMode="None">
+
+                    <CollectionView.EmptyView>
+                        <Label Text="No bricks in the catalog yet."
+                               TextColor="{StaticResource Gray400}"
+                               FontSize="15"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               Margin="0,60,0,0" />
+                    </CollectionView.EmptyView>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="16,3" Padding="12,10" StrokeShape="RoundRectangle 10">
+                                <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="10">
+
+                                    <Border Grid.Column="0"
+                                            WidthRequest="48" HeightRequest="48"
+                                            BackgroundColor="{DynamicResource Secondary}"
+                                            Stroke="Transparent"
+                                            StrokeShape="RoundRectangle 6"
+                                            VerticalOptions="Center">
+                                        <Image Source="{Binding PartImgUrl}"
+                                               Aspect="AspectFit"
+                                               WidthRequest="48" HeightRequest="48" />
+                                    </Border>
+
+                                    <VerticalStackLayout Grid.Column="1"
+                                                         Spacing="3"
+                                                         VerticalOptions="Center">
+                                        <Label Text="{Binding Name}"
+                                               FontSize="13"
+                                               FontAttributes="Bold"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2" />
+                                        <HorizontalStackLayout Spacing="6">
+                                            <Ellipse Fill="{Binding SwatchBrush}"
+                                                     WidthRequest="12" HeightRequest="12"
+                                                     VerticalOptions="Center" />
+                                            <Label Text="{Binding ColorName}"
+                                                   FontSize="11"
+                                                   TextColor="{StaticResource Gray400}"
+                                                   VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                        <Label Text="{Binding StatsLabel}"
+                                               FontSize="11"
+                                               TextColor="{StaticResource Gray400}" />
+                                    </VerticalStackLayout>
+
+                                    <Label Grid.Column="2"
+                                           Text="{Binding SetCountLabel}"
+                                           FontSize="12"
+                                           TextColor="{StaticResource Gray400}"
+                                           VerticalOptions="Center"
+                                           HorizontalOptions="End" />
+
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+            </RefreshView>
+
+        </Grid>
+
+    </Grid>
+
 </ContentPage>

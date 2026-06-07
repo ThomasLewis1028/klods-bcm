@@ -8,7 +8,7 @@
         <VerticalStackLayout Spacing="0">
 
             <!-- Minifig image -->
-            <Grid HeightRequest="200" BackgroundColor="{StaticResource Secondary}">
+            <Grid HeightRequest="200" BackgroundColor="{DynamicResource Secondary}">
                 <Image x:Name="MinifigImage"
                        Aspect="AspectFit"
                        HeightRequest="200"
@@ -85,7 +85,7 @@
                                IsVisible="True"
                                HorizontalOptions="Center"
                                Margin="0,8,0,0"
-                               Color="{StaticResource Primary}" />
+                               Color="{DynamicResource Primary}" />
 
             <Label x:Name="PartsErrorLabel"
                    IsVisible="False"
@@ -101,7 +101,7 @@
                             <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="12">
                                 <Border Grid.Column="0"
                                         WidthRequest="48" HeightRequest="48"
-                                        BackgroundColor="{StaticResource Secondary}"
+                                        BackgroundColor="{DynamicResource Secondary}"
                                         Stroke="Transparent"
                                         StrokeShape="RoundRectangle 6"
                                         VerticalOptions="Center">

@@ -49,6 +49,22 @@ public class ApiClient(HttpClient http, AuthService auth)
     private Task<bool> PatchAsync(string path, object? body = null) => SendAsync(HttpMethod.Patch, path, body);
     private Task<bool> DeleteAsync(string path) => SendAsync(HttpMethod.Delete, path);
 
+    private async Task<T?> PostAsync<T>(string path, object? body = null)
+    {
+        try
+        {
+            var client = await GetHttpAsync();
+            var req = new HttpRequestMessage(HttpMethod.Post, $"{Base}{path}");
+            if (body is not null)
+                req.Content = JsonContent.Create(body, options: JsonOpts);
+            var resp = await client.SendAsync(req);
+            return resp.IsSuccessStatusCode
+                ? await resp.Content.ReadFromJsonAsync<T>(JsonOpts)
+                : default;
+        }
+        catch { return default; }
+    }
+
     // ── Profile ───────────────────────────────────────────────────────────────
 
     public Task<UserProfileDto?> GetMyProfileAsync() =>
@@ -100,6 +116,33 @@ public class ApiClient(HttpClient http, AuthService auth)
 
     public Task<MinifigBrickDto[]?> GetMinifigBricksAsync(string minifigId) =>
         GetAsync<MinifigBrickDto[]>($"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/bricks");
+
+    // ── Global Catalog ────────────────────────────────────────────────────────
+
+    public Task<SetCatalogViewResponse?> GetSetCatalogViewAsync() =>
+        GetAsync<SetCatalogViewResponse>("/api/sets/catalog-view");
+
+    public Task<BrickCatalogViewDto[]?> GetBrickCatalogViewAsync() =>
+        GetAsync<BrickCatalogViewDto[]>("/api/bricks/catalog-view");
+
+    public Task<MinifigCatalogViewDto[]?> GetMinifigCatalogViewAsync() =>
+        GetAsync<MinifigCatalogViewDto[]>("/api/minifigs/catalog-view");
+
+    // ── Owned set management ─────────────────────────────────────────────────
+
+    public Task<bool> AddOwnedSetAsync(string setId, bool applyBricks) =>
+        SendAsync(HttpMethod.Post, "/api/sets/owned", new { SetId = setId, ApplyBricks = applyBricks });
+
+    public Task<bool> RemoveLastOwnedSetAsync(string setId) =>
+        SendAsync(HttpMethod.Delete, $"/api/sets/owned/{Uri.EscapeDataString(setId)}/last");
+
+    // ── Import ────────────────────────────────────────────────────────────────
+
+    public Task<ResolveSetResponse?> ResolveSetAsync(string query, int page = 0) =>
+        PostAsync<ResolveSetResponse>("/api/sets/resolve", new { Query = query, Page = page });
+
+    public Task<bool> ImportSetAsync(string setId) =>
+        SendAsync(HttpMethod.Post, "/api/sets/import", new { SetId = setId });
 
     // ── BoM ───────────────────────────────────────────────────────────────────
 
@@ -158,4 +201,21 @@ public class ApiClient(HttpClient http, AuthService auth)
     public record BomDto(string SetId, int SetIndex, string SetName, string ManualUrl,
         List<int> OwnedInstances, List<string> OwnedSetIds,
         List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs);
+
+    public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks,
+        int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
+
+    public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets,
+        int TotalOwnedInstances, int TotalOwners, int TotalPieces);
+
+    public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId,
+        string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId,
+        int TotalStock, int TotalNeeded, int SetCount);
+
+    public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl,
+        string MinifigUrl, int PartCount);
+
+    public record SetCandidate(string SetNum, string Name, int Year, string? ImageUrl);
+
+    public record ResolveSetResponse(List<SetCandidate> Results, bool Resolved, bool HasMore);
 }

@@ -6,14 +6,16 @@ public partial class ProfilePage : ContentPage
 {
     private readonly ApiClient _api;
     private readonly AuthService _auth;
+    private readonly ThemeService _theme;
 
-    public ProfilePage() : this(ServiceHelper.Get<ApiClient>(), ServiceHelper.Get<AuthService>()) { }
+    public ProfilePage() : this(ServiceHelper.Get<ApiClient>(), ServiceHelper.Get<AuthService>(), ServiceHelper.Get<ThemeService>()) { }
 
-    public ProfilePage(ApiClient api, AuthService auth)
+    public ProfilePage(ApiClient api, AuthService auth, ThemeService theme)
     {
         InitializeComponent();
         _api = api;
         _auth = auth;
+        _theme = theme;
     }
 
     protected override async void OnAppearing()
@@ -84,6 +86,8 @@ public partial class ProfilePage : ContentPage
         var color = string.IsNullOrWhiteSpace(input) ? null : input.Trim();
         if (await _api.ChangeThemeAsync(color))
         {
+            _theme.Apply(color, _auth.ActiveServer?.Id);
+
             if (color is not null)
             {
                 ThemeSwatch.Fill = new SolidColorBrush(Color.FromArgb(color));
@@ -161,6 +165,8 @@ public partial class ProfilePage : ContentPage
         var server = _auth.ActiveServer;
         if (server is not null)
             _auth.Logout(server.Id);
+
+        _theme.Reset();
 
         Application.Current!.Windows[0].Page =
             new NavigationPage(ServiceHelper.Get<ServerListPage>());

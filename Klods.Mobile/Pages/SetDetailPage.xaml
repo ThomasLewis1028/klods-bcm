@@ -8,7 +8,7 @@
         <VerticalStackLayout Spacing="0">
 
             <!-- Hero image -->
-            <Grid HeightRequest="220" BackgroundColor="{StaticResource Secondary}">
+            <Grid HeightRequest="220" BackgroundColor="{DynamicResource Secondary}">
                 <Image x:Name="HeroImage"
                        Aspect="AspectFill"
                        HeightRequest="220" />
@@ -63,7 +63,7 @@
                                            VerticalOptions="Center" />
                                 </Grid>
                                 <ProgressBar Progress="{Binding Progress}"
-                                             ProgressColor="{StaticResource Primary}"
+                                             ProgressColor="{DynamicResource Primary}"
                                              HeightRequest="6" />
                                 <Grid ColumnDefinitions="*,Auto">
                                     <Label Grid.Column="0"

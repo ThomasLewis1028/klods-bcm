@@ -3,7 +3,161 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Klods.Mobile.Pages.SetsPage"
              Shell.NavBarIsVisible="False">
-    <VerticalStackLayout>
-        <Label Text="Sets" FontSize="26" FontAttributes="Bold" Margin="16,16,16,8" />
-    </VerticalStackLayout>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- Header -->
+        <Grid Grid.Row="0" RowDefinitions="Auto,Auto">
+            <Label Grid.Row="0"
+                   Text="Sets"
+                   FontSize="26"
+                   FontAttributes="Bold"
+                   Margin="16,16,16,4" />
+            <Label x:Name="StatsLabel"
+                   Grid.Row="1"
+                   FontSize="12"
+                   TextColor="{StaticResource Gray400}"
+                   Margin="16,0,16,8" />
+        </Grid>
+
+        <Grid Grid.Row="1">
+
+            <ActivityIndicator x:Name="Loader"
+                               IsRunning="True"
+                               IsVisible="True"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+
+            <VerticalStackLayout x:Name="ErrorView"
+                                 IsVisible="False"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 Spacing="16"
+                                 Padding="32">
+                <Label x:Name="ErrorLabel"
+                       TextColor="{StaticResource Gray400}"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" />
+                <Button Text="Retry"
+                        HorizontalOptions="Center"
+                        Clicked="OnRetryClicked" />
+            </VerticalStackLayout>
+
+            <RefreshView x:Name="Refresher"
+                         Refreshing="OnRefreshing"
+                         IsVisible="False"
+                         VerticalOptions="Fill">
+                <CollectionView x:Name="SetsList"
+                                SelectionMode="None">
+
+                    <CollectionView.EmptyView>
+                        <Label Text="No sets in the catalog yet."
+                               TextColor="{StaticResource Gray400}"
+                               FontSize="15"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               Margin="0,60,0,0" />
+                    </CollectionView.EmptyView>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="12"
+                                    Margin="16,4"
+                                    StrokeShape="RoundRectangle 10">
+
+                                <Grid ColumnDefinitions="88,*" ColumnSpacing="12">
+
+                                    <Border Grid.Column="0"
+                                            WidthRequest="80" HeightRequest="80"
+                                            BackgroundColor="{DynamicResource Secondary}"
+                                            Stroke="Transparent"
+                                            StrokeShape="RoundRectangle 8"
+                                            VerticalOptions="Center">
+                                        <Image Source="{Binding SetImg}"
+                                               Aspect="AspectFill"
+                                               WidthRequest="80" HeightRequest="80" />
+                                    </Border>
+
+                                    <Grid Grid.Column="1"
+                                          ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="8">
+
+                                        <VerticalStackLayout Grid.Column="0"
+                                                             Spacing="3"
+                                                             VerticalOptions="Center">
+                                            <Label Text="{Binding Name}"
+                                                   FontSize="15"
+                                                   FontAttributes="Bold"
+                                                   LineBreakMode="TailTruncation"
+                                                   MaxLines="2" />
+                                            <Label Text="{Binding SubtitleLine1}"
+                                                   FontSize="12"
+                                                   TextColor="{StaticResource Gray400}" />
+                                            <Label Text="{Binding PiecesLabel}"
+                                                   FontSize="12"
+                                                   TextColor="{StaticResource Gray400}" />
+                                            <Border Padding="8,3"
+                                                    Margin="0,4,0,0"
+                                                    StrokeShape="RoundRectangle 12"
+                                                    BackgroundColor="{DynamicResource Primary}"
+                                                    Stroke="Transparent"
+                                                    IsVisible="{Binding IsOwned}"
+                                                    HorizontalOptions="Start">
+                                                <Label Text="{Binding OwnedLabel}"
+                                                       FontSize="11"
+                                                       TextColor="White" />
+                                            </Border>
+                                        </VerticalStackLayout>
+
+                                        <!-- Owned counter -->
+                                        <VerticalStackLayout Grid.Column="1"
+                                                             Spacing="2"
+                                                             VerticalOptions="Center"
+                                                             HorizontalOptions="Center"
+                                                             WidthRequest="44">
+                                            <Button Text="+"
+                                                    FontSize="18"
+                                                    Padding="0"
+                                                    HeightRequest="36" WidthRequest="36"
+                                                    HorizontalOptions="Center"
+                                                    Clicked="OnPlusClicked" />
+                                            <Label Text="{Binding UserOwnedCount}"
+                                                   FontSize="15"
+                                                   FontAttributes="Bold"
+                                                   HorizontalOptions="Center"
+                                                   HorizontalTextAlignment="Center" />
+                                            <Button Text="−"
+                                                    FontSize="18"
+                                                    Padding="0"
+                                                    HeightRequest="36" WidthRequest="36"
+                                                    HorizontalOptions="Center"
+                                                    IsEnabled="{Binding IsOwned}"
+                                                    Clicked="OnMinusClicked" />
+                                        </VerticalStackLayout>
+
+                                    </Grid>
+
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+            </RefreshView>
+
+            <!-- FAB -->
+            <Button Text="&#xe145;"
+                    FontFamily="MaterialIcons"
+                    FontSize="28"
+                    WidthRequest="56" HeightRequest="56"
+                    CornerRadius="28"
+                    HorizontalOptions="End"
+                    VerticalOptions="End"
+                    Margin="0,0,24,24"
+                    Clicked="OnImportClicked" />
+
+        </Grid>
+
+    </Grid>
+
 </ContentPage>

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.ImportSetPage"
+             Title="Import Set">
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- Search bar -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="*,Auto"
+              ColumnSpacing="8"
+              Padding="16,16,16,8">
+            <Entry x:Name="QueryEntry"
+                   Grid.Column="0"
+                   Placeholder="Set number or name (e.g. 42154)"
+                   ReturnType="Search"
+                   ReturnCommand="{Binding Source={x:Reference SearchButton}, Path=Command}"
+                   Completed="OnSearchClicked"
+                   Keyboard="Plain" />
+            <Button x:Name="SearchButton"
+                    Grid.Column="1"
+                    Text="Search"
+                    Padding="16,10"
+                    Clicked="OnSearchClicked" />
+        </Grid>
+
+        <!-- Status label -->
+        <Label x:Name="StatusLabel"
+               Grid.Row="1"
+               IsVisible="False"
+               FontSize="13"
+               TextColor="{StaticResource Gray400}"
+               Margin="16,0,16,4" />
+
+        <!-- Results area -->
+        <Grid Grid.Row="2">
+
+            <ActivityIndicator x:Name="Loader"
+                               IsRunning="True"
+                               IsVisible="False"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+
+            <CollectionView x:Name="ResultsList"
+                            SelectionMode="None">
+
+                <CollectionView.EmptyView>
+                    <Label x:Name="EmptyLabel"
+                           Text="Enter a set number or name to search."
+                           TextColor="{StaticResource Gray400}"
+                           FontSize="14"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           HorizontalTextAlignment="Center"
+                           Margin="32,60" />
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="16,4" Padding="12" StrokeShape="RoundRectangle 10">
+                            <Grid ColumnDefinitions="72,*" ColumnSpacing="12">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnCandidateTapped" />
+                                </Grid.GestureRecognizers>
+
+                                <Border Grid.Column="0"
+                                        WidthRequest="64" HeightRequest="64"
+                                        BackgroundColor="{DynamicResource Secondary}"
+                                        Stroke="Transparent"
+                                        StrokeShape="RoundRectangle 8"
+                                        VerticalOptions="Center">
+                                    <Image Source="{Binding ImageUrl}"
+                                           Aspect="AspectFit"
+                                           WidthRequest="64" HeightRequest="64" />
+                                </Border>
+
+                                <VerticalStackLayout Grid.Column="1"
+                                                     Spacing="3"
+                                                     VerticalOptions="Center">
+                                    <Label Text="{Binding Name}"
+                                           FontSize="14"
+                                           FontAttributes="Bold"
+                                           LineBreakMode="TailTruncation"
+                                           MaxLines="2" />
+                                    <Label Text="{Binding SubtitleLine}"
+                                           FontSize="12"
+                                           TextColor="{StaticResource Gray400}" />
+                                </VerticalStackLayout>
+
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.Footer>
+                    <Button x:Name="LoadMoreButton"
+                            Text="Load more results"
+                            IsVisible="False"
+                            BackgroundColor="Transparent"
+                            TextColor="{DynamicResource Primary}"
+                            Margin="16,4,16,16"
+                            Clicked="OnLoadMoreClicked" />
+                </CollectionView.Footer>
+
+            </CollectionView>
+
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

@@ -11,7 +11,7 @@
             <Label Text="Klods"
                    FontSize="40"
                    FontAttributes="Bold"
-                   TextColor="{StaticResource Primary}" />
+                   TextColor="{DynamicResource Primary}" />
             <Label Text="Select a server to connect to"
                    FontSize="14"
                    TextColor="{StaticResource Gray400}" />

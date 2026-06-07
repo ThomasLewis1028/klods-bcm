@@ -19,7 +19,7 @@
                                IsVisible="True"
                                HorizontalOptions="Center"
                                VerticalOptions="Center"
-                               Color="{StaticResource Primary}" />
+                               Color="{DynamicResource Primary}" />
 
             <VerticalStackLayout x:Name="ErrorView"
                                  IsVisible="False"
@@ -62,7 +62,7 @@
 
                                         <Border Grid.Column="0"
                                                 WidthRequest="56" HeightRequest="56"
-                                                BackgroundColor="{StaticResource Secondary}"
+                                                BackgroundColor="{DynamicResource Secondary}"
                                                 Stroke="Transparent"
                                                 StrokeShape="RoundRectangle 8"
                                                 VerticalOptions="Center">

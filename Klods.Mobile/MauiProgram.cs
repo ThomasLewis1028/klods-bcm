@@ -22,6 +22,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<ServerStore>();
         builder.Services.AddSingleton<ApiClient>();
+        builder.Services.AddSingleton<ThemeService>();
 
         builder.Services.AddTransient<ServerListPage>();
         builder.Services.AddTransient<ProfilePage>();

@@ -8,7 +8,7 @@
         <VerticalStackLayout Spacing="0">
 
             <!-- Brick image -->
-            <Grid HeightRequest="200" BackgroundColor="{StaticResource Secondary}">
+            <Grid HeightRequest="200" BackgroundColor="{DynamicResource Secondary}">
                 <Image x:Name="BrickImage"
                        Aspect="AspectFit"
                        HeightRequest="200"
@@ -85,8 +85,8 @@
             <Button x:Name="BricklinkButton"
                     Text="View on BrickLink"
                     BackgroundColor="Transparent"
-                    TextColor="{StaticResource Primary}"
-                    BorderColor="{StaticResource Primary}"
+                    TextColor="{DynamicResource Primary}"
+                    BorderColor="{DynamicResource Primary}"
                     BorderWidth="1"
                     Margin="16,16,16,0"
                     IsVisible="False"
@@ -105,7 +105,7 @@
                                IsVisible="True"
                                HorizontalOptions="Center"
                                Margin="0,8,0,0"
-                               Color="{StaticResource Primary}" />
+                               Color="{DynamicResource Primary}" />
 
             <Label x:Name="SetsErrorLabel"
                    IsVisible="False"
@@ -121,7 +121,7 @@
                             <Grid ColumnDefinitions="56,*" ColumnSpacing="12">
                                 <Border Grid.Column="0"
                                         WidthRequest="52" HeightRequest="52"
-                                        BackgroundColor="{StaticResource Secondary}"
+                                        BackgroundColor="{DynamicResource Secondary}"
                                         Stroke="Transparent"
                                         StrokeShape="RoundRectangle 6"
                                         VerticalOptions="Center">

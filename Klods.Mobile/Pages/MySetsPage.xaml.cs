@@ -80,6 +80,12 @@ public partial class MySetsPage : ContentPage
         await Navigation.PushAsync(new SetDetailPage(raw, _api));
     }
 
+    private async void OnImportClicked(object? sender, EventArgs e)
+    {
+        _loaded = false;
+        await Navigation.PushAsync(new ImportSetPage(_api));
+    }
+
     private sealed record SetItem(
         string SetId, string Name, string? SetImg, int NumBricks,
         int ReleaseYear, string? ThemeName, int Copies, int TotalMissing)
