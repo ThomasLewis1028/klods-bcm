@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Klods.Mobile.Services;
@@ -6,9 +7,18 @@ namespace Klods.Mobile.Pages;
 
 public partial class MyMinifigsPage : ContentPage
 {
+    private const int PageSize = 50;
+
     private readonly ApiClient _api;
+    private readonly ObservableCollection<MinifigItem> _items = [];
+
     private bool _loaded;
     private bool _isGridView;
+    private bool _hasMore;
+    private bool _isLoadingMore;
+    private int _currentPage;
+    private string? _currentSearch;
+    private CancellationTokenSource? _searchCts;
 
     public MyMinifigsPage() : this(ServiceHelper.Get<ApiClient>()) { }
 
@@ -16,6 +26,8 @@ public partial class MyMinifigsPage : ContentPage
     {
         InitializeComponent();
         _api = api;
+        MinifigsList.ItemsSource = _items;
+        GridList.ItemsSource = _items;
     }
 
     protected override async void OnAppearing()
@@ -45,7 +57,7 @@ public partial class MyMinifigsPage : ContentPage
             GridRefresher.IsVisible = false;
         }
 
-        var result = await _api.GetMyMinifigsAsync();
+        var result = await _api.GetMyMinifigsAsync(search: _currentSearch, page: 0, pageSize: PageSize);
         Loader.IsVisible = false;
 
         if (result is null)
@@ -58,27 +70,47 @@ public partial class MyMinifigsPage : ContentPage
         }
 
         _loaded = true;
+        _currentPage = 0;
+        _hasMore = result.HasMore;
         ErrorView.IsVisible = false;
 
-        var items = result.Items
-            .OrderBy(m => m.MinifigName)
-            .Select(m => new MinifigItem
-            {
-                MinifigId  = m.MinifigId,
-                Name       = m.MinifigName,
-                ImgUrl     = m.ImgUrl,
-                Stock      = m.Stock,
-                UserNeeded = m.UserNeeded,
-                UserSetCount = m.UserSetCount,
-                PartCount  = m.PartCount,
-            })
-            .ToList();
-
-        MinifigsList.ItemsSource = items;
-        GridList.ItemsSource = items;
+        _items.Clear();
+        foreach (var m in result.Items)
+            _items.Add(ToItem(m));
 
         Refresher.IsVisible = !_isGridView;
         GridRefresher.IsVisible = _isGridView;
+    }
+
+    private async void OnLoadMore(object? sender, EventArgs e)
+    {
+        if (!_hasMore || _isLoadingMore) return;
+        _isLoadingMore = true;
+
+        var result = await _api.GetMyMinifigsAsync(search: _currentSearch, page: _currentPage + 1, pageSize: PageSize);
+        if (result is not null)
+        {
+            _currentPage++;
+            _hasMore = result.HasMore;
+            foreach (var m in result.Items)
+                _items.Add(ToItem(m));
+        }
+
+        _isLoadingMore = false;
+    }
+
+    private async void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var cts = _searchCts;
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            _currentSearch = string.IsNullOrWhiteSpace(e.NewTextValue) ? null : e.NewTextValue.Trim();
+            await LoadAsync(firstLoad: true);
+        }
+        catch (TaskCanceledException) { }
     }
 
     private async void OnMinifigTapped(object? sender, TappedEventArgs e)
@@ -134,6 +166,17 @@ public partial class MyMinifigsPage : ContentPage
         ListViewBtn.TextColor = isGrid ? inactive : primary;
         GridViewBtn.TextColor = isGrid ? primary : inactive;
     }
+
+    private static MinifigItem ToItem(ApiClient.MyMinifigDto m) => new()
+    {
+        MinifigId    = m.MinifigId,
+        Name         = m.MinifigName,
+        ImgUrl       = m.ImgUrl,
+        Stock        = m.Stock,
+        UserNeeded   = m.UserNeeded,
+        UserSetCount = m.UserSetCount,
+        PartCount    = m.PartCount,
+    };
 
     private sealed class MinifigItem : INotifyPropertyChanged
     {

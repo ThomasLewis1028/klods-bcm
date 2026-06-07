@@ -1,13 +1,23 @@
+using System.Collections.ObjectModel;
 using Klods.Mobile.Services;
 
 namespace Klods.Mobile.Pages;
 
 public partial class MySetsPage : ContentPage
 {
+    private const int PageSize = 50;
+
     private readonly ApiClient _api;
+    private readonly ObservableCollection<SetItem> _items = [];
+    private readonly List<ApiClient.MyOwnedSetDto> _rawSets = [];
+
     private bool _loaded;
     private bool _isGridView;
-    private ApiClient.MyOwnedSetDto[] _rawSets = [];
+    private bool _hasMore;
+    private bool _isLoadingMore;
+    private int _currentPage;
+    private string? _currentSearch;
+    private CancellationTokenSource? _searchCts;
 
     public MySetsPage() : this(ServiceHelper.Get<ApiClient>()) { }
 
@@ -15,6 +25,8 @@ public partial class MySetsPage : ContentPage
     {
         InitializeComponent();
         _api = api;
+        SetsList.ItemsSource = _items;
+        GridList.ItemsSource = _items;
     }
 
     protected override async void OnAppearing()
@@ -44,8 +56,7 @@ public partial class MySetsPage : ContentPage
             GridRefresher.IsVisible = false;
         }
 
-        var result = await _api.GetMyOwnedSetsAsync();
-
+        var result = await _api.GetMyOwnedSetsAsync(search: _currentSearch, page: 0, pageSize: PageSize);
         Loader.IsVisible = false;
 
         if (result is null)
@@ -58,26 +69,54 @@ public partial class MySetsPage : ContentPage
         }
 
         _loaded = true;
-        _rawSets = [.. result.Items];
+        _currentPage = 0;
+        _hasMore = result.HasMore;
         ErrorView.IsVisible = false;
 
-        var items = result.Items
-            .Select(s => new SetItem(
-                SetId: s.SetId,
-                Name: s.Name,
-                SetImg: _api.ResolveImageUrl(s.SetImg),
-                NumBricks: s.NumBricks,
-                ReleaseYear: s.ReleaseYear,
-                ThemeName: s.ThemeName,
-                Copies: s.Instances.Count,
-                TotalMissing: s.Instances.Sum(i => i.MissingPieceCount)))
-            .ToList();
-
-        SetsList.ItemsSource = items;
-        GridList.ItemsSource = items;
+        _items.Clear();
+        _rawSets.Clear();
+        foreach (var s in result.Items)
+        {
+            _rawSets.Add(s);
+            _items.Add(ToItem(s));
+        }
 
         Refresher.IsVisible = !_isGridView;
         GridRefresher.IsVisible = _isGridView;
+    }
+
+    private async void OnLoadMore(object? sender, EventArgs e)
+    {
+        if (!_hasMore || _isLoadingMore) return;
+        _isLoadingMore = true;
+
+        var result = await _api.GetMyOwnedSetsAsync(search: _currentSearch, page: _currentPage + 1, pageSize: PageSize);
+        if (result is not null)
+        {
+            _currentPage++;
+            _hasMore = result.HasMore;
+            foreach (var s in result.Items)
+            {
+                _rawSets.Add(s);
+                _items.Add(ToItem(s));
+            }
+        }
+
+        _isLoadingMore = false;
+    }
+
+    private async void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var cts = _searchCts;
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            _currentSearch = string.IsNullOrWhiteSpace(e.NewTextValue) ? null : e.NewTextValue.Trim();
+            await LoadAsync(firstLoad: true);
+        }
+        catch (TaskCanceledException) { }
     }
 
     private async void OnSetSelected(object? sender, SelectionChangedEventArgs e)
@@ -118,6 +157,16 @@ public partial class MySetsPage : ContentPage
         ListViewBtn.TextColor = isGrid ? inactive : primary;
         GridViewBtn.TextColor = isGrid ? primary : inactive;
     }
+
+    private SetItem ToItem(ApiClient.MyOwnedSetDto s) => new(
+        SetId: s.SetId,
+        Name: s.Name,
+        SetImg: _api.ResolveImageUrl(s.SetImg),
+        NumBricks: s.NumBricks,
+        ReleaseYear: s.ReleaseYear,
+        ThemeName: s.ThemeName,
+        Copies: s.Instances.Count,
+        TotalMissing: s.Instances.Sum(i => i.MissingPieceCount));
 
     private sealed record SetItem(
         string SetId, string Name, string? SetImg, int NumBricks,

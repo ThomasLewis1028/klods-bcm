@@ -7,7 +7,7 @@
     <Grid RowDefinitions="Auto,*">
 
         <!-- Header -->
-        <Grid Grid.Row="0" RowDefinitions="Auto,Auto">
+        <Grid Grid.Row="0" RowDefinitions="Auto,Auto,Auto">
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
                 <Label Grid.Column="0"
                        Text="Sets"
@@ -40,7 +40,12 @@
                    Grid.Row="1"
                    FontSize="12"
                    TextColor="{StaticResource Gray400}"
-                   Margin="16,0,16,8" />
+                   Margin="16,0,16,4" />
+            <Entry Grid.Row="2"
+                   Placeholder="Search sets…"
+                   Margin="16,0,16,8"
+                   TextChanged="OnSearchTextChanged"
+                   ClearButtonVisibility="WhileEditing" />
         </Grid>
 
         <Grid Grid.Row="1">
@@ -73,7 +78,9 @@
                          VerticalOptions="Fill">
                 <CollectionView x:Name="SetsList"
                                 Margin="0,0,0,80"
-                                SelectionMode="None">
+                                SelectionMode="None"
+                                RemainingItemsThreshold="5"
+                                RemainingItemsThresholdReached="OnLoadMore">
 
                     <CollectionView.EmptyView>
                         <Label Text="No sets in the catalog yet."
@@ -177,7 +184,9 @@
                          VerticalOptions="Fill">
                 <CollectionView x:Name="GridList"
                                 Margin="12,0,12,80"
-                                SelectionMode="None">
+                                SelectionMode="None"
+                                RemainingItemsThreshold="5"
+                                RemainingItemsThresholdReached="OnLoadMore">
 
                     <CollectionView.ItemsLayout>
                         <GridItemsLayout Orientation="Vertical"

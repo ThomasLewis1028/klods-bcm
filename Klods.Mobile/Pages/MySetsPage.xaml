@@ -6,33 +6,40 @@
 
     <Grid RowDefinitions="Auto,*">
 
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
-            <Label Grid.Column="0"
-                   Text="My Sets"
-                   FontSize="26"
-                   FontAttributes="Bold"
-                   Margin="16,16,16,8" />
-            <Button x:Name="ListViewBtn"
-                    Grid.Column="1"
-                    Text="&#xe8ef;"
-                    FontFamily="MaterialIcons"
-                    FontSize="22"
-                    WidthRequest="44" HeightRequest="44"
-                    CornerRadius="0" Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{DynamicResource Primary}"
-                    Clicked="OnListViewClicked" />
-            <Button x:Name="GridViewBtn"
-                    Grid.Column="2"
-                    Text="&#xe8f0;"
-                    FontFamily="MaterialIcons"
-                    FontSize="22"
-                    WidthRequest="44" HeightRequest="44"
-                    CornerRadius="0" Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{StaticResource Gray400}"
-                    Clicked="OnGridViewClicked"
-                    Margin="0,0,8,0" />
+        <Grid Grid.Row="0" RowDefinitions="Auto,Auto">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+                <Label Grid.Column="0"
+                       Text="My Sets"
+                       FontSize="26"
+                       FontAttributes="Bold"
+                       Margin="16,16,16,8" />
+                <Button x:Name="ListViewBtn"
+                        Grid.Column="1"
+                        Text="&#xe8ef;"
+                        FontFamily="MaterialIcons"
+                        FontSize="22"
+                        WidthRequest="44" HeightRequest="44"
+                        CornerRadius="0" Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="{DynamicResource Primary}"
+                        Clicked="OnListViewClicked" />
+                <Button x:Name="GridViewBtn"
+                        Grid.Column="2"
+                        Text="&#xe8f0;"
+                        FontFamily="MaterialIcons"
+                        FontSize="22"
+                        WidthRequest="44" HeightRequest="44"
+                        CornerRadius="0" Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="{StaticResource Gray400}"
+                        Clicked="OnGridViewClicked"
+                        Margin="0,0,8,0" />
+            </Grid>
+            <Entry Grid.Row="1"
+                   Placeholder="Search sets…"
+                   Margin="16,0,16,8"
+                   TextChanged="OnSearchTextChanged"
+                   ClearButtonVisibility="WhileEditing" />
         </Grid>
 
         <Grid Grid.Row="1">
@@ -67,7 +74,9 @@
                 <CollectionView x:Name="SetsList"
                                 Margin="0,0,0,80"
                                 SelectionMode="Single"
-                                SelectionChanged="OnSetSelected">
+                                SelectionChanged="OnSetSelected"
+                                RemainingItemsThreshold="5"
+                                RemainingItemsThresholdReached="OnLoadMore">
 
                     <CollectionView.EmptyView>
                         <Label Text="No sets in your collection yet."
@@ -144,7 +153,9 @@
                 <CollectionView x:Name="GridList"
                                 Margin="12,0,12,80"
                                 SelectionMode="Single"
-                                SelectionChanged="OnSetSelected">
+                                SelectionChanged="OnSetSelected"
+                                RemainingItemsThreshold="5"
+                                RemainingItemsThresholdReached="OnLoadMore">
 
                     <CollectionView.ItemsLayout>
                         <GridItemsLayout Orientation="Vertical"
