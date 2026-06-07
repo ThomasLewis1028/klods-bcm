@@ -45,10 +45,10 @@ public partial class MyMinifigsPage : ContentPage
             GridRefresher.IsVisible = false;
         }
 
-        var minifigs = await _api.GetMyMinifigsAsync();
+        var result = await _api.GetMyMinifigsAsync();
         Loader.IsVisible = false;
 
-        if (minifigs is null)
+        if (result is null)
         {
             ErrorLabel.Text = "Could not load your minifigs.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
@@ -60,7 +60,7 @@ public partial class MyMinifigsPage : ContentPage
         _loaded = true;
         ErrorView.IsVisible = false;
 
-        var items = minifigs
+        var items = result.Items
             .OrderBy(m => m.MinifigName)
             .Select(m => new MinifigItem
             {

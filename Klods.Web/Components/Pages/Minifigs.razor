@@ -133,7 +133,7 @@
         var logger = LoggerFactory.CreateLogger<Minifigs>();
         logger.LogTrace("Loading Minifigs");
         var minifigs = await Api.GetMinifigsCatalogViewAsync();
-        _minifigInfos = minifigs?.Select(m => new MinifigInfo { Minifig = m }).ToList() ?? [];
+        _minifigInfos = minifigs?.Items.Select(m => new MinifigInfo { Minifig = m }).ToList() ?? [];
         _isLoading = false;
         StateHasChanged();
         logger.LogTrace("Loading Minifigs Complete");

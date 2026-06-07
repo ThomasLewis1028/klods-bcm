@@ -45,10 +45,10 @@ public partial class MyBricksPage : ContentPage
             GridRefresher.IsVisible = false;
         }
 
-        var bricks = await _api.GetOwnedBricksAsync();
+        var result = await _api.GetOwnedBricksAsync();
         Loader.IsVisible = false;
 
-        if (bricks is null)
+        if (result is null)
         {
             ErrorLabel.Text = "Could not load your bricks.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
@@ -60,7 +60,7 @@ public partial class MyBricksPage : ContentPage
         _loaded = true;
         ErrorView.IsVisible = false;
 
-        var items = bricks
+        var items = result.Items
             .OrderBy(b => b.Name)
             .Select(b => new BrickItem
             {

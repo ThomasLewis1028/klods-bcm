@@ -159,7 +159,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Sets ─────────────────────────────────────────────────────────────────
 
     public Task<SetCatalogViewResponse?> GetSetsCatalogViewAsync()   => GetAsync<SetCatalogViewResponse>("/api/sets/catalog-view");
-    public Task<MyOwnedSetDto[]?>        GetMyOwnedSetsAsync()       => GetAsync<MyOwnedSetDto[]>("/api/sets/my-owned");
+    public Task<PagedResult<MyOwnedSetDto>?> GetMyOwnedSetsAsync() => GetAsync<PagedResult<MyOwnedSetDto>>("/api/sets/my-owned");
     public async Task<bool> ImportSetAsync(string setId)             => (await PostAsync("/api/sets/import", new { SetId = setId })).Ok;
     public async Task<bool> AddOwnedSetAsync(string setId, bool applyBricks = false)
         => (await PostAsync("/api/sets/owned", new { SetId = setId, ApplyBricks = applyBricks })).Ok;
@@ -172,7 +172,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── Bricks ───────────────────────────────────────────────────────────────
 
-    public Task<BrickCatalogViewDto[]?>  GetBricksCatalogViewAsync()          => GetAsync<BrickCatalogViewDto[]>("/api/bricks/catalog-view");
+    public Task<PagedResult<BrickCatalogViewDto>?> GetBricksCatalogViewAsync() => GetAsync<PagedResult<BrickCatalogViewDto>>("/api/bricks/catalog-view");
     public Task<SetBrickDto[]?>          GetSetsForBrickAsync(string p, string c) => GetAsync<SetBrickDto[]>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets");
     public async Task<ResolveBrickResponse?> ResolvePartColorsPostAsync(string partNum)
     {
@@ -190,13 +190,13 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── My Bricks ────────────────────────────────────────────────────────────
 
-    public Task<MyBrickDto[]?>           GetMyBricksAsync()                                       => GetAsync<MyBrickDto[]>("/api/mybricks");
+    public Task<PagedResult<MyBrickDto>?> GetMyBricksAsync()                                       => GetAsync<PagedResult<MyBrickDto>>("/api/mybricks");
     public Task<MyBrickSetDetailDto[]?>  GetUserSetsForBrickAsync(string p, string c)             => GetAsync<MyBrickSetDetailDto[]>($"/api/mybricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets");
     public async Task<bool>              UpsertBrickStockAsync(string p, string c, int stock)     => (await PutAsync($"/api/mybricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/stock", new { Stock = stock })).Ok;
 
     // ── Minifigs ─────────────────────────────────────────────────────────────
 
-    public Task<MinifigCatalogViewDto[]?> GetMinifigsCatalogViewAsync()           => GetAsync<MinifigCatalogViewDto[]>("/api/minifigs/catalog-view");
+    public Task<PagedResult<MinifigCatalogViewDto>?> GetMinifigsCatalogViewAsync() => GetAsync<PagedResult<MinifigCatalogViewDto>>("/api/minifigs/catalog-view");
     public Task<MinifigDto[]?>            GetMinifigsAsync()                      => GetAsync<MinifigDto[]>("/api/minifigs");
     public Task<MinifigBrickDto[]?>       GetMinifigBricksAsync(string id)        => GetAsync<MinifigBrickDto[]>($"/api/minifigs/{Uri.EscapeDataString(id)}/bricks");
     public async Task<ResolveMinifigResponse?> ResolveMinifigIdPostAsync(string query, int page = 1)
@@ -215,7 +215,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── My Minifigs ──────────────────────────────────────────────────────────
 
-    public Task<MyMinifigDto[]?>  GetMyMinifigsAsync()                                     => GetAsync<MyMinifigDto[]>("/api/myminifigs");
+    public Task<PagedResult<MyMinifigDto>?> GetMyMinifigsAsync()                             => GetAsync<PagedResult<MyMinifigDto>>("/api/myminifigs");
     public Task<MinifigBrickDto[]?> GetMyMinifigBricksAsync(string id)                     => GetAsync<MinifigBrickDto[]>($"/api/myminifigs/{Uri.EscapeDataString(id)}/bricks");
     public async Task<bool>       UpsertMinifigStockAsync(string minifigId, int stock)     => (await PutAsync($"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/stock", new { Stock = stock })).Ok;
 
@@ -270,6 +270,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record PreviewItemDto(string Id, string Name, string? ImgUrl);
 
     public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl);
+    public record PagedResult<T>(List<T> Items, bool HasMore);
+
     public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets, int TotalOwnedInstances, int TotalOwners, int TotalPieces);
     public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);

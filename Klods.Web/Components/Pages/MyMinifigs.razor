@@ -177,7 +177,7 @@
     private async Task LoadDataAsync()
     {
         var minifigs = await Api.GetMyMinifigsAsync();
-        _minifigInfos = minifigs?.Select(m => new MyMinifigInfo { Minifig = m, Stock = m.Stock }).ToList() ?? [];
+        _minifigInfos = minifigs?.Items.Select(m => new MyMinifigInfo { Minifig = m, Stock = m.Stock }).ToList() ?? [];
         _isLoading = false;
         StateHasChanged();
     }

@@ -16,7 +16,10 @@ public static class MyCatalogEndpoints
         var group = app.MapGroup("/api/mybricks").RequireAuthorization();
 
         // All bricks relevant to the current user: bricks they own loose + bricks needed by their sets.
-        group.MapGet("/", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        // Supports optional search, page, and pageSize.
+        group.MapGet("/", async (
+            HttpContext http, IDbContextFactory<InventoryContext> dbFactory,
+            string? search = null, int page = 0, int pageSize = 0) =>
         {
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
@@ -34,7 +37,15 @@ public static class MyCatalogEndpoints
             var allKeys     = neededDict.Keys.Union(ownedDict.Keys).ToHashSet();
             var allPartNums = allKeys.Select(k => k.PartNum).ToList();
 
-            var bricks = (await db.Set<Brick>().AsNoTracking().Where(b => allPartNums.Contains(b.PartNum)).ToListAsync())
+            var bricksQuery = db.Set<Brick>().AsNoTracking().Where(b => allPartNums.Contains(b.PartNum));
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.ToLower();
+                bricksQuery = bricksQuery.Where(b =>
+                    b.Name.ToLower().Contains(term) || b.PartNum.ToLower().Contains(term));
+            }
+
+            var bricks = (await bricksQuery.OrderBy(b => b.Name).ToListAsync())
                 .Where(b => allKeys.Contains((b.PartNum, b.ColorId ?? ""))).ToList();
 
             var result = bricks.Select(b =>
@@ -48,7 +59,14 @@ public static class MyCatalogEndpoints
                     setCountDict.GetValueOrDefault(key, 0));
             }).ToList();
 
-            return Results.Ok(result);
+            bool hasMore = false;
+            if (pageSize > 0)
+            {
+                hasMore = result.Count > page * pageSize + pageSize;
+                result = result.Skip(page * pageSize).Take(pageSize).ToList();
+            }
+
+            return Results.Ok(new PagedResult<MyBrickDto>(result, hasMore));
         });
 
         // Upsert loose brick stock — creates BrickOwned if it doesn't exist yet.
@@ -107,7 +125,10 @@ public static class MyCatalogEndpoints
         var group = app.MapGroup("/api/myminifigs").RequireAuthorization();
 
         // All minifigs relevant to the current user: minifigs they own + minifigs needed by their sets.
-        group.MapGet("/", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        // Supports optional search, page, and pageSize.
+        group.MapGet("/", async (
+            HttpContext http, IDbContextFactory<InventoryContext> dbFactory,
+            string? search = null, int page = 0, int pageSize = 0) =>
         {
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
@@ -124,13 +145,22 @@ public static class MyCatalogEndpoints
 
             var allIds = neededDict.Keys.Union(ownedDict.Keys).ToHashSet();
 
-            var partCounts = (await db.Set<MinifigBrick>().AsNoTracking()
-                .Where(mb => allIds.Contains(mb.MinifigID))
-                .ToListAsync())
-                .GroupBy(mb => mb.MinifigID)
-                .ToDictionary(g => g.Key, g => g.Count());
+            var minifigsQuery = db.Set<Minifig>().AsNoTracking().Where(m => allIds.Contains(m.MinifigId));
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.ToLower();
+                minifigsQuery = minifigsQuery.Where(m =>
+                    m.MinifigName.ToLower().Contains(term) || m.MinifigId.ToLower().Contains(term));
+            }
 
-            var minifigs = await db.Set<Minifig>().AsNoTracking().Where(m => allIds.Contains(m.MinifigId)).ToListAsync();
+            var minifigs = await minifigsQuery.OrderBy(m => m.MinifigName).ToListAsync();
+
+            var pageIds = minifigs.Select(m => m.MinifigId).ToList();
+            var partCounts = await db.Set<MinifigBrick>().AsNoTracking()
+                .Where(mb => pageIds.Contains(mb.MinifigID))
+                .GroupBy(mb => mb.MinifigID)
+                .Select(g => new { MinifigId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.MinifigId, x => x.Count);
 
             var result = minifigs.Select(m =>
             {
@@ -143,7 +173,14 @@ public static class MyCatalogEndpoints
                     partCounts.GetValueOrDefault(m.MinifigId, 0));
             }).ToList();
 
-            return Results.Ok(result);
+            bool hasMore = false;
+            if (pageSize > 0)
+            {
+                hasMore = result.Count > page * pageSize + pageSize;
+                result = result.Skip(page * pageSize).Take(pageSize).ToList();
+            }
+
+            return Results.Ok(new PagedResult<MyMinifigDto>(result, hasMore));
         });
 
         // Upsert minifig owned stock — creates MinifigOwned if it doesn't exist yet.

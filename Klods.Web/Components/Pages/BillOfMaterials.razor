@@ -355,7 +355,7 @@
         _setBrickInfo.Clear();
         _setMinifigInfo.Clear();
 
-        _ownedSets = (await Api.GetMyOwnedSetsAsync())?.ToList() ?? [];
+        _ownedSets = (await Api.GetMyOwnedSetsAsync())?.Items ?? [];
 
         if (_setId != null)
         {

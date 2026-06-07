@@ -19,6 +19,18 @@ public class ApiClient(HttpClient http, AuthService auth)
 
     private string Base => auth.ActiveServer!.Url.TrimEnd('/');
 
+    private static string BuildUrl(string path, string? search, int page, int pageSize)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search))
+            parts.Add($"search={Uri.EscapeDataString(search)}");
+        if (page > 0)
+            parts.Add($"page={page}");
+        if (pageSize > 0)
+            parts.Add($"pageSize={pageSize}");
+        return parts.Count == 0 ? path : $"{path}?{string.Join('&', parts)}";
+    }
+
     private async Task<T?> GetAsync<T>(string path)
     {
         try
@@ -87,13 +99,13 @@ public class ApiClient(HttpClient http, AuthService auth)
 
     // ── Sets ─────────────────────────────────────────────────────────────────
 
-    public Task<MyOwnedSetDto[]?> GetMyOwnedSetsAsync() =>
-        GetAsync<MyOwnedSetDto[]>("/api/sets/my-owned");
+    public Task<PagedResult<MyOwnedSetDto>?> GetMyOwnedSetsAsync(string? search = null, int page = 0, int pageSize = 0) =>
+        GetAsync<PagedResult<MyOwnedSetDto>>(BuildUrl("/api/sets/my-owned", search, page, pageSize));
 
     // ── Bricks ───────────────────────────────────────────────────────────────
 
-    public Task<MyBrickDto[]?> GetOwnedBricksAsync() =>
-        GetAsync<MyBrickDto[]>("/api/mybricks");
+    public Task<PagedResult<MyBrickDto>?> GetOwnedBricksAsync(string? search = null, int page = 0, int pageSize = 0) =>
+        GetAsync<PagedResult<MyBrickDto>>(BuildUrl("/api/mybricks", search, page, pageSize));
 
     public Task<bool> UpdateLooseBrickStockAsync(string partNum, string colorId, int stock) =>
         SendAsync(HttpMethod.Put,
@@ -106,8 +118,8 @@ public class ApiClient(HttpClient http, AuthService auth)
 
     // ── Minifigs ──────────────────────────────────────────────────────────────
 
-    public Task<MyMinifigDto[]?> GetMyMinifigsAsync() =>
-        GetAsync<MyMinifigDto[]>("/api/myminifigs");
+    public Task<PagedResult<MyMinifigDto>?> GetMyMinifigsAsync(string? search = null, int page = 0, int pageSize = 0) =>
+        GetAsync<PagedResult<MyMinifigDto>>(BuildUrl("/api/myminifigs", search, page, pageSize));
 
     public Task<bool> UpdateMinifigStockAsync(string minifigId, int stock) =>
         SendAsync(HttpMethod.Put,
@@ -119,14 +131,14 @@ public class ApiClient(HttpClient http, AuthService auth)
 
     // ── Global Catalog ────────────────────────────────────────────────────────
 
-    public Task<SetCatalogViewResponse?> GetSetCatalogViewAsync() =>
-        GetAsync<SetCatalogViewResponse>("/api/sets/catalog-view");
+    public Task<SetCatalogViewResponse?> GetSetCatalogViewAsync(string? search = null, int page = 0, int pageSize = 0) =>
+        GetAsync<SetCatalogViewResponse>(BuildUrl("/api/sets/catalog-view", search, page, pageSize));
 
-    public Task<BrickCatalogViewDto[]?> GetBrickCatalogViewAsync() =>
-        GetAsync<BrickCatalogViewDto[]>("/api/bricks/catalog-view");
+    public Task<PagedResult<BrickCatalogViewDto>?> GetBrickCatalogViewAsync(string? search = null, int page = 0, int pageSize = 0) =>
+        GetAsync<PagedResult<BrickCatalogViewDto>>(BuildUrl("/api/bricks/catalog-view", search, page, pageSize));
 
-    public Task<MinifigCatalogViewDto[]?> GetMinifigCatalogViewAsync() =>
-        GetAsync<MinifigCatalogViewDto[]>("/api/minifigs/catalog-view");
+    public Task<PagedResult<MinifigCatalogViewDto>?> GetMinifigCatalogViewAsync(string? search = null, int page = 0, int pageSize = 0) =>
+        GetAsync<PagedResult<MinifigCatalogViewDto>>(BuildUrl("/api/minifigs/catalog-view", search, page, pageSize));
 
     // ── Owned set management ─────────────────────────────────────────────────
 
@@ -205,8 +217,10 @@ public class ApiClient(HttpClient http, AuthService auth)
     public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks,
         int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
 
+    public record PagedResult<T>(List<T> Items, bool HasMore);
+
     public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets,
-        int TotalOwnedInstances, int TotalOwners, int TotalPieces);
+        int TotalOwnedInstances, int TotalOwners, int TotalPieces, bool HasMore = false);
 
     public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId,
         string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId,

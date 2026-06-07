@@ -44,11 +44,11 @@ public partial class MySetsPage : ContentPage
             GridRefresher.IsVisible = false;
         }
 
-        var sets = await _api.GetMyOwnedSetsAsync();
+        var result = await _api.GetMyOwnedSetsAsync();
 
         Loader.IsVisible = false;
 
-        if (sets is null)
+        if (result is null)
         {
             ErrorLabel.Text = "Could not load your sets.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
@@ -58,10 +58,10 @@ public partial class MySetsPage : ContentPage
         }
 
         _loaded = true;
-        _rawSets = sets;
+        _rawSets = [.. result.Items];
         ErrorView.IsVisible = false;
 
-        var items = sets
+        var items = result.Items
             .Select(s => new SetItem(
                 SetId: s.SetId,
                 Name: s.Name,

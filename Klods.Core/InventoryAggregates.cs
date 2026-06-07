@@ -12,7 +12,8 @@ public static class InventoryAggregates
             query = query.Where(so => so.UserId == userId.Value);
         return query
             .GroupBy(so => so.SetId)
-            .ToDictionary(g => g.Key, g => g.Count());
+            .Select(g => new { SetId = g.Key, Count = g.Count() })
+            .ToDictionary(x => x.SetId, x => x.Count);
     }
 
     public static async Task<Dictionary<string, int>> GetSetCopiesAsync(InventoryContext context, int? userId = null)
@@ -20,10 +21,10 @@ public static class InventoryAggregates
         var query = context.Set<SetOwned>().AsNoTracking();
         if (userId.HasValue)
             query = query.Where(so => so.UserId == userId.Value);
-        var list = await query.ToListAsync();
-        return list
+        return await query
             .GroupBy(so => so.SetId)
-            .ToDictionary(g => g.Key, g => g.Count());
+            .Select(g => new { SetId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.SetId, x => x.Count);
     }
 
     public static Dictionary<(string PartNum, string ColorId), int> GetBrickNeededDict(

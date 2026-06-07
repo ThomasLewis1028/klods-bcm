@@ -78,7 +78,10 @@ public static class SetsEndpoints
         });
 
         // Returns each set the user owns, grouped with all their copy instances + per-instance stats.
-        group.MapGet("/my-owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        // Supports optional search, page, and pageSize.
+        group.MapGet("/my-owned", async (
+            HttpContext http, IDbContextFactory<InventoryContext> dbFactory,
+            string? search = null, int page = 0, int pageSize = 0) =>
         {
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
@@ -86,30 +89,28 @@ public static class SetsEndpoints
             var ownedList = await db.Set<SetOwned>().AsNoTracking()
                 .Where(so => so.UserId == userId).ToListAsync();
 
-            if (ownedList.Count == 0) return Results.Ok(Array.Empty<MyOwnedSetDto>());
+            if (ownedList.Count == 0) return Results.Ok(new PagedResult<MyOwnedSetDto>([], false));
 
-            var setIds = ownedList.Select(so => so.SetId).Distinct().ToList();
+            var allSetIds = ownedList.Select(so => so.SetId).Distinct().ToList();
 
             var sets = await db.Set<Set>().AsNoTracking()
-                .Where(s => setIds.Contains(s.SetId))
+                .Where(s => allSetIds.Contains(s.SetId))
                 .ToDictionaryAsync(s => s.SetId);
 
-            // Total required bricks per setId
             var requiredPerSet = await db.Set<SetBrick>().AsNoTracking()
-                .Where(sb => setIds.Contains(sb.SetId))
+                .Where(sb => allSetIds.Contains(sb.SetId))
                 .GroupBy(sb => sb.SetId)
                 .Select(g => new { SetId = g.Key, Total = g.Sum(sb => sb.Count) })
                 .ToDictionaryAsync(x => x.SetId, x => x.Total);
 
-            // Stock per (setId, setIndex)
             var stockPerInstance = await db.Set<SetBrickOwned>().AsNoTracking()
-                .Where(sbo => sbo.UserId == userId && setIds.Contains(sbo.SetId))
+                .Where(sbo => sbo.UserId == userId && allSetIds.Contains(sbo.SetId))
                 .GroupBy(sbo => new { sbo.SetId, sbo.SetIndex })
                 .Select(g => new { g.Key.SetId, g.Key.SetIndex, Stock = g.Sum(sbo => sbo.Stock) })
                 .ToListAsync();
             var stockDict = stockPerInstance.ToDictionary(x => (x.SetId, x.SetIndex), x => x.Stock);
 
-            var result = ownedList
+            var allResults = ownedList
                 .GroupBy(so => so.SetId)
                 .Where(g => sets.ContainsKey(g.Key))
                 .Select(g =>
@@ -124,33 +125,73 @@ public static class SetsEndpoints
                     return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,
                         set.ReleaseYear, set.ThemeName, set.ManualUrl, instances);
                 })
-                .ToList();
+                .AsEnumerable();
 
-            return Results.Ok(result);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.ToLower();
+                allResults = allResults.Where(s =>
+                    s.Name.ToLower().Contains(term) || s.SetId.ToLower().Contains(term));
+            }
+
+            var resultList = allResults.OrderBy(s => s.Name).ToList();
+            bool hasMore = false;
+            if (pageSize > 0)
+            {
+                hasMore = resultList.Count > page * pageSize + pageSize;
+                resultList = resultList.Skip(page * pageSize).Take(pageSize).ToList();
+            }
+
+            return Results.Ok(new PagedResult<MyOwnedSetDto>(resultList, hasMore));
         });
 
         // Global catalog view: each set + current user's owned count + global totals.
-        group.MapGet("/catalog-view", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        // Supports optional search, page, and pageSize.
+        group.MapGet("/catalog-view", async (
+            HttpContext http, IDbContextFactory<InventoryContext> dbFactory,
+            string? search = null, int page = 0, int pageSize = 0) =>
         {
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
 
-            var sets = await db.Set<Set>().AsNoTracking().OrderBy(s => s.Name).ToListAsync();
+            IQueryable<Set> setsQuery = db.Set<Set>().AsNoTracking().OrderBy(s => s.Name);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.ToLower();
+                setsQuery = setsQuery.Where(s =>
+                    s.Name.ToLower().Contains(term) || s.SetId.ToLower().Contains(term));
+            }
+
+            bool hasMore = false;
+            List<Set> sets;
+            if (pageSize > 0)
+            {
+                var raw = await setsQuery.Skip(page * pageSize).Take(pageSize + 1).ToListAsync();
+                hasMore = raw.Count > pageSize;
+                sets = raw.Count > pageSize ? raw.Take(pageSize).ToList() : raw;
+            }
+            else
+            {
+                sets = await setsQuery.ToListAsync();
+            }
+
+            var pageSetIds = sets.Select(s => s.SetId).ToList();
 
             var userOwned = await db.Set<SetOwned>().AsNoTracking()
-                .Where(so => so.UserId == userId)
+                .Where(so => so.UserId == userId && pageSetIds.Contains(so.SetId))
                 .GroupBy(so => so.SetId)
                 .Select(g => new { SetId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.SetId, x => x.Count);
 
             var totalInstances = await db.Set<SetOwned>().CountAsync();
-            var totalOwners   = await db.Set<SetOwned>().Select(so => so.UserId).Distinct().CountAsync();
+            var totalOwners    = await db.Set<SetOwned>().Select(so => so.UserId).Distinct().CountAsync();
+            var totalPieces    = await db.Set<Set>().AsNoTracking().SumAsync(s => (long)s.NumBricks);
 
             var rows = sets.Select(s => new SetCatalogViewDto(
                 s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ThemeName, s.ManualUrl,
                 userOwned.GetValueOrDefault(s.SetId, 0))).ToList();
 
-            return Results.Ok(new SetCatalogViewResponse(rows, totalInstances, totalOwners, sets.Sum(s => s.NumBricks)));
+            return Results.Ok(new SetCatalogViewResponse(rows, totalInstances, totalOwners, (int)totalPieces, hasMore));
         });
 
         // Admin: remove a set from the catalog entirely.
@@ -175,5 +216,5 @@ public static class SetsEndpoints
     public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
-    public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets, int TotalOwnedInstances, int TotalOwners, int TotalPieces);
+    public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets, int TotalOwnedInstances, int TotalOwners, int TotalPieces, bool HasMore = false);
 }

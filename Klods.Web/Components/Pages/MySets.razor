@@ -171,7 +171,7 @@
     private async Task LoadDataAsync()
     {
         var owned = await Api.GetMyOwnedSetsAsync();
-        _setInfos = owned?.Select(s => new SetInfo { Set = s, OwnedSets = s.Instances }).ToList() ?? [];
+        _setInfos = owned?.Items.Select(s => new SetInfo { Set = s, OwnedSets = s.Instances }).ToList() ?? [];
         _isLoading = false;
     }
 

@@ -43,10 +43,10 @@ public partial class MinifigsPage : ContentPage
             GridRefresher.IsVisible = false;
         }
 
-        var minifigs = await _api.GetMinifigCatalogViewAsync();
+        var result = await _api.GetMinifigCatalogViewAsync();
         Loader.IsVisible = false;
 
-        if (minifigs is null)
+        if (result is null)
         {
             ErrorLabel.Text = "Could not load the minifig catalog.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
@@ -58,7 +58,7 @@ public partial class MinifigsPage : ContentPage
         _loaded = true;
         ErrorView.IsVisible = false;
 
-        var items = minifigs
+        var items = result.Items
             .Select(m => new MinifigItem(
                 MinifigId: m.MinifigId,
                 Name: m.MinifigName,

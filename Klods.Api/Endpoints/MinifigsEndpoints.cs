@@ -16,21 +16,46 @@ public static class MinifigsEndpoints
             return Results.Ok(minifigs.Select(MinifigDto.From));
         });
 
-        // Catalog view: all minifigs with part count.
-        group.MapGet("/catalog-view", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        // Catalog view: all minifigs with part count. Supports optional search, page, and pageSize.
+        group.MapGet("/catalog-view", async (
+            IDbContextFactory<InventoryContext> dbFactory,
+            string? search = null, int page = 0, int pageSize = 0) =>
         {
             await using var db = dbFactory.CreateDbContext();
 
+            IQueryable<Minifig> filteredQuery = db.Set<Minifig>().AsNoTracking().OrderBy(m => m.MinifigName);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.ToLower();
+                filteredQuery = filteredQuery.Where(m =>
+                    m.MinifigName.ToLower().Contains(term) || m.MinifigId.ToLower().Contains(term));
+            }
+
+            bool hasMore = false;
+            List<Minifig> minifigs;
+            if (pageSize > 0)
+            {
+                var raw = await filteredQuery.Skip(page * pageSize).Take(pageSize + 1).ToListAsync();
+                hasMore = raw.Count > pageSize;
+                minifigs = raw.Count > pageSize ? raw.Take(pageSize).ToList() : raw;
+            }
+            else
+            {
+                minifigs = await filteredQuery.ToListAsync();
+            }
+
+            var pageIds = minifigs.Select(m => m.MinifigId).ToList();
             var partCounts = await db.Set<MinifigBrick>().AsNoTracking()
+                .Where(mb => pageIds.Contains(mb.MinifigID))
                 .GroupBy(mb => mb.MinifigID)
                 .Select(g => new { MinifigId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.MinifigId, x => x.Count);
 
-            var minifigs = await db.Set<Minifig>().AsNoTracking().OrderBy(m => m.MinifigName).ToListAsync();
-
-            return Results.Ok(minifigs.Select(m => new MinifigCatalogViewDto(
+            var items = minifigs.Select(m => new MinifigCatalogViewDto(
                 m.MinifigId, m.MinifigName, m.MinifigImgUrl, m.MinifigUrl,
-                partCounts.GetValueOrDefault(m.MinifigId, 0))));
+                partCounts.GetValueOrDefault(m.MinifigId, 0))).ToList();
+
+            return Results.Ok(new PagedResult<MinifigCatalogViewDto>(items, hasMore));
         });
 
         group.MapGet("/owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>

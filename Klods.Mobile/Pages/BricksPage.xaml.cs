@@ -43,10 +43,10 @@ public partial class BricksPage : ContentPage
             GridRefresher.IsVisible = false;
         }
 
-        var bricks = await _api.GetBrickCatalogViewAsync();
+        var result = await _api.GetBrickCatalogViewAsync();
         Loader.IsVisible = false;
 
-        if (bricks is null)
+        if (result is null)
         {
             ErrorLabel.Text = "Could not load the brick catalog.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
@@ -58,7 +58,7 @@ public partial class BricksPage : ContentPage
         _loaded = true;
         ErrorView.IsVisible = false;
 
-        var items = bricks
+        var items = result.Items
             .Select(b => new BrickItem(
                 PartNum: b.PartNum,
                 Name: b.Name,

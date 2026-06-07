@@ -17,26 +17,67 @@ public static class BricksEndpoints
         });
 
         // Global catalog view: all bricks with total stock (all users) + needed + set count.
-        group.MapGet("/catalog-view", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        // Supports optional search, page, and pageSize.
+        group.MapGet("/catalog-view", async (
+            IDbContextFactory<InventoryContext> dbFactory,
+            string? search = null, int page = 0, int pageSize = 0) =>
         {
             await using var db = dbFactory.CreateDbContext();
 
-            var allBrickOwned = await db.Set<BrickOwned>().AsNoTracking().ToListAsync();
-            var brickStock = allBrickOwned
-                .GroupBy(bo => (bo.PartNum, bo.ColorId))
-                .ToDictionary(g => g.Key, g => g.Sum(bo => bo.Stock));
+            IQueryable<Brick> bricksQuery = db.Set<Brick>().AsNoTracking().OrderBy(b => b.Name);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.ToLower();
+                bricksQuery = bricksQuery.Where(b =>
+                    b.Name.ToLower().Contains(term) || b.PartNum.ToLower().Contains(term));
+            }
 
-            var allSetBrickOwned = await db.Set<SetBrickOwned>().AsNoTracking().ToListAsync();
-            var setBrickStock = allSetBrickOwned
-                .GroupBy(sbo => (sbo.PartNum, sbo.ColorId))
-                .ToDictionary(g => g.Key, g => g.Sum(sbo => sbo.Stock));
+            bool hasMore = false;
+            List<Brick> bricks;
+            if (pageSize > 0)
+            {
+                var raw = await bricksQuery.Skip(page * pageSize).Take(pageSize + 1).ToListAsync();
+                hasMore = raw.Count > pageSize;
+                bricks = raw.Count > pageSize ? raw.Take(pageSize).ToList() : raw;
+            }
+            else
+            {
+                bricks = await bricksQuery.ToListAsync();
+            }
+
+            var pagePartNums = bricks.Select(b => b.PartNum).Distinct().ToList();
+
+            // Use DB-side aggregation — never load all rows into server memory.
+            var brickOwnedQuery = db.Set<BrickOwned>().AsNoTracking();
+            var setBrickOwnedQuery = db.Set<SetBrickOwned>().AsNoTracking();
+            if (pageSize > 0)
+            {
+                brickOwnedQuery = brickOwnedQuery.Where(bo => pagePartNums.Contains(bo.PartNum));
+                setBrickOwnedQuery = setBrickOwnedQuery.Where(sbo => pagePartNums.Contains(sbo.PartNum));
+            }
+
+            var brickStock = (await brickOwnedQuery
+                .GroupBy(bo => new { bo.PartNum, bo.ColorId })
+                .Select(g => new { g.Key.PartNum, g.Key.ColorId, Stock = g.Sum(bo => bo.Stock) })
+                .ToListAsync())
+                .ToDictionary(x => (x.PartNum, x.ColorId ?? ""), x => x.Stock);
+
+            var setBrickStock = (await setBrickOwnedQuery
+                .GroupBy(sbo => new { sbo.PartNum, sbo.ColorId })
+                .Select(g => new { g.Key.PartNum, g.Key.ColorId, Stock = g.Sum(sbo => sbo.Stock) })
+                .ToListAsync())
+                .ToDictionary(x => (x.PartNum, x.ColorId ?? ""), x => x.Stock);
+
+            // Scope SetBrick to page PartNums when paginating to avoid loading the full table.
+            var setBricksQuery = db.Set<SetBrick>().AsNoTracking();
+            if (pageSize > 0)
+                setBricksQuery = setBricksQuery.Where(sb => pagePartNums.Contains(sb.PartNum));
+            var allSetBricks = await setBricksQuery.ToListAsync();
 
             var setCopies    = await InventoryAggregates.GetSetCopiesAsync(db);
-            var allSetBricks = await db.Set<SetBrick>().AsNoTracking().ToListAsync();
             var neededDict   = InventoryAggregates.GetBrickNeededDict(allSetBricks, setCopies);
             var setCountDict = InventoryAggregates.GetBrickSetCountDict(allSetBricks);
 
-            var bricks = await db.Set<Brick>().AsNoTracking().OrderBy(b => b.Name).ToListAsync();
             var rows = bricks.Select(b =>
             {
                 var key = (b.PartNum, b.ColorId ?? "");
@@ -47,7 +88,7 @@ public static class BricksEndpoints
                     setCountDict.GetValueOrDefault(key, 0));
             }).ToList();
 
-            return Results.Ok(rows);
+            return Results.Ok(new PagedResult<BrickCatalogViewDto>(rows, hasMore));
         });
 
         group.MapGet("/owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>

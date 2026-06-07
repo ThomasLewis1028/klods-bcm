@@ -126,7 +126,7 @@
         var bricks = await Api.GetBricksCatalogViewAsync();
         if (bricks != null)
         {
-            _brickInfos = bricks.Select(b => new BrickInfo { Brick = b }).ToList();
+            _brickInfos = bricks.Items.Select(b => new BrickInfo { Brick = b }).ToList();
             _totalStock = _brickInfos.Sum(b => b.Brick.TotalStock);
             _totalNeeded = _brickInfos.Sum(b => b.Brick.TotalNeeded);
         }

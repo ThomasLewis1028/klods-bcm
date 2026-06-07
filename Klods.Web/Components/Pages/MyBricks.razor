@@ -177,7 +177,7 @@
     private async Task LoadDataAsync()
     {
         var bricks = await Api.GetMyBricksAsync();
-        _brickInfos = bricks?.Select(b => new MyBrickInfo { Brick = b, Stock = b.Stock }).ToList() ?? [];
+        _brickInfos = bricks?.Items.Select(b => new MyBrickInfo { Brick = b, Stock = b.Stock }).ToList() ?? [];
         _isLoading = false;
         StateHasChanged();
     }
