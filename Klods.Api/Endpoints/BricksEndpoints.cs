@@ -75,7 +75,16 @@ public static class BricksEndpoints
             var setBricks = await db.Set<SetBrick>().AsNoTracking()
                 .Where(sb => sb.PartNum == partNum && sb.ColorId == colorId)
                 .ToListAsync();
-            return Results.Ok(setBricks);
+            var setIds = setBricks.Select(sb => sb.SetId).ToList();
+            var sets = await db.Set<Set>().AsNoTracking()
+                .Where(s => setIds.Contains(s.SetId))
+                .ToDictionaryAsync(s => s.SetId);
+            var result = setBricks
+                .Where(sb => sets.ContainsKey(sb.SetId))
+                .Select(sb => new BrickSetDto(sb.SetId, sets[sb.SetId].Name, sets[sb.SetId].SetImg, sb.Count, sb.SpareCount))
+                .OrderBy(dto => dto.SetName)
+                .ToList();
+            return Results.Ok(result);
         });
 
         group.MapPost("/resolve", async (ResolveBrickRequest req, ImportData importer) =>
@@ -119,4 +128,5 @@ public static class BricksEndpoints
     public record ResolveBrickResponse(string? PartName, IEnumerable<PartColorInfo> Colors);
     public record AddLooseBrickRequest(string PartNum, string PartName, string ColorId, string ColorName, string? PartImgUrl, int Quantity);
     public record UpdateStockRequest(int Stock);
+    public record BrickSetDto(string SetId, string SetName, string? SetImg, int Count, int SpareCount);
 }

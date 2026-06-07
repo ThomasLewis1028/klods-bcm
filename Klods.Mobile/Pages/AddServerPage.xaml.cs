@@ -63,8 +63,7 @@ public partial class AddServerPage : ContentPage
             }
 
             _store.Upsert(server);
-            Application.Current!.Windows[0].Page =
-                new NavigationPage(_services.GetRequiredService<AppShell>());
+            Application.Current!.Windows[0].Page = _services.GetRequiredService<AppShell>();
         }
         catch
         {

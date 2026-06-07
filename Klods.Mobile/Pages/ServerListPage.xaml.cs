@@ -53,7 +53,6 @@ public partial class ServerListPage : ContentPage
 
     private void NavigateToShell()
     {
-        Application.Current!.Windows[0].Page =
-            new NavigationPage(_services.GetRequiredService<AppShell>());
+        Application.Current!.Windows[0].Page = _services.GetRequiredService<AppShell>();
     }
 }

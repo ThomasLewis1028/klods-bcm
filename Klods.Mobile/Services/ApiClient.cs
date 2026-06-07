@@ -74,6 +74,20 @@ public class ApiClient(HttpClient http, AuthService auth)
     public Task<MyOwnedSetDto[]?> GetMyOwnedSetsAsync() =>
         GetAsync<MyOwnedSetDto[]>("/api/sets/my-owned");
 
+    // ── Bricks ───────────────────────────────────────────────────────────────
+
+    public Task<MyBrickDto[]?> GetOwnedBricksAsync() =>
+        GetAsync<MyBrickDto[]>("/api/mybricks");
+
+    public Task<bool> UpdateLooseBrickStockAsync(string partNum, string colorId, int stock) =>
+        SendAsync(HttpMethod.Put,
+            $"/api/mybricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}/stock",
+            new { Stock = stock });
+
+    // Returns sets the user owns that require this brick (user-scoped).
+    public Task<MyBrickSetDetailDto[]?> GetBrickSetsAsync(string partNum, string colorId) =>
+        GetAsync<MyBrickSetDetailDto[]>($"/api/mybricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}/sets");
+
     // ── BoM ───────────────────────────────────────────────────────────────────
 
     public Task<BomDto?> GetBomAsync(string setId, int setIndex) =>
@@ -109,6 +123,12 @@ public class ApiClient(HttpClient http, AuthService auth)
         string SetId, string Name, string? SetImg, int NumBricks,
         int ReleaseYear, string? ThemeName, string ManualUrl,
         List<OwnedInstanceDto> Instances);
+
+    public record MyBrickDto(string PartNum, string Name, string? PartImg, string? ColorId,
+        string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId,
+        int Stock, int UserNeeded, int UserSetCount);
+
+    public record MyBrickSetDetailDto(string SetId, string SetName, string? SetImg, int BrickCount, int CopiesOwned);
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg,
         string? ColorName, string? HexColor, int Count, int SpareCount,
