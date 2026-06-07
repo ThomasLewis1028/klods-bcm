@@ -51,16 +51,18 @@ public partial class ProfilePage : ContentPage
         RoleLabel.Text = profile.Role;
         ChangePasswordRow.IsVisible = profile.HasPassword;
 
-        if (!string.IsNullOrEmpty(profile.ProfilePictureUrl))
+        if (!string.IsNullOrEmpty(profile.ProfilePictureUrl) &&
+            Uri.TryCreate(profile.ProfilePictureUrl, UriKind.Absolute, out var pictureUri))
         {
-            AvatarImage.Source = ImageSource.FromUri(new Uri(profile.ProfilePictureUrl));
+            AvatarImage.Source = ImageSource.FromUri(pictureUri);
             AvatarImage.IsVisible = true;
             AvatarIcon.IsVisible = false;
         }
 
-        if (!string.IsNullOrEmpty(profile.PrimaryColor))
+        if (!string.IsNullOrEmpty(profile.PrimaryColor) &&
+            Color.TryParse(profile.PrimaryColor, out var swatchColor))
         {
-            ThemeSwatch.Fill = new SolidColorBrush(Color.FromArgb(profile.PrimaryColor));
+            ThemeSwatch.Fill = new SolidColorBrush(swatchColor);
             ThemeHexLabel.Text = profile.PrimaryColor.ToUpperInvariant();
         }
         else
@@ -88,9 +90,9 @@ public partial class ProfilePage : ContentPage
         {
             _theme.Apply(color, _auth.ActiveServer?.Id);
 
-            if (color is not null)
+            if (color is not null && Color.TryParse(color, out var swatchColor))
             {
-                ThemeSwatch.Fill = new SolidColorBrush(Color.FromArgb(color));
+                ThemeSwatch.Fill = new SolidColorBrush(swatchColor);
                 ThemeHexLabel.Text = color.ToUpperInvariant();
             }
             else
