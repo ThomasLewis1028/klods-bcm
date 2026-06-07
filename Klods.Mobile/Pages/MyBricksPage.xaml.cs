@@ -8,6 +8,7 @@ public partial class MyBricksPage : ContentPage
 {
     private readonly ApiClient _api;
     private bool _loaded;
+    private bool _isGridView;
 
     public MyBricksPage() : this(ServiceHelper.Get<ApiClient>()) { }
 
@@ -28,6 +29,7 @@ public partial class MyBricksPage : ContentPage
     {
         await LoadAsync(firstLoad: false);
         Refresher.IsRefreshing = false;
+        GridRefresher.IsRefreshing = false;
     }
 
     private async void OnRetryClicked(object? sender, EventArgs e) =>
@@ -40,6 +42,7 @@ public partial class MyBricksPage : ContentPage
             Loader.IsVisible = true;
             ErrorView.IsVisible = false;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
         }
 
         var bricks = await _api.GetOwnedBricksAsync();
@@ -50,14 +53,14 @@ public partial class MyBricksPage : ContentPage
             ErrorLabel.Text = "Could not load your bricks.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
             return;
         }
 
         _loaded = true;
         ErrorView.IsVisible = false;
-        Refresher.IsVisible = true;
 
-        BricksList.ItemsSource = bricks
+        var items = bricks
             .OrderBy(b => b.Name)
             .Select(b => new BrickItem
             {
@@ -71,6 +74,12 @@ public partial class MyBricksPage : ContentPage
                 Stock       = b.Stock,
             })
             .ToList();
+
+        BricksList.ItemsSource = items;
+        GridList.ItemsSource = items;
+
+        Refresher.IsVisible = !_isGridView;
+        GridRefresher.IsVisible = _isGridView;
     }
 
     private void OnPlusClicked(object? sender, EventArgs e)
@@ -91,7 +100,7 @@ public partial class MyBricksPage : ContentPage
     private async void OnBrickTapped(object? sender, TappedEventArgs e)
     {
         if (sender is not VisualElement { BindingContext: BrickItem item }) return;
-        _loaded = false; // reload list on return so stock changes from detail are reflected
+        _loaded = false;
         await Navigation.PushAsync(new GlobalBrickDetailPage(
             new GlobalBrickDetailPage.BrickData(
                 PartNum:     item.PartNum,
@@ -103,6 +112,29 @@ public partial class MyBricksPage : ContentPage
                 BricklinkId: item.BricklinkId,
                 Stock:       item.Stock),
             _api));
+    }
+
+    private void OnListViewClicked(object? sender, EventArgs e)
+    {
+        if (_isGridView)
+            SetView(isGrid: false);
+    }
+
+    private void OnGridViewClicked(object? sender, EventArgs e)
+    {
+        if (!_isGridView)
+            SetView(isGrid: true);
+    }
+
+    private void SetView(bool isGrid)
+    {
+        _isGridView = isGrid;
+        Refresher.IsVisible = !isGrid && _loaded;
+        GridRefresher.IsVisible = isGrid && _loaded;
+        var primary = (Color)Application.Current!.Resources["Primary"];
+        var inactive = (Color)Application.Current!.Resources["Gray400"];
+        ListViewBtn.TextColor = isGrid ? inactive : primary;
+        GridViewBtn.TextColor = isGrid ? primary : inactive;
     }
 
     private sealed class BrickItem : INotifyPropertyChanged

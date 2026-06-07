@@ -8,6 +8,7 @@ public partial class MyMinifigsPage : ContentPage
 {
     private readonly ApiClient _api;
     private bool _loaded;
+    private bool _isGridView;
 
     public MyMinifigsPage() : this(ServiceHelper.Get<ApiClient>()) { }
 
@@ -28,6 +29,7 @@ public partial class MyMinifigsPage : ContentPage
     {
         await LoadAsync(firstLoad: false);
         Refresher.IsRefreshing = false;
+        GridRefresher.IsRefreshing = false;
     }
 
     private async void OnRetryClicked(object? sender, EventArgs e) =>
@@ -40,6 +42,7 @@ public partial class MyMinifigsPage : ContentPage
             Loader.IsVisible = true;
             ErrorView.IsVisible = false;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
         }
 
         var minifigs = await _api.GetMyMinifigsAsync();
@@ -50,14 +53,14 @@ public partial class MyMinifigsPage : ContentPage
             ErrorLabel.Text = "Could not load your minifigs.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
             return;
         }
 
         _loaded = true;
         ErrorView.IsVisible = false;
-        Refresher.IsVisible = true;
 
-        MinifigsList.ItemsSource = minifigs
+        var items = minifigs
             .OrderBy(m => m.MinifigName)
             .Select(m => new MinifigItem
             {
@@ -70,6 +73,12 @@ public partial class MyMinifigsPage : ContentPage
                 PartCount  = m.PartCount,
             })
             .ToList();
+
+        MinifigsList.ItemsSource = items;
+        GridList.ItemsSource = items;
+
+        Refresher.IsVisible = !_isGridView;
+        GridRefresher.IsVisible = _isGridView;
     }
 
     private async void OnMinifigTapped(object? sender, TappedEventArgs e)
@@ -101,6 +110,29 @@ public partial class MyMinifigsPage : ContentPage
         if (item.Stock <= 0) return;
         item.Stock--;
         _ = _api.UpdateMinifigStockAsync(item.MinifigId, item.Stock);
+    }
+
+    private void OnListViewClicked(object? sender, EventArgs e)
+    {
+        if (_isGridView)
+            SetView(isGrid: false);
+    }
+
+    private void OnGridViewClicked(object? sender, EventArgs e)
+    {
+        if (!_isGridView)
+            SetView(isGrid: true);
+    }
+
+    private void SetView(bool isGrid)
+    {
+        _isGridView = isGrid;
+        Refresher.IsVisible = !isGrid && _loaded;
+        GridRefresher.IsVisible = isGrid && _loaded;
+        var primary = (Color)Application.Current!.Resources["Primary"];
+        var inactive = (Color)Application.Current!.Resources["Gray400"];
+        ListViewBtn.TextColor = isGrid ? inactive : primary;
+        GridViewBtn.TextColor = isGrid ? primary : inactive;
     }
 
     private sealed class MinifigItem : INotifyPropertyChanged

@@ -8,6 +8,7 @@ public partial class SetsPage : ContentPage
 {
     private readonly ApiClient _api;
     private bool _loaded;
+    private bool _isGridView;
 
     public SetsPage() : this(ServiceHelper.Get<ApiClient>()) { }
 
@@ -28,6 +29,7 @@ public partial class SetsPage : ContentPage
     {
         await LoadAsync(firstLoad: false);
         Refresher.IsRefreshing = false;
+        GridRefresher.IsRefreshing = false;
     }
 
     private async void OnRetryClicked(object? sender, EventArgs e) =>
@@ -40,6 +42,7 @@ public partial class SetsPage : ContentPage
             Loader.IsVisible = true;
             ErrorView.IsVisible = false;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
         }
 
         var response = await _api.GetSetCatalogViewAsync();
@@ -50,12 +53,12 @@ public partial class SetsPage : ContentPage
             ErrorLabel.Text = "Could not load the catalog.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
             return;
         }
 
         _loaded = true;
         ErrorView.IsVisible = false;
-        Refresher.IsVisible = true;
 
         StatsLabel.Text = string.Join("  ·  ", new[]
         {
@@ -64,7 +67,7 @@ public partial class SetsPage : ContentPage
             $"{response.TotalOwners} collector{(response.TotalOwners != 1 ? "s" : "")}"
         });
 
-        SetsList.ItemsSource = response.Sets
+        var items = response.Sets
             .Select(s => new SetItem
             {
                 SetId = s.SetId,
@@ -76,6 +79,12 @@ public partial class SetsPage : ContentPage
                 UserOwnedCount = s.UserOwnedCount
             })
             .ToList();
+
+        SetsList.ItemsSource = items;
+        GridList.ItemsSource = items;
+
+        Refresher.IsVisible = !_isGridView;
+        GridRefresher.IsVisible = _isGridView;
     }
 
     private void OnPlusClicked(object? sender, EventArgs e)
@@ -97,6 +106,29 @@ public partial class SetsPage : ContentPage
     {
         _loaded = false;
         await Navigation.PushAsync(new ImportSetPage(_api));
+    }
+
+    private void OnListViewClicked(object? sender, EventArgs e)
+    {
+        if (_isGridView)
+            SetView(isGrid: false);
+    }
+
+    private void OnGridViewClicked(object? sender, EventArgs e)
+    {
+        if (!_isGridView)
+            SetView(isGrid: true);
+    }
+
+    private void SetView(bool isGrid)
+    {
+        _isGridView = isGrid;
+        Refresher.IsVisible = !isGrid && _loaded;
+        GridRefresher.IsVisible = isGrid && _loaded;
+        var primary = (Color)Application.Current!.Resources["Primary"];
+        var inactive = (Color)Application.Current!.Resources["Gray400"];
+        ListViewBtn.TextColor = isGrid ? inactive : primary;
+        GridViewBtn.TextColor = isGrid ? primary : inactive;
     }
 
     private sealed class SetItem : INotifyPropertyChanged

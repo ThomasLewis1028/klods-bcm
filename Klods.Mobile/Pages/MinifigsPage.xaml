@@ -6,11 +6,34 @@
 
     <Grid RowDefinitions="Auto,*">
 
-        <Label Grid.Row="0"
-               Text="Minifigs"
-               FontSize="26"
-               FontAttributes="Bold"
-               Margin="16,16,16,8" />
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+            <Label Grid.Column="0"
+                   Text="Minifigs"
+                   FontSize="26"
+                   FontAttributes="Bold"
+                   Margin="16,16,16,8" />
+            <Button x:Name="ListViewBtn"
+                    Grid.Column="1"
+                    Text="&#xe8ef;"
+                    FontFamily="MaterialIcons"
+                    FontSize="22"
+                    WidthRequest="44" HeightRequest="44"
+                    CornerRadius="0" Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="{DynamicResource Primary}"
+                    Clicked="OnListViewClicked" />
+            <Button x:Name="GridViewBtn"
+                    Grid.Column="2"
+                    Text="&#xe8f0;"
+                    FontFamily="MaterialIcons"
+                    FontSize="22"
+                    WidthRequest="44" HeightRequest="44"
+                    CornerRadius="0" Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="{StaticResource Gray400}"
+                    Clicked="OnGridViewClicked"
+                    Margin="0,0,8,0" />
+        </Grid>
 
         <Grid Grid.Row="1">
 
@@ -32,6 +55,7 @@
                 <Button Text="Retry" HorizontalOptions="Center" Clicked="OnRetryClicked" />
             </VerticalStackLayout>
 
+            <!-- List view -->
             <RefreshView x:Name="Refresher"
                          Refreshing="OnRefreshing"
                          IsVisible="False"
@@ -77,6 +101,58 @@
                                                TextColor="{StaticResource Gray400}" />
                                     </VerticalStackLayout>
 
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+            </RefreshView>
+
+            <!-- Grid view -->
+            <RefreshView x:Name="GridRefresher"
+                         Refreshing="OnRefreshing"
+                         IsVisible="False"
+                         VerticalOptions="Fill">
+                <CollectionView x:Name="GridList"
+                                Margin="12,0"
+                                SelectionMode="None">
+
+                    <CollectionView.ItemsLayout>
+                        <GridItemsLayout Orientation="Vertical"
+                                         Span="2"
+                                         HorizontalItemSpacing="8"
+                                         VerticalItemSpacing="8" />
+                    </CollectionView.ItemsLayout>
+
+                    <CollectionView.EmptyView>
+                        <Label Text="No minifigs in the catalog yet."
+                               TextColor="{StaticResource Gray400}"
+                               FontSize="15"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               Margin="0,60,0,0" />
+                    </CollectionView.EmptyView>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="8"
+                                    StrokeShape="RoundRectangle 10">
+                                <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                    <Border Grid.Row="0"
+                                            HeightRequest="100"
+                                            BackgroundColor="{DynamicResource Secondary}"
+                                            Stroke="Transparent"
+                                            StrokeShape="RoundRectangle 8">
+                                        <Image Source="{Binding ImgUrl}" Aspect="AspectFit" />
+                                    </Border>
+                                    <Label Grid.Row="1"
+                                           Text="{Binding Name}"
+                                           FontSize="11"
+                                           FontAttributes="Bold"
+                                           LineBreakMode="TailTruncation"
+                                           MaxLines="2"
+                                           Margin="0,2,0,0" />
                                 </Grid>
                             </Border>
                         </DataTemplate>

@@ -6,6 +6,7 @@ public partial class MySetsPage : ContentPage
 {
     private readonly ApiClient _api;
     private bool _loaded;
+    private bool _isGridView;
     private ApiClient.MyOwnedSetDto[] _rawSets = [];
 
     public MySetsPage() : this(ServiceHelper.Get<ApiClient>()) { }
@@ -27,6 +28,7 @@ public partial class MySetsPage : ContentPage
     {
         await LoadAsync(firstLoad: false);
         Refresher.IsRefreshing = false;
+        GridRefresher.IsRefreshing = false;
     }
 
     private async void OnRetryClicked(object? sender, EventArgs e) =>
@@ -39,6 +41,7 @@ public partial class MySetsPage : ContentPage
             Loader.IsVisible = true;
             ErrorView.IsVisible = false;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
         }
 
         var sets = await _api.GetMyOwnedSetsAsync();
@@ -50,15 +53,15 @@ public partial class MySetsPage : ContentPage
             ErrorLabel.Text = "Could not load your sets.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
             return;
         }
 
         _loaded = true;
         _rawSets = sets;
         ErrorView.IsVisible = false;
-        Refresher.IsVisible = true;
 
-        SetsList.ItemsSource = sets
+        var items = sets
             .Select(s => new SetItem(
                 SetId: s.SetId,
                 Name: s.Name,
@@ -69,14 +72,21 @@ public partial class MySetsPage : ContentPage
                 Copies: s.Instances.Count,
                 TotalMissing: s.Instances.Sum(i => i.MissingPieceCount)))
             .ToList();
+
+        SetsList.ItemsSource = items;
+        GridList.ItemsSource = items;
+
+        Refresher.IsVisible = !_isGridView;
+        GridRefresher.IsVisible = _isGridView;
     }
 
     private async void OnSetSelected(object? sender, SelectionChangedEventArgs e)
     {
         if (e.CurrentSelection.FirstOrDefault() is not SetItem item) return;
-        SetsList.SelectedItem = null;
+        if (sender is CollectionView cv) cv.SelectedItem = null;
         var raw = _rawSets.FirstOrDefault(s => s.SetId == item.SetId);
         if (raw is null) return;
+        _loaded = false;
         await Navigation.PushAsync(new SetDetailPage(raw, _api));
     }
 
@@ -84,6 +94,29 @@ public partial class MySetsPage : ContentPage
     {
         _loaded = false;
         await Navigation.PushAsync(new ImportSetPage(_api));
+    }
+
+    private void OnListViewClicked(object? sender, EventArgs e)
+    {
+        if (_isGridView)
+            SetView(isGrid: false);
+    }
+
+    private void OnGridViewClicked(object? sender, EventArgs e)
+    {
+        if (!_isGridView)
+            SetView(isGrid: true);
+    }
+
+    private void SetView(bool isGrid)
+    {
+        _isGridView = isGrid;
+        Refresher.IsVisible = !isGrid && _loaded;
+        GridRefresher.IsVisible = isGrid && _loaded;
+        var primary = (Color)Application.Current!.Resources["Primary"];
+        var inactive = (Color)Application.Current!.Resources["Gray400"];
+        ListViewBtn.TextColor = isGrid ? inactive : primary;
+        GridViewBtn.TextColor = isGrid ? primary : inactive;
     }
 
     private sealed record SetItem(

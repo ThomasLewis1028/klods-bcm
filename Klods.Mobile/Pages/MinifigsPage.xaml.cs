@@ -6,6 +6,7 @@ public partial class MinifigsPage : ContentPage
 {
     private readonly ApiClient _api;
     private bool _loaded;
+    private bool _isGridView;
 
     public MinifigsPage() : this(ServiceHelper.Get<ApiClient>()) { }
 
@@ -26,6 +27,7 @@ public partial class MinifigsPage : ContentPage
     {
         await LoadAsync(firstLoad: false);
         Refresher.IsRefreshing = false;
+        GridRefresher.IsRefreshing = false;
     }
 
     private async void OnRetryClicked(object? sender, EventArgs e) =>
@@ -38,6 +40,7 @@ public partial class MinifigsPage : ContentPage
             Loader.IsVisible = true;
             ErrorView.IsVisible = false;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
         }
 
         var minifigs = await _api.GetMinifigCatalogViewAsync();
@@ -48,20 +51,49 @@ public partial class MinifigsPage : ContentPage
             ErrorLabel.Text = "Could not load the minifig catalog.\nCheck your connection and try again.";
             ErrorView.IsVisible = true;
             Refresher.IsVisible = false;
+            GridRefresher.IsVisible = false;
             return;
         }
 
         _loaded = true;
         ErrorView.IsVisible = false;
-        Refresher.IsVisible = true;
 
-        MinifigsList.ItemsSource = minifigs
+        var items = minifigs
             .Select(m => new MinifigItem(
                 MinifigId: m.MinifigId,
                 Name: m.MinifigName,
                 ImgUrl: m.ImgUrl,
                 PartCount: m.PartCount))
             .ToList();
+
+        MinifigsList.ItemsSource = items;
+        GridList.ItemsSource = items;
+
+        Refresher.IsVisible = !_isGridView;
+        GridRefresher.IsVisible = _isGridView;
+    }
+
+    private void OnListViewClicked(object? sender, EventArgs e)
+    {
+        if (_isGridView)
+            SetView(isGrid: false);
+    }
+
+    private void OnGridViewClicked(object? sender, EventArgs e)
+    {
+        if (!_isGridView)
+            SetView(isGrid: true);
+    }
+
+    private void SetView(bool isGrid)
+    {
+        _isGridView = isGrid;
+        Refresher.IsVisible = !isGrid && _loaded;
+        GridRefresher.IsVisible = isGrid && _loaded;
+        var primary = (Color)Application.Current!.Resources["Primary"];
+        var inactive = (Color)Application.Current!.Resources["Gray400"];
+        ListViewBtn.TextColor = isGrid ? inactive : primary;
+        GridViewBtn.TextColor = isGrid ? primary : inactive;
     }
 
     private sealed record MinifigItem(string MinifigId, string Name, string? ImgUrl, int PartCount)
