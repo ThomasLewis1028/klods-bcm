@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Klods.Mobile.Pages.MinifigDetailPage"
+             Title="Minifig Detail">
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="0">
+
+            <!-- Minifig image -->
+            <Grid HeightRequest="200" BackgroundColor="{StaticResource Secondary}">
+                <Image x:Name="MinifigImage"
+                       Aspect="AspectFit"
+                       HeightRequest="200"
+                       Margin="24" />
+                <Label x:Name="PlaceholderIcon"
+                       Text="&#xe7fd;"
+                       FontFamily="MaterialIcons"
+                       FontSize="72"
+                       TextColor="{StaticResource Gray300}"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center" />
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnImageTapped" />
+                </Grid.GestureRecognizers>
+            </Grid>
+
+            <!-- Metadata -->
+            <VerticalStackLayout Padding="20,16,20,0" Spacing="4">
+                <Label x:Name="MinifigIdLabel"
+                       FontSize="12"
+                       TextColor="{StaticResource Gray400}" />
+                <Label x:Name="NameLabel"
+                       FontSize="20"
+                       FontAttributes="Bold"
+                       LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+
+            <!-- Stock ticker -->
+            <Label Text="OWNED STOCK"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   CharacterSpacing="1"
+                   Margin="20,24,20,8" />
+
+            <Border Margin="16,0" Padding="16" StrokeShape="RoundRectangle 10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Grid.Column="0"
+                           Text="Minifigs owned"
+                           FontSize="14"
+                           VerticalOptions="Center" />
+                    <HorizontalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
+                        <Button Text="−"
+                                FontSize="18"
+                                Padding="0"
+                                HeightRequest="36" WidthRequest="36"
+                                Clicked="OnMinusClicked" />
+                        <Label x:Name="StockLabel"
+                               FontSize="15"
+                               FontAttributes="Bold"
+                               MinimumWidthRequest="30"
+                               HorizontalOptions="Center"
+                               HorizontalTextAlignment="Center"
+                               VerticalOptions="Center" />
+                        <Button Text="+"
+                                FontSize="18"
+                                Padding="0"
+                                HeightRequest="36" WidthRequest="36"
+                                Clicked="OnPlusClicked" />
+                    </HorizontalStackLayout>
+                </Grid>
+            </Border>
+
+            <!-- Parts list -->
+            <Label Text="PARTS"
+                   FontSize="11"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray400}"
+                   CharacterSpacing="1"
+                   Margin="20,24,20,8" />
+
+            <ActivityIndicator x:Name="PartsLoader"
+                               IsRunning="True"
+                               IsVisible="True"
+                               HorizontalOptions="Center"
+                               Margin="0,8,0,0"
+                               Color="{StaticResource Primary}" />
+
+            <Label x:Name="PartsErrorLabel"
+                   IsVisible="False"
+                   TextColor="{StaticResource Gray400}"
+                   HorizontalOptions="Center"
+                   HorizontalTextAlignment="Center"
+                   Margin="16,8" />
+
+            <VerticalStackLayout x:Name="PartsLayout" Spacing="8" Padding="16,0,16,32">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="12" StrokeShape="RoundRectangle 10">
+                            <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="12">
+                                <Border Grid.Column="0"
+                                        WidthRequest="48" HeightRequest="48"
+                                        BackgroundColor="{StaticResource Secondary}"
+                                        Stroke="Transparent"
+                                        StrokeShape="RoundRectangle 6"
+                                        VerticalOptions="Center">
+                                    <Image Source="{Binding PartImgUrl}"
+                                           Aspect="AspectFit"
+                                           WidthRequest="48" HeightRequest="48" />
+                                </Border>
+                                <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                    <Label Text="{Binding Name}"
+                                           FontSize="13"
+                                           FontAttributes="Bold"
+                                           LineBreakMode="TailTruncation"
+                                           MaxLines="2" />
+                                    <HorizontalStackLayout Spacing="6">
+                                        <Ellipse Fill="{Binding SwatchBrush}"
+                                                 WidthRequest="10" HeightRequest="10"
+                                                 VerticalOptions="Center" />
+                                        <Label Text="{Binding ColorName}"
+                                               FontSize="11"
+                                               TextColor="{StaticResource Gray400}"
+                                               VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                                <Label Grid.Column="2"
+                                       Text="{Binding QuantityLabel}"
+                                       FontSize="13"
+                                       FontAttributes="Bold"
+                                       TextColor="{StaticResource Gray400}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

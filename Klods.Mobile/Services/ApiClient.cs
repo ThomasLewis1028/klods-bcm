@@ -98,6 +98,9 @@ public class ApiClient(HttpClient http, AuthService auth)
             $"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/stock",
             new { Stock = stock });
 
+    public Task<MinifigBrickDto[]?> GetMinifigBricksAsync(string minifigId) =>
+        GetAsync<MinifigBrickDto[]>($"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/bricks");
+
     // ── BoM ───────────────────────────────────────────────────────────────────
 
     public Task<BomDto?> GetBomAsync(string setId, int setIndex) =>
@@ -142,6 +145,9 @@ public class ApiClient(HttpClient http, AuthService auth)
 
     public record MyMinifigDto(string MinifigId, string MinifigName, string? ImgUrl,
         int Stock, int UserNeeded, int UserSetCount, int PartCount);
+
+    public record MinifigBrickDto(string BrickId, string ColorId, string Name, string? PartImg,
+        string? ColorName, string? HexColor, int Quantity);
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg,
         string? ColorName, string? HexColor, int Count, int SpareCount,

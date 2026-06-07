@@ -72,6 +72,22 @@ public partial class MyMinifigsPage : ContentPage
             .ToList();
     }
 
+    private async void OnMinifigTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not VisualElement { BindingContext: MinifigItem item }) return;
+        _loaded = false;
+        await Navigation.PushAsync(new MinifigDetailPage(
+            new ApiClient.MyMinifigDto(
+                MinifigId:    item.MinifigId,
+                MinifigName:  item.Name,
+                ImgUrl:       item.ImgUrl,
+                Stock:        item.Stock,
+                UserNeeded:   item.UserNeeded,
+                UserSetCount: item.UserSetCount,
+                PartCount:    item.PartCount),
+            _api));
+    }
+
     private void OnPlusClicked(object? sender, EventArgs e)
     {
         if (sender is not VisualElement { BindingContext: MinifigItem item }) return;

@@ -56,6 +56,9 @@
 
                                     <Grid Grid.Column="0"
                                           ColumnDefinitions="60,*" ColumnSpacing="12">
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnMinifigTapped" />
+                                        </Grid.GestureRecognizers>
 
                                         <Border Grid.Column="0"
                                                 WidthRequest="56" HeightRequest="56"
