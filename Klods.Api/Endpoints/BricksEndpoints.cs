@@ -28,7 +28,7 @@ public static class BricksEndpoints
 
         // Server-side, paginated catalog browse/search. Empty query => most-used bricks first.
         // Per-row stock/needed computed only for the current page; SetCount is the denormalized column.
-        group.MapGet("/catalog", async (string? q, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
+        group.MapGet("/catalog", async (string? q, string? sort, string? dir, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             if (pageSize is <= 0 or > 200) pageSize = 25;
             if (page < 0) page = 0;
@@ -41,13 +41,10 @@ public static class BricksEndpoints
             {
                 var like = $"%{query}%";
                 baseQ = baseQ.Where(b => EF.Functions.ILike(b.PartNum, like) || EF.Functions.ILike(b.Name, like)
-                                         || (b.ColorName != null && EF.Functions.ILike(b.ColorName, like)))
-                             .OrderBy(b => b.Name);
+                                         || (b.ColorName != null && EF.Functions.ILike(b.ColorName, like)));
             }
-            else
-            {
-                baseQ = baseQ.OrderByDescending(b => b.SetCount).ThenBy(b => b.Name);
-            }
+
+            baseQ = SortBricks(baseQ, sort, dir);
 
             var total = await baseQ.CountAsync();
             var pageItems = await baseQ.Skip(page * pageSize).Take(pageSize).ToListAsync();
@@ -134,6 +131,20 @@ public static class BricksEndpoints
             updater.UpdateBrickOwned(bo, userId);
             return Results.Ok();
         });
+    }
+
+    // Whitelisted server-side sort. Default: most-used (set count) first. Stock/Needed are per-page aggregates, not sortable.
+    private static IQueryable<Brick> SortBricks(IQueryable<Brick> q, string? sort, string? dir)
+    {
+        var desc = dir != "asc";
+        return (sort ?? "sets") switch
+        {
+            "id"    => desc ? q.OrderByDescending(b => b.PartNum) : q.OrderBy(b => b.PartNum),
+            "name"  => desc ? q.OrderByDescending(b => b.Name) : q.OrderBy(b => b.Name),
+            "color" => desc ? q.OrderByDescending(b => b.ColorName) : q.OrderBy(b => b.ColorName),
+            _       => desc ? q.OrderByDescending(b => b.SetCount).ThenBy(b => b.Name)
+                            : q.OrderBy(b => b.SetCount).ThenBy(b => b.Name),
+        };
     }
 
     public record BrickDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId)

@@ -181,8 +181,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Bricks ───────────────────────────────────────────────────────────────
 
     public Task<BrickCatalogStatsDto?>   GetBrickCatalogStatsAsync()          => GetAsync<BrickCatalogStatsDto>("/api/bricks/catalog-stats");
-    public Task<BrickCatalogPage?>       GetBricksCatalogPageAsync(string q, int page, int pageSize)
-        => GetAsync<BrickCatalogPage>($"/api/bricks/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
+    public Task<BrickCatalogPage?>       GetBricksCatalogPageAsync(string q, string sort, string dir, int page, int pageSize)
+        => GetAsync<BrickCatalogPage>($"/api/bricks/catalog?q={Uri.EscapeDataString(q)}&sort={sort}&dir={dir}&page={page}&pageSize={pageSize}");
     public Task<SetBrickDto[]?>          GetSetsForBrickAsync(string p, string c) => GetAsync<SetBrickDto[]>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets");
     public async Task<ResolveBrickResponse?> ResolvePartColorsPostAsync(string partNum)
     {
@@ -208,8 +208,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public Task<MinifigSearchDto[]?>      SearchMinifigsCatalogAsync(string q)    => GetAsync<MinifigSearchDto[]>($"/api/minifigs/catalog-search?q={Uri.EscapeDataString(q)}");
     public Task<MinifigCatalogStatsDto?>  GetMinifigCatalogStatsAsync()           => GetAsync<MinifigCatalogStatsDto>("/api/minifigs/catalog-stats");
-    public Task<MinifigCatalogPage?>      GetMinifigsCatalogPageAsync(string q, int page, int pageSize)
-        => GetAsync<MinifigCatalogPage>($"/api/minifigs/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
+    public Task<MinifigCatalogPage?>      GetMinifigsCatalogPageAsync(string q, string sort, string dir, int page, int pageSize)
+        => GetAsync<MinifigCatalogPage>($"/api/minifigs/catalog?q={Uri.EscapeDataString(q)}&sort={sort}&dir={dir}&page={page}&pageSize={pageSize}");
     public Task<MinifigBrickDto[]?>       GetMinifigBricksAsync(string id)        => GetAsync<MinifigBrickDto[]>($"/api/minifigs/{Uri.EscapeDataString(id)}/bricks");
     public async Task<ResolveMinifigResponse?> ResolveMinifigIdPostAsync(string query, int page = 1)
     {

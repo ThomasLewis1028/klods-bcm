@@ -40,7 +40,7 @@ public static class MinifigsEndpoints
         });
 
         // Server-side, paginated catalog browse/search. Empty query => figs with the most parts first.
-        group.MapGet("/catalog", async (string? q, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
+        group.MapGet("/catalog", async (string? q, string? sort, string? dir, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             if (pageSize is <= 0 or > 200) pageSize = 25;
             if (page < 0) page = 0;
@@ -52,13 +52,10 @@ public static class MinifigsEndpoints
             if (query.Length >= 2)
             {
                 var like = $"%{query}%";
-                baseQ = baseQ.Where(m => EF.Functions.ILike(m.MinifigId, like) || EF.Functions.ILike(m.Name, like))
-                             .OrderBy(m => m.Name);
+                baseQ = baseQ.Where(m => EF.Functions.ILike(m.MinifigId, like) || EF.Functions.ILike(m.Name, like));
             }
-            else
-            {
-                baseQ = baseQ.OrderByDescending(m => m.NumParts).ThenBy(m => m.Name);
-            }
+
+            baseQ = SortMinifigs(baseQ, sort, dir);
 
             var total = await baseQ.CountAsync();
             var pageItems = await baseQ.Skip(page * pageSize).Take(pageSize).ToListAsync();
@@ -138,6 +135,19 @@ public static class MinifigsEndpoints
         });
     }
 
+
+    // Whitelisted server-side sort. Default: most parts first (sorts by NumParts; the Parts column shows distinct part count).
+    private static IQueryable<Minifig> SortMinifigs(IQueryable<Minifig> q, string? sort, string? dir)
+    {
+        var desc = dir != "asc";
+        return (sort ?? "parts") switch
+        {
+            "id"   => desc ? q.OrderByDescending(m => m.MinifigId) : q.OrderBy(m => m.MinifigId),
+            "name" => desc ? q.OrderByDescending(m => m.Name) : q.OrderBy(m => m.Name),
+            _      => desc ? q.OrderByDescending(m => m.NumParts).ThenBy(m => m.Name)
+                           : q.OrderBy(m => m.NumParts).ThenBy(m => m.Name),
+        };
+    }
 
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
     public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
