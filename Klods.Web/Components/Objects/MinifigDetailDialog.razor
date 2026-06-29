@@ -1,0 +1,78 @@
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject ImageStorageService ImageStorage
+@inject ISnackbar Snackbar
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <DialogContent>
+        <MudStack AlignItems="AlignItems.Center" Spacing="2" Style="min-width: 320px;">
+            <MudImage Src="@ImageStorage.ResolveUrl(Minifig.ImgUrl)" Alt="@Minifig.MinifigName"
+                      Style="width: 200px; height: 200px; object-fit: contain;" Class="rounded-lg"/>
+            <MudText Typo="Typo.h6" Align="Align.Center">@Minifig.MinifigName</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@Minifig.MinifigId</MudText>
+
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                <MudText>Loose owned:</MudText>
+                <MudNumericField T="int" @bind-Value="_count" Min="0" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" Style="max-width: 110px;"
+                                 Disabled="@(AuthService.CurrentUser == null)"/>
+                <MudButton OnClick="SaveCount" Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="@(AuthService.CurrentUser == null)">Save</MudButton>
+            </MudStack>
+
+            <MudDivider Class="my-2" FlexItem="true"/>
+            <MudText Typo="Typo.subtitle2">Parts (@_parts.Count)</MudText>
+            @if (_loading)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+            }
+            else if (_parts.Count > 0)
+            {
+                <div style="max-height: 300px; overflow-y: auto; width: 100%;">
+                    @foreach (var p in _parts.OrderBy(p => p.BrickId))
+                    {
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="py-1">
+                            <MudImage Src="@ImageStorage.ResolveUrl(p.PartImg)" Height="36"
+                                      Style="width: 36px; object-fit: contain;" Class="rounded"/>
+                            <MudStack Spacing="0" Style="flex: 1; min-width: 0;">
+                                <MudText Typo="Typo.body2" Style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@p.Name</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@p.ColorName</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2">×@p.Quantity</MudText>
+                        </MudStack>
+                    }
+                </div>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ApiClient.MinifigCatalogViewDto Minifig { get; set; } = null!;
+
+    private int _count;
+    private List<ApiClient.MinifigBrickDto> _parts = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _count = (await Api.GetMyMinifigLooseCountAsync(Minifig.MinifigId))?.Count ?? 0;
+        _parts = (await Api.GetMinifigBricksAsync(Minifig.MinifigId))?.ToList() ?? [];
+        _loading = false;
+    }
+
+    private async Task SaveCount()
+    {
+        if (AuthService.CurrentUser == null) return;
+        if (await Api.UpsertMinifigStockAsync(Minifig.MinifigId, _count))
+            Snackbar.Add("Loose count updated.", Severity.Success);
+        else
+            Snackbar.Add("Failed to update.", Severity.Error);
+    }
+}

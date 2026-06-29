@@ -45,6 +45,14 @@
     </MudItem>
 
     <MudItem xs="12">
+        <MudStack Row Justify="Justify.FlexEnd" Class="mb-2">
+            <MudToggleGroup T="string" Value="_view" ValueChanged="OnViewChanged" Size="Size.Small"
+                            Color="Color.Primary" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Dense="true">
+                <MudToggleItem Value="@("list")"><MudIcon Icon="@Icons.Material.Filled.ViewList" Size="Size.Small"/></MudToggleItem>
+                <MudToggleItem Value="@("grid")"><MudIcon Icon="@Icons.Material.Filled.GridView" Size="Size.Small"/></MudToggleItem>
+            </MudToggleGroup>
+        </MudStack>
+
         @if (_loadingResults)
         {
             <MudStack AlignItems="AlignItems.Center" Class="pa-8"><MudProgressCircular Indeterminate="true"/></MudStack>
@@ -63,6 +71,24 @@
         }
         else
         {
+            @if (_view == "grid")
+            {
+                <div class="card-grid">
+                    @foreach (var row in _rows)
+                    {
+                        var r = row;
+                        <MudPaper Class="catalog-card" Elevation="2" @onclick="() => OpenMinifigDialog(r)">
+                            <div class="card-img"><MudImage Src="@ImageStorage.ResolveUrl(r.Minifig.ImgUrl)" Style="max-width:100%; max-height:100%; object-fit:contain;"/></div>
+                            <div class="card-label">
+                                <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@r.Minifig.MinifigName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@r.Minifig.MinifigId</MudText>
+                            </div>
+                        </MudPaper>
+                    }
+                </div>
+            }
+            else
+            {
             <MudDataGrid T="MinifigInfo" Items="_rows" SortMode="SortMode.None" ReadOnly="true">
                 <Columns>
                     <HierarchyColumn T="MinifigInfo" ButtonDisabledFunc="@(info => info.Minifig.PartCount == 0)"/>
@@ -138,6 +164,7 @@
                     </div>
                 </ChildRowContent>
             </MudDataGrid>
+            }
 
             <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mt-4">
                 <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
@@ -159,7 +186,16 @@
     </MudItem>
 </MudGrid>
 
-<style> .sort-head { cursor: pointer; user-select: none; font-weight: 600; } </style>
+<style>
+    .sort-head { cursor: pointer; user-select: none; font-weight: 600; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+    .catalog-card { border-radius: 16px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;
+                    transition: transform .12s ease, box-shadow .12s ease; }
+    .catalog-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
+    .card-img { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; padding: 14px;
+                background: var(--mud-palette-surface); }
+    .card-label { padding: 8px 12px; }
+</style>
 
 @code {
     private List<MinifigInfo> _rows = [];
@@ -168,6 +204,7 @@
     private string _dir = "desc";
     private int _page = 1;
     private int _pageSize = 25;
+    private string _view = "list";
     private int _total;
     private int _totalPages = 1;
     private int _totalMinifigs;
@@ -210,6 +247,7 @@
         _dir = qs["dir"] ?? "desc";
         _page = int.TryParse(qs["page"], out var p) && p > 0 ? p : 1;
         _pageSize = int.TryParse(qs["size"], out var sz) && sz is 25 or 50 or 100 ? sz : 25;
+        _view = qs["view"] == "grid" ? "grid" : "list";
     }
 
     private async Task LoadAsync()
@@ -232,8 +270,18 @@
         if (_sort != "parts") parts.Add($"sort={_sort}");
         if (_dir != "desc") parts.Add($"dir={_dir}");
         if (_pageSize != 25) parts.Add($"size={_pageSize}");
+        if (_view != "list") parts.Add($"view={_view}");
         if (_page > 1) parts.Add($"page={_page}");
         Nav.NavigateTo("/minifigs" + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
+    }
+
+    private void OnViewChanged(string view) { _view = view == "grid" ? "grid" : "list"; Navigate(); }
+
+    private async Task OpenMinifigDialog(MinifigInfo row)
+    {
+        var parameters = new DialogParameters<MinifigDetailDialog> { { x => x.Minifig, row.Minifig } };
+        await DialogService.ShowAsync<MinifigDetailDialog>(row.Minifig.MinifigName, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
     }
 
     private void OnSearch(string value) { _query = value ?? ""; _page = 1; Navigate(); }

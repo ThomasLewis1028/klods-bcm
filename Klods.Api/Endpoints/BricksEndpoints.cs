@@ -103,6 +103,18 @@ public static class BricksEndpoints
             return Results.Ok(setBricks);
         });
 
+        // Current user's loose stock for a single brick (for the detail dialog).
+        group.MapGet("/{partNum}/{colorId}/owned", async (
+            string partNum, string colorId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            var stock = await db.Set<BrickOwned>().AsNoTracking()
+                .Where(bo => bo.UserId == userId && bo.PartNum == partNum && bo.ColorId == colorId)
+                .Select(bo => (int?)bo.Stock).FirstOrDefaultAsync() ?? 0;
+            return Results.Ok(new OwnedStockDto(stock));
+        });
+
         group.MapPost("/resolve", async (ResolveBrickRequest req, ImportData importer) =>
         {
             var (name, colors, notFound) = await importer.ResolvePartColors(req.PartNum);
@@ -156,6 +168,7 @@ public static class BricksEndpoints
     public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int TotalStock, int TotalNeeded, int SetCount);
     public record BrickCatalogStatsDto(int TotalBricks, long TotalOwnedStock);
     public record BrickCatalogPage(List<BrickCatalogViewDto> Items, int Total);
+    public record OwnedStockDto(int Stock);
     public record ResolveBrickRequest(string PartNum);
     public record ResolveBrickResponse(string? PartName, IEnumerable<PartColorInfo> Colors);
     public record AddLooseBrickRequest(string PartNum, string PartName, string ColorId, string ColorName, string? PartImgUrl, int Quantity);
