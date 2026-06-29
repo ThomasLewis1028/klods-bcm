@@ -159,7 +159,6 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── Sets ─────────────────────────────────────────────────────────────────
 
-    public Task<SetCatalogViewResponse?> GetSetsCatalogViewAsync()   => GetAsync<SetCatalogViewResponse>("/api/sets/catalog-view");
     public Task<SetCatalogStatsDto?>     GetSetCatalogStatsAsync()   => GetAsync<SetCatalogStatsDto>("/api/sets/catalog-stats");
     public Task<SetCatalogPage?>         GetSetsCatalogPageAsync(string q, int page, int pageSize)
         => GetAsync<SetCatalogPage>($"/api/sets/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
@@ -176,7 +175,6 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── Bricks ───────────────────────────────────────────────────────────────
 
-    public Task<BrickCatalogViewDto[]?>  GetBricksCatalogViewAsync()          => GetAsync<BrickCatalogViewDto[]>("/api/bricks/catalog-view");
     public Task<BrickCatalogStatsDto?>   GetBrickCatalogStatsAsync()          => GetAsync<BrickCatalogStatsDto>("/api/bricks/catalog-stats");
     public Task<BrickCatalogPage?>       GetBricksCatalogPageAsync(string q, int page, int pageSize)
         => GetAsync<BrickCatalogPage>($"/api/bricks/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
@@ -203,12 +201,10 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── Minifigs ─────────────────────────────────────────────────────────────
 
-    public Task<MinifigCatalogViewDto[]?> GetMinifigsCatalogViewAsync()           => GetAsync<MinifigCatalogViewDto[]>("/api/minifigs/catalog-view");
     public Task<MinifigSearchDto[]?>      SearchMinifigsCatalogAsync(string q)    => GetAsync<MinifigSearchDto[]>($"/api/minifigs/catalog-search?q={Uri.EscapeDataString(q)}");
     public Task<MinifigCatalogStatsDto?>  GetMinifigCatalogStatsAsync()           => GetAsync<MinifigCatalogStatsDto>("/api/minifigs/catalog-stats");
     public Task<MinifigCatalogPage?>      GetMinifigsCatalogPageAsync(string q, int page, int pageSize)
         => GetAsync<MinifigCatalogPage>($"/api/minifigs/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
-    public Task<MinifigDto[]?>            GetMinifigsAsync()                      => GetAsync<MinifigDto[]>("/api/minifigs");
     public Task<MinifigBrickDto[]?>       GetMinifigBricksAsync(string id)        => GetAsync<MinifigBrickDto[]>($"/api/minifigs/{Uri.EscapeDataString(id)}/bricks");
     public async Task<ResolveMinifigResponse?> ResolveMinifigIdPostAsync(string query, int page = 1)
     {
@@ -331,8 +327,6 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record PreviewItemDto(string Id, string Name, string? ImgUrl);
 
     public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl);
-    public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
-    public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets, int TotalOwnedInstances, int TotalOwners, int TotalPieces);
     public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
     public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string ManualUrl, int UserOwnedCount);
     public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
@@ -351,7 +345,6 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record MyBrickDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int Stock, int UserNeeded, int UserSetCount);
     public record MyBrickSetDetailDto(string SetId, string SetName, string? SetImg, int BrickCount, int CopiesOwned);
 
-    public record MinifigDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl);
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
     public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
     public record MinifigCatalogStatsDto(int TotalMinifigs, long TotalParts);

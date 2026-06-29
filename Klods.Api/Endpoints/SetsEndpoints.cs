@@ -129,30 +129,6 @@ public static class SetsEndpoints
             return Results.Ok(result);
         });
 
-        // Global catalog view: each set + current user's owned count + global totals.
-        group.MapGet("/catalog-view", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-
-            var sets = await db.Set<Set>().AsNoTracking().OrderBy(s => s.Name).ToListAsync();
-
-            var userOwned = await db.Set<SetOwned>().AsNoTracking()
-                .Where(so => so.UserId == userId)
-                .GroupBy(so => so.SetId)
-                .Select(g => new { SetId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.SetId, x => x.Count);
-
-            var totalInstances = await db.Set<SetOwned>().CountAsync();
-            var totalOwners   = await db.Set<SetOwned>().Select(so => so.UserId).Distinct().CountAsync();
-
-            var rows = sets.Select(s => new SetCatalogViewDto(
-                s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ThemeName, s.ManualUrl,
-                userOwned.GetValueOrDefault(s.SetId, 0))).ToList();
-
-            return Results.Ok(new SetCatalogViewResponse(rows, totalInstances, totalOwners, sets.Sum(s => s.NumBricks)));
-        });
-
         // Lightweight catalog stats (no row load) for the Sets page header.
         group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory) =>
         {
@@ -222,8 +198,6 @@ public static class SetsEndpoints
 
     public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
-    public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
-    public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets, int TotalOwnedInstances, int TotalOwners, int TotalPieces);
     public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
     public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string ManualUrl, int UserOwnedCount);
     public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
