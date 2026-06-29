@@ -184,6 +184,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public Task<BrickCatalogPage?>       GetBricksCatalogPageAsync(string q, string sort, string dir, int page, int pageSize)
         => GetAsync<BrickCatalogPage>($"/api/bricks/catalog?q={Uri.EscapeDataString(q)}&sort={sort}&dir={dir}&page={page}&pageSize={pageSize}");
     public Task<SetBrickDto[]?>          GetSetsForBrickAsync(string p, string c) => GetAsync<SetBrickDto[]>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets");
+    public Task<OwnedStockDto?>          GetMyBrickStockAsync(string p, string c) => GetAsync<OwnedStockDto>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/owned");
     public async Task<ResolveBrickResponse?> ResolvePartColorsPostAsync(string partNum)
     {
         try
@@ -211,6 +212,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public Task<MinifigCatalogPage?>      GetMinifigsCatalogPageAsync(string q, string sort, string dir, int page, int pageSize)
         => GetAsync<MinifigCatalogPage>($"/api/minifigs/catalog?q={Uri.EscapeDataString(q)}&sort={sort}&dir={dir}&page={page}&pageSize={pageSize}");
     public Task<MinifigBrickDto[]?>       GetMinifigBricksAsync(string id)        => GetAsync<MinifigBrickDto[]>($"/api/minifigs/{Uri.EscapeDataString(id)}/bricks");
+    public Task<LooseCountDto?>           GetMyMinifigLooseCountAsync(string id)  => GetAsync<LooseCountDto>($"/api/minifigs/{Uri.EscapeDataString(id)}/loose-count");
     public async Task<ResolveMinifigResponse?> ResolveMinifigIdPostAsync(string query, int page = 1)
     {
         try
@@ -367,6 +369,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record BrickCatalogStatsDto(int TotalBricks, long TotalOwnedStock);
     public record BrickCatalogPage(List<BrickCatalogViewDto> Items, int Total);
     public record SetBrickDto(string SetId, string PartNum, string ColorId, int Count, int SpareCount);
+    public record OwnedStockDto(int Stock);
+    public record LooseCountDto(int Count);
     public record PartColorInfoDto(string ColorId, string ColorName, string? PartImgUrl);
     public record ResolveBrickResponse(string? PartName, List<PartColorInfoDto> Colors);
     public record MyBrickDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int Stock, int UserNeeded, int UserSetCount);

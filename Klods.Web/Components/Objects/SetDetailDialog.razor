@@ -1,0 +1,65 @@
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject ImageStorageService ImageStorage
+@inject IJSRuntime JsRuntime
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <DialogContent>
+        <MudStack AlignItems="AlignItems.Center" Spacing="2" Style="min-width: 280px;">
+            <MudImage Src="@ImageStorage.ResolveUrl(Set.SetImg)" Alt="@Set.Name"
+                      Style="width: 220px; height: 220px; object-fit: contain;" Class="rounded-lg"/>
+            <MudText Typo="Typo.h6" Align="Align.Center">@Set.Name</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @Set.SetId &middot; @Set.ReleaseYear &middot; @Set.NumBricks.ToString("N0") pcs
+            </MudText>
+            @if (!string.IsNullOrEmpty(Set.ThemeName))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Default">@Set.ThemeName</MudChip>
+            }
+
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                <MudText>Owned:</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                               Disabled="@(_owned == 0 || AuthService.CurrentUser == null)" OnClick="Decrement"/>
+                <MudText Typo="Typo.h6" Style="min-width: 32px; text-align: center;">@_owned</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                               Disabled="@(AuthService.CurrentUser == null)" OnClick="Increment"/>
+            </MudStack>
+
+            <MudButton StartIcon="@Icons.Material.Filled.MenuBook" Variant="Variant.Text" OnClick="OpenManual">
+                Building instructions
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ApiClient.SetCatalogSearchDto Set { get; set; } = null!;
+    [Parameter] public int Owned { get; set; }
+
+    private int _owned;
+
+    protected override void OnInitialized() => _owned = Owned;
+
+    private async Task Increment()
+    {
+        if (AuthService.CurrentUser == null) return;
+        if (await Api.AddOwnedSetAsync(Set.SetId)) { _owned++; StateHasChanged(); }
+    }
+
+    private async Task Decrement()
+    {
+        if (AuthService.CurrentUser == null || _owned == 0) return;
+        if (await Api.DeleteLastOwnedSetAsync(Set.SetId)) { _owned--; StateHasChanged(); }
+    }
+
+    private void OpenManual() => JsRuntime.InvokeVoidAsync("open", Set.ManualUrl, "_blank");
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(_owned));
+}

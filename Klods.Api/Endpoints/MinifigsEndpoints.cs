@@ -30,6 +30,17 @@ public static class MinifigsEndpoints
             return Results.Ok(matches);
         });
 
+        // Current user's loose-owned count for a single fig (for the detail dialog).
+        group.MapGet("/{minifigId}/loose-count", async (
+            string minifigId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            var count = await db.Set<MinifigOwned>().AsNoTracking()
+                .CountAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == null);
+            return Results.Ok(new LooseCountDto(count));
+        });
+
         // Lightweight stats for the Minifigs page header.
         group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory) =>
         {
@@ -153,6 +164,7 @@ public static class MinifigsEndpoints
     public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
     public record MinifigCatalogStatsDto(int TotalMinifigs, long TotalParts);
     public record MinifigCatalogPage(List<MinifigCatalogViewDto> Items, int Total);
+    public record LooseCountDto(int Count);
     public record MinifigBrickDto(string BrickId, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Quantity);
     public record OwnedMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock);
     public record ImportMinifigRequest(string Query, int Page = 0);
