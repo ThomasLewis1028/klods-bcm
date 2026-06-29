@@ -1,6 +1,10 @@
 using System.Text.Json.Nodes;
+using System.Xml.Linq;
 
 namespace Klods;
+
+/// <summary>A recently-added set from Rebrickable's public sets RSS feed.</summary>
+public record RssSetItem(string SetNum, string Name, DateTime PubDate);
 
 public class RebrickableApi
 {
@@ -96,6 +100,32 @@ public class RebrickableApi
     {
         _logger.LogInformation("Searching sets for {Query} (page {Page})", query, page);
         return await SendQuery($"{BaseUrl}sets/?search={Uri.EscapeDataString(query)}&page={page}&page_size=25&");
+    }
+
+    // ── Public RSS feed (no API key; newest sets first) ──────────────────────
+
+    /// <summary>Fetches Rebrickable's public "newest sets" RSS feed and parses out the set numbers + dates.</summary>
+    public async Task<List<RssSetItem>> GetRecentSetsFromRssAsync(CancellationToken ct = default)
+    {
+        _logger.LogInformation("Fetching Rebrickable sets RSS feed");
+        var xml = await _httpClient.GetStringAsync("https://rebrickable.com/sets/rss/", ct);
+        var doc = XDocument.Parse(xml);
+
+        var items = new List<RssSetItem>();
+        foreach (var item in doc.Descendants("item"))
+        {
+            // title is "<set_num> <name>", e.g. "75192-1 Millennium Falcon"
+            var title = item.Element("title")?.Value?.Trim() ?? "";
+            var split = title.Split(' ', 2);
+            var setNum = split[0];
+            if (setNum.Length == 0) continue;
+
+            var name = split.Length > 1 ? split[1] : setNum;
+            if (!DateTimeOffset.TryParse(item.Element("pubDate")?.Value, out var pub)) continue;
+
+            items.Add(new RssSetItem(setNum, name, pub.UtcDateTime));
+        }
+        return items;
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────

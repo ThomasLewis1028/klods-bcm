@@ -56,36 +56,6 @@ public class ImageStorageService
         await _minio.SetPolicyAsync(new SetPolicyArgs().WithBucket(_bucket).WithPolicy(policy));
     }
 
-    /// <summary>
-    /// Downloads the image at <paramref name="sourceUrl"/> and stores it in MinIO under
-    /// <paramref name="objectKey"/>. Returns the object key slug, or the original URL on failure.
-    /// Use <see cref="ResolveUrl"/> to convert the returned slug to a browser-accessible URL.
-    /// </summary>
-    public async Task<string?> StoreImageAsync(string? sourceUrl, string objectKey)
-    {
-        if (string.IsNullOrEmpty(sourceUrl)) return null;
-
-        try
-        {
-            var bytes = await _http.GetByteArrayAsync(sourceUrl);
-            var contentType = GuessContentType(sourceUrl);
-
-            using var stream = new MemoryStream(bytes);
-            await _minio.PutObjectAsync(new PutObjectArgs()
-                .WithBucket(_bucket)
-                .WithObject(objectKey)
-                .WithStreamData(stream)
-                .WithObjectSize(bytes.Length)
-                .WithContentType(contentType));
-
-            return $"{_bucket}/{objectKey}";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Failed to store image '{Key}' from {Url}: {Message}", objectKey, sourceUrl, ex.Message);
-            return sourceUrl;
-        }
-    }
 
     // Hosts whose images we lazily pull into MinIO (read-through). Other http URLs (e.g. avatars) pass through.
     private static readonly string[] CacheableHosts = ["cdn.rebrickable.com", "rebrickable.com"];

@@ -15,6 +15,9 @@ builder.Services.AddDbContextFactory<InventoryContext>();
 builder.Services.AddScoped<RebrickableApi>();
 builder.Services.AddScoped<ImportData>();
 builder.Services.AddScoped<BulkImportService>();
+builder.Services.AddScoped<SettingsService>();
+builder.Services.AddScoped<RssUpdateService>();
+builder.Services.AddHostedService<Klods.Api.RssBackgroundService>();
 builder.Services.AddScoped<UpdateData>();
 builder.Services.AddScoped<DeleteData>();
 

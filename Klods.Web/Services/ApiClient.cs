@@ -246,16 +246,23 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Admin ────────────────────────────────────────────────────────────────
 
     public Task<AdminUserDto[]?> GetAdminUsersAsync()     => GetAsync<AdminUserDto[]>("/api/admin/users");
-    public Task<PendingCountDto?> GetPendingCountAsync()  => GetAsync<PendingCountDto>("/api/admin/pending-count");
     public async Task<bool> ImportColorsAsync()           => (await PostAsync("/api/admin/import-colors")).Ok;
-    public async Task BackfillImagesAsync(CancellationToken ct = default)
-    {
-        try { await Http().PostAsync("/api/admin/backfill-images", null, ct); } catch { }
-    }
     public async Task<bool> SetUserRoleAsync(int userId, string role)
         => (await PatchAsync($"/api/admin/users/{userId}/role", new { Role = role })).Ok;
 
     public Task<CatalogImportDto[]?> GetCatalogImportsAsync() => GetAsync<CatalogImportDto[]>("/api/admin/catalog-imports");
+
+    public Task<RssSettingsDto?> GetRssSettingsAsync()        => GetAsync<RssSettingsDto>("/api/admin/rss-settings");
+    public async Task<bool> SetRssEnabledAsync(bool enabled)  => (await PutAsync("/api/admin/rss-settings", new { Enabled = enabled })).Ok;
+    public async Task<CatalogImportDto?> RssPollNowAsync()
+    {
+        try
+        {
+            var resp = await Http().PostAsync("/api/admin/rss-poll", null);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<CatalogImportDto>(JsonOpts) : null;
+        }
+        catch { return null; }
+    }
 
     public async Task<(bool Ok, string? Message)> BulkImportCatalogAsync(
         IReadOnlyList<IBrowserFile> files, DateTime? snapshot, CancellationToken ct = default)
@@ -360,7 +367,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs);
 
     public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl);
-    public record PendingCountDto(int Count);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
+    public record RssSettingsDto(bool Enabled);
     public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs);
 }
