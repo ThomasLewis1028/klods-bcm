@@ -205,6 +205,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public Task<MinifigCatalogViewDto[]?> GetMinifigsCatalogViewAsync()           => GetAsync<MinifigCatalogViewDto[]>("/api/minifigs/catalog-view");
     public Task<MinifigSearchDto[]?>      SearchMinifigsCatalogAsync(string q)    => GetAsync<MinifigSearchDto[]>($"/api/minifigs/catalog-search?q={Uri.EscapeDataString(q)}");
+    public Task<MinifigCatalogStatsDto?>  GetMinifigCatalogStatsAsync()           => GetAsync<MinifigCatalogStatsDto>("/api/minifigs/catalog-stats");
+    public Task<MinifigCatalogPage?>      GetMinifigsCatalogPageAsync(string q, int page, int pageSize)
+        => GetAsync<MinifigCatalogPage>($"/api/minifigs/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
     public Task<MinifigDto[]?>            GetMinifigsAsync()                      => GetAsync<MinifigDto[]>("/api/minifigs");
     public Task<MinifigBrickDto[]?>       GetMinifigBricksAsync(string id)        => GetAsync<MinifigBrickDto[]>($"/api/minifigs/{Uri.EscapeDataString(id)}/bricks");
     public async Task<ResolveMinifigResponse?> ResolveMinifigIdPostAsync(string query, int page = 1)
@@ -351,6 +354,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record MinifigDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl);
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
     public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
+    public record MinifigCatalogStatsDto(int TotalMinifigs, long TotalParts);
+    public record MinifigCatalogPage(List<MinifigCatalogViewDto> Items, int Total);
     public record MinifigBrickDto(string BrickId, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Quantity);
     public record MinifigCandidateDto(string MinifigId, string Name, int NumParts, string? ImageUrl);
     public record ResolveMinifigResponse(List<MinifigCandidateDto> Results, bool Resolved, bool HasMore);
