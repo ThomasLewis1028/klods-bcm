@@ -16,40 +16,6 @@ public static class BricksEndpoints
             return Results.Ok(bricks.Select(BrickDto.From));
         });
 
-        // Global catalog view: all bricks with total stock (all users) + needed + set count.
-        group.MapGet("/catalog-view", async (IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            await using var db = dbFactory.CreateDbContext();
-
-            var allBrickOwned = await db.Set<BrickOwned>().AsNoTracking().ToListAsync();
-            var brickStock = allBrickOwned
-                .GroupBy(bo => (bo.PartNum, bo.ColorId))
-                .ToDictionary(g => g.Key, g => g.Sum(bo => bo.Stock));
-
-            var allSetBrickOwned = await db.Set<SetBrickOwned>().AsNoTracking().ToListAsync();
-            var setBrickStock = allSetBrickOwned
-                .GroupBy(sbo => (sbo.PartNum, sbo.ColorId))
-                .ToDictionary(g => g.Key, g => g.Sum(sbo => sbo.Stock));
-
-            var setCopies    = await InventoryAggregates.GetSetCopiesAsync(db);
-            var allSetBricks = await db.Set<SetBrick>().AsNoTracking().ToListAsync();
-            var neededDict   = InventoryAggregates.GetBrickNeededDict(allSetBricks, setCopies);
-            var setCountDict = InventoryAggregates.GetBrickSetCountDict(allSetBricks);
-
-            var bricks = await db.Set<Brick>().AsNoTracking().OrderBy(b => b.Name).ToListAsync();
-            var rows = bricks.Select(b =>
-            {
-                var key = (b.PartNum, b.ColorId ?? "");
-                return new BrickCatalogViewDto(
-                    b.PartNum, b.Name, b.PartImg, b.ColorId, b.ColorName, b.HexColor, b.IsTrans, b.BricklinkId,
-                    brickStock.GetValueOrDefault(key, 0) + setBrickStock.GetValueOrDefault(key, 0),
-                    neededDict.GetValueOrDefault(key, 0),
-                    setCountDict.GetValueOrDefault(key, 0));
-            }).ToList();
-
-            return Results.Ok(rows);
-        });
-
         // Lightweight stats for the Bricks page header (no row load).
         group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory) =>
         {

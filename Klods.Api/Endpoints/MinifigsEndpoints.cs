@@ -9,30 +9,6 @@ public static class MinifigsEndpoints
     {
         var group = app.MapGroup("/api/minifigs").RequireAuthorization();
 
-        group.MapGet("/", async (IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            await using var db = dbFactory.CreateDbContext();
-            var minifigs = await db.Set<Minifig>().AsNoTracking().OrderBy(m => m.Name).ToListAsync();
-            return Results.Ok(minifigs.Select(MinifigDto.From));
-        });
-
-        // Catalog view: all minifigs with part count.
-        group.MapGet("/catalog-view", async (IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            await using var db = dbFactory.CreateDbContext();
-
-            var partCounts = await db.Set<MinifigBrick>().AsNoTracking()
-                .GroupBy(mb => mb.MinifigId)
-                .Select(g => new { MinifigId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.MinifigId, x => x.Count);
-
-            var minifigs = await db.Set<Minifig>().AsNoTracking().OrderBy(m => m.Name).ToListAsync();
-
-            return Results.Ok(minifigs.Select(m => new MinifigCatalogViewDto(
-                m.MinifigId, m.Name, m.ImgUrl, m.Url ?? "",
-                partCounts.GetValueOrDefault(m.MinifigId, 0))));
-        });
-
         // Server-side catalog search (the full ~17k-fig catalog is too large to ship to the client).
         // Only returns figs that have an image, since this powers the profile-picture picker.
         group.MapGet("/catalog-search", async (string q, IDbContextFactory<InventoryContext> dbFactory) =>
@@ -162,10 +138,6 @@ public static class MinifigsEndpoints
         });
     }
 
-    public record MinifigDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl)
-    {
-        public static MinifigDto From(Minifig m) => new(m.MinifigId, m.Name, m.ImgUrl, m.Url ?? "");
-    }
 
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
     public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
