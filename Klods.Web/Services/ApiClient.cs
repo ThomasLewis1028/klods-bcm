@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Components.Forms;
 
 namespace Klods.Services;
 
@@ -159,6 +160,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Sets ─────────────────────────────────────────────────────────────────
 
     public Task<SetCatalogViewResponse?> GetSetsCatalogViewAsync()   => GetAsync<SetCatalogViewResponse>("/api/sets/catalog-view");
+    public Task<SetCatalogStatsDto?>     GetSetCatalogStatsAsync()   => GetAsync<SetCatalogStatsDto>("/api/sets/catalog-stats");
+    public Task<SetCatalogPage?>         GetSetsCatalogPageAsync(string q, int page, int pageSize)
+        => GetAsync<SetCatalogPage>($"/api/sets/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
     public Task<MyOwnedSetDto[]?>        GetMyOwnedSetsAsync()       => GetAsync<MyOwnedSetDto[]>("/api/sets/my-owned");
     public async Task<bool> ImportSetAsync(string setId)             => (await PostAsync("/api/sets/import", new { SetId = setId })).Ok;
     public async Task<bool> AddOwnedSetAsync(string setId, bool applyBricks = false)
@@ -173,6 +177,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Bricks ───────────────────────────────────────────────────────────────
 
     public Task<BrickCatalogViewDto[]?>  GetBricksCatalogViewAsync()          => GetAsync<BrickCatalogViewDto[]>("/api/bricks/catalog-view");
+    public Task<BrickCatalogStatsDto?>   GetBrickCatalogStatsAsync()          => GetAsync<BrickCatalogStatsDto>("/api/bricks/catalog-stats");
+    public Task<BrickCatalogPage?>       GetBricksCatalogPageAsync(string q, int page, int pageSize)
+        => GetAsync<BrickCatalogPage>($"/api/bricks/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
     public Task<SetBrickDto[]?>          GetSetsForBrickAsync(string p, string c) => GetAsync<SetBrickDto[]>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets");
     public async Task<ResolveBrickResponse?> ResolvePartColorsPostAsync(string partNum)
     {
@@ -197,6 +204,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Minifigs ─────────────────────────────────────────────────────────────
 
     public Task<MinifigCatalogViewDto[]?> GetMinifigsCatalogViewAsync()           => GetAsync<MinifigCatalogViewDto[]>("/api/minifigs/catalog-view");
+    public Task<MinifigSearchDto[]?>      SearchMinifigsCatalogAsync(string q)    => GetAsync<MinifigSearchDto[]>($"/api/minifigs/catalog-search?q={Uri.EscapeDataString(q)}");
     public Task<MinifigDto[]?>            GetMinifigsAsync()                      => GetAsync<MinifigDto[]>("/api/minifigs");
     public Task<MinifigBrickDto[]?>       GetMinifigBricksAsync(string id)        => GetAsync<MinifigBrickDto[]>($"/api/minifigs/{Uri.EscapeDataString(id)}/bricks");
     public async Task<ResolveMinifigResponse?> ResolveMinifigIdPostAsync(string query, int page = 1)
@@ -216,8 +224,10 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── My Minifigs ──────────────────────────────────────────────────────────
 
     public Task<MyMinifigDto[]?>  GetMyMinifigsAsync()                                     => GetAsync<MyMinifigDto[]>("/api/myminifigs");
-    public Task<MinifigBrickDto[]?> GetMyMinifigBricksAsync(string id)                     => GetAsync<MinifigBrickDto[]>($"/api/myminifigs/{Uri.EscapeDataString(id)}/bricks");
+    public Task<MyMinifigBrickDto[]?> GetMyMinifigLooseBricksAsync(string id)              => GetAsync<MyMinifigBrickDto[]>($"/api/myminifigs/{Uri.EscapeDataString(id)}/loose-bricks");
     public async Task<bool>       UpsertMinifigStockAsync(string minifigId, int stock)     => (await PutAsync($"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/stock", new { Stock = stock })).Ok;
+    public async Task<bool>       UpdateMyMinifigLooseBrickStockAsync(string minifigId, string partNum, string colorId, int stock)
+        => (await PatchAsync($"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/loose-bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
 
     // ── BOM ──────────────────────────────────────────────────────────────────
 
@@ -231,6 +241,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}", new { Stock = stock })).Ok;
     public Task<BomBrickDto[]?> GetMinifigBricksInBomAsync(string setId, int setIndex, string minifigId)
         => GetAsync<BomBrickDto[]>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/bricks");
+    public async Task<bool> UpdateBomMinifigBrickStockAsync(string setId, int setIndex, string minifigId, string partNum, string colorId, int stock)
+        => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
@@ -243,6 +255,52 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     }
     public async Task<bool> SetUserRoleAsync(int userId, string role)
         => (await PatchAsync($"/api/admin/users/{userId}/role", new { Role = role })).Ok;
+
+    public Task<CatalogImportDto[]?> GetCatalogImportsAsync() => GetAsync<CatalogImportDto[]>("/api/admin/catalog-imports");
+
+    public async Task<(bool Ok, string? Message)> BulkImportCatalogAsync(
+        IReadOnlyList<IBrowserFile> files, DateTime? snapshot, CancellationToken ct = default)
+    {
+        const long maxFile = 600L * 1024 * 1024;
+        var temps = new List<(string Path, string Name)>();
+        try
+        {
+            // Buffer each browser file to a local temp file ONE AT A TIME. Holding several IBrowserFile
+            // streams open while HttpClient sends them sequentially makes the idle ones time out.
+            foreach (var f in files)
+            {
+                var path = Path.GetTempFileName();
+                await using (var src = f.OpenReadStream(maxFile, ct))
+                await using (var dest = File.Create(path))
+                    await src.CopyToAsync(dest, ct);
+                temps.Add((path, f.Name));
+            }
+
+            using var content = new MultipartFormDataContent();
+            if (snapshot is { } s) content.Add(new StringContent(s.ToString("o")), "snapshotDate");
+            foreach (var (path, name) in temps)
+                content.Add(new StreamContent(File.OpenRead(path)), "files", name);
+
+            // Dedicated client with a long timeout — a full COPY + upsert can run for minutes.
+            var client = factory.CreateClient("api");
+            client.Timeout = TimeSpan.FromMinutes(30);
+            if (auth.Token is not null)
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+
+            var resp = await client.PostAsync("/api/admin/bulk-import", content, ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            return (resp.IsSuccessStatusCode, body);
+        }
+        catch (Exception e)
+        {
+            return (false, e.Message);
+        }
+        finally
+        {
+            foreach (var (path, _) in temps)
+                try { File.Delete(path); } catch { /* best effort */ }
+        }
+    }
 
     // ── Users ────────────────────────────────────────────────────────────────
 
@@ -272,6 +330,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl);
     public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets, int TotalOwnedInstances, int TotalOwners, int TotalPieces);
+    public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
+    public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string ManualUrl, int UserOwnedCount);
+    public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
     public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCandidateDto(string SetNum, string Name, int Year, string? ImageUrl);
@@ -279,6 +340,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record BrickDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId);
     public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int TotalStock, int TotalNeeded, int SetCount);
+    public record BrickCatalogStatsDto(int TotalBricks, long TotalOwnedStock);
+    public record BrickCatalogPage(List<BrickCatalogViewDto> Items, int Total);
     public record SetBrickDto(string SetId, string PartNum, string ColorId, int Count, int SpareCount);
     public record PartColorInfoDto(string ColorId, string ColorName, string? PartImgUrl);
     public record ResolveBrickResponse(string? PartName, List<PartColorInfoDto> Colors);
@@ -287,10 +350,12 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record MinifigDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl);
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
+    public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
     public record MinifigBrickDto(string BrickId, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Quantity);
     public record MinifigCandidateDto(string MinifigId, string Name, int NumParts, string? ImageUrl);
     public record ResolveMinifigResponse(List<MinifigCandidateDto> Results, bool Resolved, bool HasMore);
-    public record MyMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock, int UserNeeded, int UserSetCount, int PartCount);
+    public record MyMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock, int InUseStock, int UserNeeded, int UserSetCount, int PartCount);
+    public record MyMinifigBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
@@ -298,5 +363,6 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl);
     public record PendingCountDto(int Count);
+    public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
     public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs);
 }

@@ -153,6 +153,54 @@ public static class SetsEndpoints
             return Results.Ok(new SetCatalogViewResponse(rows, totalInstances, totalOwners, sets.Sum(s => s.NumBricks)));
         });
 
+        // Lightweight catalog stats (no row load) for the Sets page header.
+        group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            await using var db = dbFactory.CreateDbContext();
+            var totalSets   = await db.Set<Set>().CountAsync();
+            var totalOwned  = await db.Set<SetOwned>().CountAsync();
+            var totalOwners = await db.Set<SetOwned>().Select(so => so.UserId).Distinct().CountAsync();
+            var totalPieces = await db.Set<Set>().SumAsync(s => (long)s.NumBricks);
+            return Results.Ok(new SetCatalogStatsDto(totalSets, totalOwned, totalOwners, totalPieces));
+        });
+
+        // Server-side, paginated catalog browse/search. Empty query => latest sets first.
+        group.MapGet("/catalog", async (string? q, int page, int pageSize, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            if (pageSize is <= 0 or > 200) pageSize = 25;
+            if (page < 0) page = 0;
+            var query = (q ?? "").Trim();
+
+            await using var db = dbFactory.CreateDbContext();
+
+            IQueryable<Set> baseQ = db.Set<Set>().AsNoTracking();
+            if (query.Length >= 2)
+            {
+                var like = $"%{query}%";
+                baseQ = baseQ.Where(s => EF.Functions.ILike(s.SetId, like) || EF.Functions.ILike(s.Name, like))
+                             .OrderBy(s => s.Name);
+            }
+            else
+            {
+                baseQ = baseQ.OrderByDescending(s => s.ReleaseYear).ThenBy(s => s.Name);
+            }
+
+            var total = await baseQ.CountAsync();
+            var pageItems = await baseQ.Skip(page * pageSize).Take(pageSize).ToListAsync();
+
+            var ids = pageItems.Select(s => s.SetId).ToList();
+            var ownedCounts = (await db.Set<SetOwned>().AsNoTracking()
+                    .Where(so => so.UserId == userId && ids.Contains(so.SetId)).ToListAsync())
+                .GroupBy(so => so.SetId).ToDictionary(g => g.Key, g => g.Count());
+
+            var items = pageItems.Select(s => new SetCatalogSearchDto(
+                s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ManualUrl,
+                ownedCounts.GetValueOrDefault(s.SetId, 0))).ToList();
+
+            return Results.Ok(new SetCatalogPage(items, total));
+        });
+
         // Admin: remove a set from the catalog entirely.
         group.MapDelete("/{setId}", (string setId, DeleteData deleter) =>
         {
@@ -176,4 +224,7 @@ public static class SetsEndpoints
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCatalogViewDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogViewResponse(List<SetCatalogViewDto> Sets, int TotalOwnedInstances, int TotalOwners, int TotalPieces);
+    public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
+    public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string ManualUrl, int UserOwnedCount);
+    public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
 }

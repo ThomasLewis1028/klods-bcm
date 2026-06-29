@@ -3,11 +3,9 @@
 @inject IDialogService DialogService
 @inject ApiClient Api
 @inject ImageStorageService ImageStorage
-@using System.Drawing
 @using Klods.Components.Objects
 @using Klods.Services
 @using Color = MudBlazor.Color
-@using BrickColor = Color
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
 
@@ -24,20 +22,37 @@
 }
 
 <MudGrid>
+    @* Stats *@
+    <MudItem xs="12" sm="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudStack AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalBricks.ToString("N0")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Bricks in Catalog</MudText>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudStack AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalOwnedStock.ToString("N0")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Owned Stock</MudText>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    @* Search *@
     <MudItem xs="12">
-        <MudDataGrid T="BrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
-                     SortMode="@SortMode.Multiple" QuickFilter="BrickFilterFunc" ReadOnly="true">
-            <ToolBarContent>
-                <MudText Typo="Typo.h6">Total Bricks: @_brickInfos.Count</MudText>
-                <MudSpacer/>
-                <MudText Typo="Typo.h6">Total Stock: @_totalStock</MudText>
-                <MudSpacer/>
-                <MudText Typo="Typo.h6">Total Needed: @_totalNeeded</MudText>
-                <MudSpacer/>
-                <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
-                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
-                              Class="mt-0"/>
-            </ToolBarContent>
+        <MudTextField T="string" Value="_query" ValueChanged="OnQueryChanged"
+                      Immediate="true" DebounceInterval="350"
+                      Placeholder="Search by part number, name, or color — or just browse the most-used below…"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined" Clearable="true"/>
+    </MudItem>
+
+    @* Catalog (server-paginated; most-used bricks by default) *@
+    <MudItem xs="12">
+        <MudDataGrid T="BrickInfo" @ref="_grid" ServerData="LoadServerData"
+                     SortMode="SortMode.None" ReadOnly="true">
             <Columns>
                 <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Brick.SetCount == 0)"/>
                 <TemplateColumn Title="Image" Editable="false">
@@ -51,7 +66,7 @@
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Brick.PartNum" Title="Id" Editable="false"/>
                 <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
-                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
+                <TemplateColumn Title="Color" Editable="false">
                     <CellTemplate>
                         <MudStack Row>
                             @if (context.Item.Brick.HexColor != null)
@@ -107,6 +122,23 @@
                 </div>
             </ChildRowContent>
 
+            <NoRecordsContent>
+                @if (_query.Trim().Length >= 2)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
+                        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary"/>
+                        <MudText Typo="Typo.h6">No bricks match “@_query”</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
+                            Double-check the spelling, or try the part number (e.g. <em>3001</em>) or a color name.
+                        </MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Class="pa-6" Align="Align.Center" Color="Color.Secondary">No bricks found.</MudText>
+                }
+            </NoRecordsContent>
+
             <PagerContent>
                 <MudDataGridPager T="BrickInfo"/>
             </PagerContent>
@@ -115,43 +147,44 @@
 </MudGrid>
 
 @code {
-    private List<BrickInfo> _brickInfos = [];
-    private int _totalStock;
-    private int _totalNeeded;
-    private string searchString = "";
+    private MudDataGrid<BrickInfo> _grid = null!;
+    private string _query = "";
+    private int _totalBricks;
+    private long _totalOwnedStock;
     private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
-        var bricks = await Api.GetBricksCatalogViewAsync();
-        if (bricks != null)
+        var stats = await Api.GetBrickCatalogStatsAsync();
+        if (stats != null)
         {
-            _brickInfos = bricks.Select(b => new BrickInfo { Brick = b }).ToList();
-            _totalStock = _brickInfos.Sum(b => b.Brick.TotalStock);
-            _totalNeeded = _brickInfos.Sum(b => b.Brick.TotalNeeded);
+            _totalBricks = stats.TotalBricks;
+            _totalOwnedStock = stats.TotalOwnedStock;
         }
         _isLoading = false;
         StateHasChanged();
     }
 
+    private async Task<GridData<BrickInfo>> LoadServerData(GridState<BrickInfo> state)
+    {
+        var page = await Api.GetBricksCatalogPageAsync(_query.Trim(), state.Page, state.PageSize);
+        var rows = (page?.Items ?? []).Select(b => new BrickInfo { Brick = b }).ToList();
+        return new GridData<BrickInfo> { Items = rows, TotalItems = page?.Total ?? 0 };
+    }
+
+    private async Task OnQueryChanged(string value)
+    {
+        _query = value ?? "";
+        if (_grid is not null) await _grid.ReloadServerData();
+    }
+
     private async Task LoadSetBricksAsync(BrickInfo info)
     {
         if (info.IsLoaded) return;
-        var setId = info.Brick.ColorId;
         var result = await Api.GetSetsForBrickAsync(info.Brick.PartNum, info.Brick.ColorId ?? "");
         info.SetBricks = result?.ToList() ?? [];
         info.IsLoaded = true;
         StateHasChanged();
-    }
-
-    private bool BrickFilterFunc(BrickInfo b)
-    {
-        if (string.IsNullOrWhiteSpace(searchString)) return true;
-        if (b.Brick.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase)) return true;
-        if (b.Brick.PartNum.Contains(searchString, StringComparison.OrdinalIgnoreCase)) return true;
-        if (b.Brick.ColorId?.Contains(searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
-        if (b.Brick.ColorName?.Contains(searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
-        return false;
     }
 
     private Task OpenImagePopup(string id, string name, string? imgUrl) =>

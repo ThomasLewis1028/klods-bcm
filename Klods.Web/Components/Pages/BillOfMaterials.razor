@@ -292,7 +292,12 @@
                                         </TemplateColumn>
                                         <TemplateColumn Title="Stock Used">
                                             <CellTemplate>
-                                                <MudText>@context.Item.SetStock</MudText>
+                                                <MudNumericField T="int"
+                                                                 Value="@context.Item.SetStock"
+                                                                 ValueChanged="@(v => SaveMinifigBrickOwnedStock(minifigContext.Item, context.Item, v))"
+                                                                 Min="0"
+                                                                 Disabled="@(AuthService.CurrentUser == null)"
+                                                                 Variant="Variant.Text"/>
                                             </CellTemplate>
                                         </TemplateColumn>
                                     </Columns>
@@ -389,6 +394,15 @@
                 Minifig = m,
                 OwnedStock = m.OwnedStock
             }).ToList();
+
+            // Load each fig's parts (with this copy's owned stock) for the expandable child grid.
+            foreach (var mi in _setMinifigInfo)
+            {
+                var bricks = await Api.GetMinifigBricksInBomAsync(_setId, setIndex, mi.Minifig.MinifigId);
+                mi.BomBricks = (bricks ?? [])
+                    .Select(b => new SetBrickInfo { Brick = b, SetStock = b.SetStock, LooseStock = b.LooseStock })
+                    .ToList();
+            }
         }
 
         _isLoading = false;
@@ -522,7 +536,7 @@
         StateHasChanged();
     }
 
-    private async void SaveSetBrickOwnedStock(SetBrickInfo info, int newValue)
+    private async Task SaveSetBrickOwnedStock(SetBrickInfo info, int newValue)
     {
         if (AuthService.CurrentUser == null || _setId == null) return;
         info.SetStock = newValue;
@@ -531,7 +545,7 @@
         StateHasChanged();
     }
 
-    private async void SaveBrickOwnedStock(SetBrickInfo info, int newValue)
+    private async Task SaveBrickOwnedStock(SetBrickInfo info, int newValue)
     {
         if (AuthService.CurrentUser == null || _setId == null) return;
         info.LooseStock = newValue;
@@ -540,12 +554,22 @@
         StateHasChanged();
     }
 
-    private async void SaveMinifigOwnedStock(SetMinifigInfo info, int newValue)
+    private async Task SaveMinifigOwnedStock(SetMinifigInfo info, int newValue)
     {
         if (AuthService.CurrentUser == null || _setId == null) return;
         info.OwnedStock = newValue;
         if (!await Api.UpdateBomMinifigStockAsync(_setId, _currentSetIndex, info.Minifig.MinifigId, newValue))
             _ = OpenErrorPopup("Failed to save minifig stock.");
+        StateHasChanged();
+    }
+
+    private async Task SaveMinifigBrickOwnedStock(SetMinifigInfo minifig, SetBrickInfo info, int newValue)
+    {
+        if (AuthService.CurrentUser == null || _setId == null) return;
+        info.SetStock = newValue;
+        if (!await Api.UpdateBomMinifigBrickStockAsync(
+                _setId, _currentSetIndex, minifig.Minifig.MinifigId, info.Brick.PartNum, info.Brick.ColorId, newValue))
+            _ = OpenErrorPopup("Failed to save minifig part stock.");
         StateHasChanged();
     }
 

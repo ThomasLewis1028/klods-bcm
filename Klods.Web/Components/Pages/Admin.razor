@@ -3,6 +3,7 @@
 @inject AuthService AuthService
 @inject ImageStorageService ImageStorage
 @using Klods.Services
+@using Microsoft.AspNetCore.Components.Forms
 @using Color = MudBlazor.Color
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
@@ -121,6 +122,52 @@
         }
     </MudPaper>
 
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Catalog Bulk Import</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Upload the Rebrickable bulk files (.csv, .csv.gz, or a .zip of them). All required tables must be
+            present — the load is all-or-nothing, so a missing file rejects the whole batch.
+        </MudText>
+
+        @if (_catalogImports.FirstOrDefault(c => c.Status == "Success") is { } last)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                Last refreshed @last.ImportedAt.ToLocalTime().ToString("g")
+                @(last.SnapshotDate is { } sd ? $"(snapshot {sd.ToLocalTime():d})" : "")
+            </MudAlert>
+        }
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+            <MudFileUpload T="IReadOnlyList<IBrowserFile>" @bind-Files="_bulkFiles"
+                           Accept=".csv,.gz,.zip" MaximumFileCount="20">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.UploadFile">
+                        Select files
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+
+            <MudText Typo="Typo.body2">@(_bulkFiles?.Count ?? 0) file(s) selected</MudText>
+
+            <MudButton OnClick="RunBulkImport" Color="Color.Primary" Variant="Variant.Filled"
+                       Disabled="@(_bulkRunning || _bulkFiles is null || _bulkFiles.Count == 0)">
+                @(_bulkRunning ? "Importing..." : "Run import")
+            </MudButton>
+            @if (_bulkRunning)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+            }
+        </MudStack>
+
+        @if (_bulkResult is not null)
+        {
+            <MudAlert Severity="@(_bulkSucceeded ? Severity.Success : Severity.Error)" Dense="true" Class="mt-3">
+                @_bulkResult
+            </MudAlert>
+        }
+    </MudPaper>
+
 </MudStack>
 
 @code {
@@ -132,6 +179,12 @@
     private bool _backfillRunning;
     private CancellationTokenSource? _cts;
 
+    private IReadOnlyList<IBrowserFile>? _bulkFiles;
+    private bool _bulkRunning;
+    private bool _bulkSucceeded;
+    private string? _bulkResult;
+    private List<ApiClient.CatalogImportDto> _catalogImports = [];
+
     protected override async Task OnInitializedAsync()
     {
         var users = await Api.GetAdminUsersAsync();
@@ -140,7 +193,29 @@
         var pending = await Api.GetPendingCountAsync();
         _pendingCount = pending?.Count ?? 0;
 
+        _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+
         _isLoading = false;
+    }
+
+    private async Task RunBulkImport()
+    {
+        if (_bulkFiles is null || _bulkFiles.Count == 0) return;
+
+        _bulkRunning = true;
+        _bulkResult = null;
+        StateHasChanged();
+
+        // Snapshot date = newest selected file's last-modified (when the dump was pulled).
+        DateTime? snapshot = _bulkFiles.Max(f => (DateTime?)f.LastModified.UtcDateTime);
+        var (ok, msg) = await Api.BulkImportCatalogAsync(_bulkFiles, snapshot);
+
+        _bulkSucceeded = ok;
+        _bulkResult = ok ? "Catalog import succeeded." : $"Import failed: {msg}";
+        _bulkFiles = null;
+        _bulkRunning = false;
+        _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+        StateHasChanged();
     }
 
     private Task MakeAdmin(ApiClient.AdminUserDto user)   => SetRole(user, "Admin");

@@ -33,7 +33,7 @@
             <ToolBarContent>
                 <MudText Typo="Typo.h6">My Minifigs: @_minifigInfos.Count</MudText>
                 <MudSpacer/>
-                <MudText Typo="Typo.h6">In Stock: @_minifigInfos.Sum(m => m.Stock)</MudText>
+                <MudText Typo="Typo.h6">Owned: @_minifigInfos.Sum(m => m.Minifig.Stock + m.Minifig.InUseStock)</MudText>
                 <MudSpacer/>
                 <MudText Typo="Typo.h6">Needed: @_minifigInfos.Sum(m => m.Minifig.UserNeeded)</MudText>
                 <MudSpacer/>
@@ -62,15 +62,17 @@
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Id" Editable="false"/>
                 <PropertyColumn Property="x => x.Minifig.MinifigName" Title="Name" Editable="false"/>
-                <TemplateColumn Title="My Stock" Editable="false" Sortable="true" SortBy="x => x.Stock">
+                <TemplateColumn Title="Loose" Editable="false" Sortable="true" SortBy="x => x.Stock">
                     <CellTemplate>
                         <MudNumericField T="int"
                                          Value="@context.Item.Stock"
                                          ValueChanged="@(v => SaveMinifigOwnedStock(context.Item, v))"
                                          Min="0"
+                                         Disabled="@(AuthService.CurrentUser == null)"
                                          Variant="Variant.Text"/>
                     </CellTemplate>
                 </TemplateColumn>
+                <PropertyColumn Property="x => x.Minifig.InUseStock" Title="In Use" Editable="false"/>
                 <PropertyColumn Property="x => x.Minifig.UserNeeded" Title="Needed" Editable="false"/>
                 <PropertyColumn Property="x => x.Minifig.UserSetCount" Title="Sets" Editable="false"/>
                 <PropertyColumn Property="x => x.Minifig.PartCount" Title="Parts" Editable="false"/>
@@ -124,7 +126,17 @@
                                         </MudStack>
                                     </CellTemplate>
                                 </TemplateColumn>
-                                <PropertyColumn Title="Quantity" Property="x => x.Quantity"/>
+                                <PropertyColumn Title="Need" Property="x => x.Need" Editable="false"/>
+                                <TemplateColumn Title="Owned">
+                                    <CellTemplate>
+                                        <MudNumericField T="int"
+                                                         Value="@context.Item.Owned"
+                                                         ValueChanged="@(v => SaveLooseBrickStock(minifigContext.Item, context.Item, v))"
+                                                         Min="0"
+                                                         Disabled="@(AuthService.CurrentUser == null)"
+                                                         Variant="Variant.Text"/>
+                                    </CellTemplate>
+                                </TemplateColumn>
                             </Columns>
                         </MudDataGrid>
                     </MudCard>
@@ -185,26 +197,35 @@
     private async Task LoadMinifigBricksAsync(MyMinifigInfo info)
     {
         if (info.IsLoaded) return;
-        var bricks = await Api.GetMyMinifigBricksAsync(info.Minifig.MinifigId);
+        var bricks = await Api.GetMyMinifigLooseBricksAsync(info.Minifig.MinifigId);
         info.Bricks = bricks?.Select(b => new BrickEntry
         {
-            BrickId = b.BrickId,
+            BrickId = b.PartNum,
             ColorId = b.ColorId,
             Name = b.Name,
             PartImg = b.PartImg,
             ColorName = b.ColorName,
             HexColor = b.HexColor,
-            Quantity = b.Quantity
+            Need = b.Need,
+            Owned = b.Owned
         }).ToList() ?? [];
         info.IsLoaded = true;
         StateHasChanged();
     }
 
-    private async void SaveMinifigOwnedStock(MyMinifigInfo info, int newValue)
+    private async Task SaveMinifigOwnedStock(MyMinifigInfo info, int newValue)
     {
         if (newValue < 0) return;
         info.Stock = newValue;
         await Api.UpsertMinifigStockAsync(info.Minifig.MinifigId, newValue);
+        StateHasChanged();
+    }
+
+    private async Task SaveLooseBrickStock(MyMinifigInfo minifig, BrickEntry brick, int newValue)
+    {
+        if (newValue < 0) return;
+        brick.Owned = newValue;
+        await Api.UpdateMyMinifigLooseBrickStockAsync(minifig.Minifig.MinifigId, brick.BrickId, brick.ColorId, newValue);
         StateHasChanged();
     }
 
@@ -248,6 +269,7 @@
         public string? PartImg { get; set; }
         public string? ColorName { get; set; }
         public string? HexColor { get; set; }
-        public int Quantity { get; set; }
+        public int Need { get; set; }
+        public int Owned { get; set; }
     }
 }

@@ -27,7 +27,7 @@
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudStack AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalSets</MudText>
+                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalSets.ToString("N0")</MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary">Sets in Catalog</MudText>
             </MudStack>
         </MudPaper>
@@ -57,25 +57,19 @@
         </MudPaper>
     </MudItem>
 
-    @* Grid *@
+    @* Search *@
     <MudItem xs="12">
-        <MudDataGrid T="SetCatalogRow" Items="@_rows.OrderBy(r => r.Set.SetId)"
-                     SortMode="@SortMode.Multiple" QuickFilter="FilterFunc" ReadOnly="true">
-            <ToolBarContent>
-                <MudText Typo="Typo.h6">All Sets</MudText>
-                <MudSpacer/>
-                <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
-                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
-                              IconSize="Size.Medium" Class="mt-0 me-3"/>
-                <MudTooltip Text="@(AuthService.CurrentUser == null ? "You must be logged in to import sets" : "Import Sets")">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Download)"
-                               Disabled="@(AuthService.CurrentUser == null)"
-                               OnClick="OpenImportDialog">
-                        Import
-                    </MudButton>
-                </MudTooltip>
-            </ToolBarContent>
+        <MudTextField T="string" Value="_query" ValueChanged="OnQueryChanged"
+                      Immediate="true" DebounceInterval="350"
+                      Placeholder="Search the catalog by set name or number — or just browse the latest below…"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined" Clearable="true"/>
+    </MudItem>
+
+    @* Catalog (server-paginated; latest sets by default) *@
+    <MudItem xs="12">
+        <MudDataGrid T="SetCatalogRow" @ref="_grid" ServerData="LoadServerData"
+                     SortMode="SortMode.None" ReadOnly="true">
             <Columns>
                 <TemplateColumn Title="Image" Editable="false">
                     <CellTemplate>
@@ -90,7 +84,7 @@
                 <PropertyColumn Property="x => x.Set.Name" Title="Name" Editable="false"/>
                 <PropertyColumn Property="x => x.Set.ReleaseYear" Title="Year" Editable="false"/>
                 <PropertyColumn Property="x => x.Set.NumBricks" Title="Pieces" Editable="false"/>
-                <TemplateColumn Title="Owned" Editable="false" SortBy="x => x.UserOwnedCount">
+                <TemplateColumn Title="Owned" Editable="false">
                     <CellTemplate>
                         <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                             <MudIconButton Icon="@Icons.Material.Filled.Remove"
@@ -113,6 +107,31 @@
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>
+            <NoRecordsContent>
+                @if (_query.Trim().Length >= 2)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Spacing="3" Class="pa-6">
+                        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary"/>
+                        <MudText Typo="Typo.h6">No sets match “@_query”</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
+                            Double-check the spelling or try the set number (e.g. <em>75192-1</em>). If it's a brand-new
+                            set that isn't in our catalog yet, you can pull it straight from Rebrickable.
+                        </MudText>
+                        <MudTooltip Text="@(AuthService.CurrentUser == null ? "You must be logged in to import sets" : "Import from Rebrickable")">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Download)"
+                                       Disabled="@(AuthService.CurrentUser == null)"
+                                       OnClick="OpenImportDialog">
+                                Import a set from Rebrickable
+                            </MudButton>
+                        </MudTooltip>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Class="pa-6" Align="Align.Center" Color="Color.Secondary">No sets found.</MudText>
+                }
+            </NoRecordsContent>
             <PagerContent>
                 <MudDataGridPager T="SetCatalogRow"/>
             </PagerContent>
@@ -121,27 +140,39 @@
 </MudGrid>
 
 @code {
-    private List<SetCatalogRow> _rows = [];
-    private string _searchString = "";
+    private MudDataGrid<SetCatalogRow> _grid = null!;
+    private string _query = "";
     private int _totalSets;
     private int _totalOwnedInstances;
     private int _totalOwners;
-    private int _totalPieces;
+    private long _totalPieces;
     private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
-        var response = await Api.GetSetsCatalogViewAsync();
-        if (response != null)
+        var stats = await Api.GetSetCatalogStatsAsync();
+        if (stats != null)
         {
-            _rows = response.Sets.Select(s => new SetCatalogRow { Set = s, UserOwnedCount = s.UserOwnedCount }).ToList();
-            _totalSets = response.Sets.Count;
-            _totalOwnedInstances = response.TotalOwnedInstances;
-            _totalOwners = response.TotalOwners;
-            _totalPieces = response.TotalPieces;
+            _totalSets = stats.TotalSets;
+            _totalOwnedInstances = stats.TotalOwnedInstances;
+            _totalOwners = stats.TotalOwners;
+            _totalPieces = stats.TotalPieces;
         }
         _isLoading = false;
         StateHasChanged();
+    }
+
+    private async Task<GridData<SetCatalogRow>> LoadServerData(GridState<SetCatalogRow> state)
+    {
+        var page = await Api.GetSetsCatalogPageAsync(_query.Trim(), state.Page, state.PageSize);
+        var rows = (page?.Items ?? []).Select(s => new SetCatalogRow { Set = s, UserOwnedCount = s.UserOwnedCount }).ToList();
+        return new GridData<SetCatalogRow> { Items = rows, TotalItems = page?.Total ?? 0 };
+    }
+
+    private async Task OnQueryChanged(string value)
+    {
+        _query = value ?? "";
+        if (_grid is not null) await _grid.ReloadServerData();
     }
 
     private async Task OpenImportDialog()
@@ -150,7 +181,10 @@
             new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
         var result = await dialog.Result;
         if (!result.Canceled)
+        {
             await OnInitializedAsync();
+            if (_grid is not null) await _grid.ReloadServerData();
+        }
     }
 
     private async Task IncrementOwned(SetCatalogRow row)
@@ -175,14 +209,6 @@
         }
     }
 
-    private bool FilterFunc(SetCatalogRow row)
-    {
-        if (string.IsNullOrWhiteSpace(_searchString)) return true;
-        if (row.Set.SetId.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
-        if (row.Set.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
-    }
-
     private Task OpenImagePopup(string setId, string setName, string? setImgUrl)
     {
         var parameters = new DialogParameters<ImagePopup>
@@ -202,7 +228,7 @@
 
     private class SetCatalogRow
     {
-        public ApiClient.SetCatalogViewDto Set { get; set; } = null!;
+        public ApiClient.SetCatalogSearchDto Set { get; set; } = null!;
         public int UserOwnedCount { get; set; }
     }
 }

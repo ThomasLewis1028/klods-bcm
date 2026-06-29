@@ -191,7 +191,7 @@
         StateHasChanged();
     }
 
-    private async void SaveBrickOwnedStock(MyBrickInfo info, int newValue)
+    private async Task SaveBrickOwnedStock(MyBrickInfo info, int newValue)
     {
         if (newValue < 0) return;
         info.Stock = newValue;

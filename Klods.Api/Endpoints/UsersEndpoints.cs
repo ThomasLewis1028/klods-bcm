@@ -23,7 +23,7 @@ public static class UsersEndpoints
 
             var minifigCounts = (await db.Set<MinifigOwned>().AsNoTracking().ToListAsync())
                 .GroupBy(mo => mo.UserId)
-                .ToDictionary(g => g.Key, g => g.Sum(mo => mo.Stock));
+                .ToDictionary(g => g.Key, g => g.Count());
 
             var users = await db.Users.AsNoTracking().OrderBy(u => u.UserName).ToListAsync();
 
