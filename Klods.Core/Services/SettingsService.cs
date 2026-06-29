@@ -16,6 +16,9 @@ public class SettingsService(IDbContextFactory<InventoryContext> contextFactory)
     public async Task<bool> GetBoolAsync(string key, bool fallback = false, CancellationToken ct = default)
         => await GetAsync(key, ct) is { } v ? v == "true" : fallback;
 
+    public async Task<int> GetIntAsync(string key, int fallback, CancellationToken ct = default)
+        => int.TryParse(await GetAsync(key, ct), out var n) ? n : fallback;
+
     public async Task SetAsync(string key, string value, CancellationToken ct = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(ct);

@@ -81,19 +81,50 @@ public static class AdminEndpoints
             return Results.Ok(rows);
         });
 
-        // RSS auto-update toggle + manual poll.
+        // RSS auto-update settings + manual poll.
         group.MapGet("/rss-settings", async (SettingsService settings) =>
-            Results.Ok(new RssSettingsDto(await settings.GetBoolAsync(RssUpdateService.EnabledKey))));
+            Results.Ok(new RssSettingsDto(
+                await settings.GetBoolAsync(RssUpdateService.EnabledKey),
+                await settings.GetAsync(RssUpdateService.CronKey) ?? RssUpdateService.DefaultCron,
+                await settings.GetAsync(RssUpdateService.TimezoneKey) ?? RssUpdateService.DefaultTimezone,
+                await settings.GetIntAsync(RssUpdateService.MaxImportsKey, RssUpdateService.DefaultMaxImports))));
 
         group.MapPut("/rss-settings", async (RssSettingsDto req, SettingsService settings) =>
         {
+            var cron = (req.Cron ?? "").Trim();
+            if (NCrontab.CrontabSchedule.TryParse(cron) is null)
+                return Results.BadRequest("Invalid cron expression (expected 5 fields, e.g. '0 3 * * *').");
+            var tz = (req.Timezone ?? "").Trim();
+            if (!CronHelper.IsValidTimeZone(tz))
+                return Results.BadRequest($"Unknown timezone '{tz}'.");
+            var max = Math.Clamp(req.MaxImports, 1, 500);
+
             await settings.SetAsync(RssUpdateService.EnabledKey, req.Enabled ? "true" : "false");
+            await settings.SetAsync(RssUpdateService.CronKey, cron);
+            await settings.SetAsync(RssUpdateService.TimezoneKey, tz);
+            await settings.SetAsync(RssUpdateService.MaxImportsKey, max.ToString());
             return Results.Ok();
         });
 
-        group.MapPost("/rss-poll", async (RssUpdateService rss, CancellationToken ct) =>
+        // Available timezones for the schedule picker.
+        group.MapGet("/timezones", () =>
+            Results.Ok(TimeZoneInfo.GetSystemTimeZones()
+                .Select(t => new TimezoneDto(t.Id, t.DisplayName))
+                .ToList()));
+
+        // Live preview: the next few runs of a cron expression in a given timezone (also validates).
+        group.MapGet("/cron-preview", (string cron, string? tz) =>
         {
-            var result = await rss.PollAsync(ct: ct);
+            var next = CronHelper.NextOccurrencesLocal((cron ?? "").Trim(), CronHelper.ResolveTimeZone(tz), 5);
+            return Results.Ok(new CronPreviewDto(
+                next.Count > 0,
+                next.Select(d => d.ToString("ddd, dd MMM yyyy HH:mm")).ToList()));
+        });
+
+        group.MapPost("/rss-poll", async (RssUpdateService rss, SettingsService settings, CancellationToken ct) =>
+        {
+            var max = await settings.GetIntAsync(RssUpdateService.MaxImportsKey, RssUpdateService.DefaultMaxImports, ct);
+            var result = await rss.PollAsync(max, ct);
             return Results.Ok(new CatalogImportDto(result.ImportedAt, result.SnapshotDate, result.Source, result.Status, result.Notes));
         });
 
@@ -134,5 +165,7 @@ public static class AdminEndpoints
     public record SetRoleRequest(string Role);
     public record BulkImportResultDto(string Status, string? Notes, DateTime ImportedAt);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
-    public record RssSettingsDto(bool Enabled);
+    public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
+    public record TimezoneDto(string Id, string DisplayName);
+    public record CronPreviewDto(bool Valid, List<string> Next);
 }

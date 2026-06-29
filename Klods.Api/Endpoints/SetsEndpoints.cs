@@ -140,8 +140,10 @@ public static class SetsEndpoints
             return Results.Ok(new SetCatalogStatsDto(totalSets, totalOwned, totalOwners, totalPieces));
         });
 
-        // Server-side, paginated catalog browse/search. Empty query => latest sets first.
-        group.MapGet("/catalog", async (string? q, int page, int pageSize, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        // Server-side, paginated catalog browse/search with optional theme filter + sort.
+        group.MapGet("/catalog", async (
+            string? q, int? theme, string? sort, string? dir, int page, int pageSize,
+            HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
             if (pageSize is <= 0 or > 200) pageSize = 25;
@@ -154,13 +156,12 @@ public static class SetsEndpoints
             if (query.Length >= 2)
             {
                 var like = $"%{query}%";
-                baseQ = baseQ.Where(s => EF.Functions.ILike(s.SetId, like) || EF.Functions.ILike(s.Name, like))
-                             .OrderBy(s => s.Name);
+                baseQ = baseQ.Where(s => EF.Functions.ILike(s.SetId, like) || EF.Functions.ILike(s.Name, like));
             }
-            else
-            {
-                baseQ = baseQ.OrderByDescending(s => s.ReleaseYear).ThenBy(s => s.Name);
-            }
+            if (theme is int themeId)
+                baseQ = baseQ.Where(s => s.ThemeId == themeId);
+
+            baseQ = SortSets(baseQ, sort, dir);
 
             var total = await baseQ.CountAsync();
             var pageItems = await baseQ.Skip(page * pageSize).Take(pageSize).ToListAsync();
@@ -171,10 +172,23 @@ public static class SetsEndpoints
                 .GroupBy(so => so.SetId).ToDictionary(g => g.Key, g => g.Count());
 
             var items = pageItems.Select(s => new SetCatalogSearchDto(
-                s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ManualUrl,
+                s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ThemeName, s.ManualUrl,
                 ownedCounts.GetValueOrDefault(s.SetId, 0))).ToList();
 
             return Results.Ok(new SetCatalogPage(items, total));
+        });
+
+        // Distinct themes that have sets, for the filter dropdown.
+        group.MapGet("/themes", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            await using var db = dbFactory.CreateDbContext();
+            var themes = await db.Set<Set>().AsNoTracking()
+                .Where(s => s.ThemeId != null && s.ThemeName != null)
+                .Select(s => new { Id = s.ThemeId!.Value, Name = s.ThemeName! })
+                .Distinct()
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+            return Results.Ok(themes.Select(t => new ThemeDto(t.Id, t.Name)).ToList());
         });
 
         // Admin: remove a set from the catalog entirely.
@@ -183,6 +197,21 @@ public static class SetsEndpoints
             var ok = deleter.DeleteSetInfo(setId);
             return ok ? Results.Ok() : Results.NotFound();
         }).RequireAuthorization("Admin");
+    }
+
+    // Whitelisted server-side sort. Default: latest sets first.
+    private static IQueryable<Set> SortSets(IQueryable<Set> q, string? sort, string? dir)
+    {
+        var desc = dir != "asc";
+        return (sort ?? "year") switch
+        {
+            "name"   => desc ? q.OrderByDescending(s => s.Name) : q.OrderBy(s => s.Name),
+            "id"     => desc ? q.OrderByDescending(s => s.SetId) : q.OrderBy(s => s.SetId),
+            "pieces" => desc ? q.OrderByDescending(s => s.NumBricks) : q.OrderBy(s => s.NumBricks),
+            "theme"  => desc ? q.OrderByDescending(s => s.ThemeName) : q.OrderBy(s => s.ThemeName),
+            _        => desc ? q.OrderByDescending(s => s.ReleaseYear).ThenBy(s => s.Name)
+                             : q.OrderBy(s => s.ReleaseYear).ThenBy(s => s.Name),
+        };
     }
 
     public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName)
@@ -199,6 +228,7 @@ public static class SetsEndpoints
     public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
-    public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string ManualUrl, int UserOwnedCount);
+    public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
+    public record ThemeDto(int Id, string Name);
 }

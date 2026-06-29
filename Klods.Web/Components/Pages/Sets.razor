@@ -1,14 +1,16 @@
 @page "/sets"
-@inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
+@inject NavigationManager Nav
 @inject AuthService AuthService
 @inject ApiClient Api
 @inject ImageStorageService ImageStorage
 @using Klods.Components.Objects
 @using Klods.Services
+@using Microsoft.AspNetCore.Components.Routing
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
+@implements IDisposable
 
 <PageTitle>Sets</PageTitle>
 
@@ -25,128 +27,164 @@
 <MudGrid>
     @* Stats *@
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="pa-4" Elevation="2">
-            <MudStack AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalSets.ToString("N0")</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Sets in Catalog</MudText>
-            </MudStack>
-        </MudPaper>
+        <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalSets.ToString("N0")</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Sets in Catalog</MudText>
+        </MudStack></MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="pa-4" Elevation="2">
-            <MudStack AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalOwnedInstances</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Owned Instances</MudText>
-            </MudStack>
-        </MudPaper>
+        <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalOwnedInstances</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Owned Instances</MudText>
+        </MudStack></MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="pa-4" Elevation="2">
-            <MudStack AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalOwners</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Collectors</MudText>
-            </MudStack>
-        </MudPaper>
+        <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalOwners</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Collectors</MudText>
+        </MudStack></MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="pa-4" Elevation="2">
-            <MudStack AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalPieces.ToString("N0")</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Pieces</MudText>
-            </MudStack>
-        </MudPaper>
+        <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalPieces.ToString("N0")</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Total Pieces</MudText>
+        </MudStack></MudPaper>
     </MudItem>
 
-    @* Search *@
-    <MudItem xs="12">
-        <MudTextField T="string" Value="_query" ValueChanged="OnQueryChanged"
-                      Immediate="true" DebounceInterval="350"
-                      Placeholder="Search the catalog by set name or number — or just browse the latest below…"
+    @* Search + theme filter *@
+    <MudItem xs="12" md="8">
+        <MudTextField T="string" Value="_query" ValueChanged="OnSearch" Immediate="true" DebounceInterval="350"
+                      Placeholder="Search by set name or number — or just browse the latest below…"
                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                       Variant="Variant.Outlined" Clearable="true"/>
     </MudItem>
+    <MudItem xs="12" md="4">
+        <MudAutocomplete T="ApiClient.ThemeDto" Value="_selectedTheme" ValueChanged="OnThemeChanged"
+                         SearchFunc="SearchThemes" ToStringFunc="@(t => t?.Name ?? "")"
+                         Label="Filter by theme" Variant="Variant.Outlined" Clearable="true"
+                         Placeholder="All themes"/>
+    </MudItem>
 
-    @* Catalog (server-paginated; latest sets by default) *@
+    @* Results *@
     <MudItem xs="12">
-        <MudDataGrid T="SetCatalogRow" @ref="_grid" ServerData="LoadServerData"
-                     SortMode="SortMode.None" ReadOnly="true">
-            <Columns>
-                <TemplateColumn Title="Image" Editable="false">
-                    <CellTemplate>
-                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+        @if (_loadingResults)
+        {
+            <MudStack AlignItems="AlignItems.Center" Class="pa-8"><MudProgressCircular Indeterminate="true"/></MudStack>
+        }
+        else if (_rows.Count == 0)
+        {
+            <MudPaper Class="pa-8" Elevation="0">
+                <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary"/>
+                    <MudText Typo="Typo.h6">No sets match your search</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
+                        Try a different spelling, theme, or the set number (e.g. <em>75192-1</em>). Brand-new sets not in
+                        the catalog yet can be pulled from Rebrickable.
+                    </MudText>
+                    <MudTooltip Text="@(AuthService.CurrentUser == null ? "You must be logged in to import sets" : "Import from Rebrickable")">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Download)"
+                                   Disabled="@(AuthService.CurrentUser == null)" OnClick="OpenImportDialog">
+                            Import a set from Rebrickable
+                        </MudButton>
+                    </MudTooltip>
+                </MudStack>
+            </MudPaper>
+        }
+        else
+        {
+            <MudDataGrid T="SetCatalogRow" Items="_rows" SortMode="SortMode.None" ReadOnly="true">
+                <ToolBarContent>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@_total.ToString("N0") sets</MudText>
+                </ToolBarContent>
+                <Columns>
+                    <TemplateColumn Title="Image" Editable="false">
+                        <CellTemplate>
                             <MudImage class="cursor-pointer rounded-3" Elevation="2"
                                       Src="@ImageStorage.ResolveUrl(context.Item.Set.SetImg)" Height="50"
                                       @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
-                        </MudStack>
-                    </CellTemplate>
-                </TemplateColumn>
-                <PropertyColumn Property="x => x.Set.SetId" Title="Id" Editable="false"/>
-                <PropertyColumn Property="x => x.Set.Name" Title="Name" Editable="false"/>
-                <PropertyColumn Property="x => x.Set.ReleaseYear" Title="Year" Editable="false"/>
-                <PropertyColumn Property="x => x.Set.NumBricks" Title="Pieces" Editable="false"/>
-                <TemplateColumn Title="Owned" Editable="false">
-                    <CellTemplate>
-                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                            <MudIconButton Icon="@Icons.Material.Filled.Remove"
-                                           Size="Size.Small"
-                                           Disabled="@(context.Item.UserOwnedCount == 0 || AuthService.CurrentUser == null)"
-                                           OnClick="() => DecrementOwned(context.Item)"/>
-                            <MudText Style="min-width: 20px; text-align: center;">@context.Item.UserOwnedCount</MudText>
-                            <MudIconButton Icon="@Icons.Material.Filled.Add"
-                                           Size="Size.Small"
-                                           Disabled="@(AuthService.CurrentUser == null)"
-                                           OnClick="() => IncrementOwned(context.Item)"/>
-                        </MudStack>
-                    </CellTemplate>
-                </TemplateColumn>
-                <TemplateColumn Title="Manual" Editable="false">
-                    <CellTemplate>
-                        <MudImage @onclick="() => OpenBuildingInstructions(context.Item.Set.ManualUrl)"
-                                  class="cursor-pointer rounded-2" Elevation="2" Height="30"
-                                  Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
-                    </CellTemplate>
-                </TemplateColumn>
-            </Columns>
-            <NoRecordsContent>
-                @if (_query.Trim().Length >= 2)
-                {
-                    <MudStack AlignItems="AlignItems.Center" Spacing="3" Class="pa-6">
-                        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary"/>
-                        <MudText Typo="Typo.h6">No sets match “@_query”</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
-                            Double-check the spelling or try the set number (e.g. <em>75192-1</em>). If it's a brand-new
-                            set that isn't in our catalog yet, you can pull it straight from Rebrickable.
-                        </MudText>
-                        <MudTooltip Text="@(AuthService.CurrentUser == null ? "You must be logged in to import sets" : "Import from Rebrickable")">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                       StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Download)"
-                                       Disabled="@(AuthService.CurrentUser == null)"
-                                       OnClick="OpenImportDialog">
-                                Import a set from Rebrickable
-                            </MudButton>
-                        </MudTooltip>
-                    </MudStack>
-                }
-                else
-                {
-                    <MudText Class="pa-6" Align="Align.Center" Color="Color.Secondary">No sets found.</MudText>
-                }
-            </NoRecordsContent>
-            <PagerContent>
-                <MudDataGridPager T="SetCatalogRow"/>
-            </PagerContent>
-        </MudDataGrid>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("id")'>Id@(Arrow("id"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Set.SetId</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("name")'>Name@(Arrow("name"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Set.Name</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("theme")'>Theme@(Arrow("theme"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Set.ThemeName</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("year")'>Year@(Arrow("year"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Set.ReleaseYear</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("pieces")'>Pieces@(Arrow("pieces"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Set.NumBricks</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Owned" Editable="false">
+                        <CellTemplate>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                               Disabled="@(context.Item.UserOwnedCount == 0 || AuthService.CurrentUser == null)"
+                                               OnClick="() => DecrementOwned(context.Item)"/>
+                                <MudText Style="min-width: 20px; text-align: center;">@context.Item.UserOwnedCount</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                               Disabled="@(AuthService.CurrentUser == null)"
+                                               OnClick="() => IncrementOwned(context.Item)"/>
+                            </MudStack>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Manual" Editable="false">
+                        <CellTemplate>
+                            <MudImage @onclick="() => OpenBuildingInstructions(context.Item.Set.ManualUrl)"
+                                      class="cursor-pointer rounded-2" Elevation="2" Height="30"
+                                      Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+            </MudDataGrid>
+
+            @if (_totalPages > 1)
+            {
+                <MudStack AlignItems="AlignItems.Center" Class="mt-4">
+                    <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_page" SelectedChanged="OnPageChanged"/>
+                </MudStack>
+            }
+        }
     </MudItem>
 </MudGrid>
 
+<style>
+    .sort-head { cursor: pointer; user-select: none; font-weight: 600; }
+</style>
+
 @code {
-    private MudDataGrid<SetCatalogRow> _grid = null!;
+    private const int PageSize = 25;
+
+    private List<SetCatalogRow> _rows = [];
+    private List<ApiClient.ThemeDto> _themes = [];
+    private ApiClient.ThemeDto? _selectedTheme;
+
     private string _query = "";
-    private int _totalSets;
-    private int _totalOwnedInstances;
-    private int _totalOwners;
+    private int? _theme;
+    private string _sort = "year";
+    private string _dir = "desc";
+    private int _page = 1;
+
+    private int _total;
+    private int _totalPages = 1;
+
+    private int _totalSets, _totalOwnedInstances, _totalOwners;
     private long _totalPieces;
+
     private bool _isLoading = true;
+    private bool _loadingResults;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
 
     protected override async Task OnInitializedAsync()
     {
@@ -158,73 +196,121 @@
             _totalOwners = stats.TotalOwners;
             _totalPieces = stats.TotalPieces;
         }
+        _themes = (await Api.GetSetThemesAsync())?.ToList() ?? [];
+
+        ParseUrl();
+        await LoadAsync();
         _isLoading = false;
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+        => InvokeAsync(async () => { ParseUrl(); await LoadAsync(); });
+
+    private void ParseUrl()
+    {
+        var qs = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        _query = qs["q"] ?? "";
+        _theme = int.TryParse(qs["theme"], out var t) ? t : null;
+        _selectedTheme = _theme is int id ? _themes.FirstOrDefault(x => x.Id == id) : null;
+        _sort = qs["sort"] ?? "year";
+        _dir = qs["dir"] ?? "desc";
+        _page = int.TryParse(qs["page"], out var p) && p > 0 ? p : 1;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadingResults = true;
+        StateHasChanged();
+
+        var page = await Api.GetSetsCatalogPageAsync(_query.Trim(), _theme, _sort, _dir, _page - 1, PageSize);
+        _rows = (page?.Items ?? []).Select(s => new SetCatalogRow { Set = s, UserOwnedCount = s.UserOwnedCount }).ToList();
+        _total = page?.Total ?? 0;
+        _totalPages = Math.Max(1, (int)Math.Ceiling(_total / (double)PageSize));
+
+        _loadingResults = false;
         StateHasChanged();
     }
 
-    private async Task<GridData<SetCatalogRow>> LoadServerData(GridState<SetCatalogRow> state)
+    private void Navigate()
     {
-        var page = await Api.GetSetsCatalogPageAsync(_query.Trim(), state.Page, state.PageSize);
-        var rows = (page?.Items ?? []).Select(s => new SetCatalogRow { Set = s, UserOwnedCount = s.UserOwnedCount }).ToList();
-        return new GridData<SetCatalogRow> { Items = rows, TotalItems = page?.Total ?? 0 };
+        var parts = new List<string>();
+        var q = _query.Trim();
+        if (q.Length > 0) parts.Add($"q={Uri.EscapeDataString(q)}");
+        if (_theme is int t) parts.Add($"theme={t}");
+        if (_sort != "year") parts.Add($"sort={_sort}");
+        if (_dir != "desc") parts.Add($"dir={_dir}");
+        if (_page > 1) parts.Add($"page={_page}");
+        Nav.NavigateTo("/sets" + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
     }
 
-    private async Task OnQueryChanged(string value)
+    private void OnSearch(string value)
     {
         _query = value ?? "";
-        if (_grid is not null) await _grid.ReloadServerData();
+        _page = 1;
+        Navigate();
     }
+
+    private void OnThemeChanged(ApiClient.ThemeDto? theme)
+    {
+        _selectedTheme = theme;
+        _theme = theme?.Id;
+        _page = 1;
+        Navigate();
+    }
+
+    private void SetSort(string field)
+    {
+        if (_sort == field)
+            _dir = _dir == "asc" ? "desc" : "asc";
+        else
+        {
+            _sort = field;
+            _dir = field is "name" or "id" or "theme" ? "asc" : "desc";
+        }
+        _page = 1;
+        Navigate();
+    }
+
+    private void OnPageChanged(int page)
+    {
+        _page = page;
+        Navigate();
+    }
+
+    private string Arrow(string field) => field == _sort ? (_dir == "asc" ? " ▲" : " ▼") : "";
+
+    private Task<IEnumerable<ApiClient.ThemeDto>> SearchThemes(string value, CancellationToken token)
+        => Task.FromResult<IEnumerable<ApiClient.ThemeDto>>(
+            _themes.Where(t => string.IsNullOrEmpty(value) || t.Name.Contains(value, StringComparison.OrdinalIgnoreCase)).Take(50));
 
     private async Task OpenImportDialog()
     {
         var dialog = await DialogService.ShowAsync<ImportSetDialog>("Import Sets",
             new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
-        var result = await dialog.Result;
-        if (!result.Canceled)
-        {
-            await OnInitializedAsync();
-            if (_grid is not null) await _grid.ReloadServerData();
-        }
+        if (!(await dialog.Result).Canceled)
+            await LoadAsync();
     }
 
     private async Task IncrementOwned(SetCatalogRow row)
     {
         if (AuthService.CurrentUser == null) return;
-        if (await Api.AddOwnedSetAsync(row.Set.SetId))
-        {
-            row.UserOwnedCount++;
-            _totalOwnedInstances++;
-            StateHasChanged();
-        }
+        if (await Api.AddOwnedSetAsync(row.Set.SetId)) { row.UserOwnedCount++; _totalOwnedInstances++; StateHasChanged(); }
     }
 
     private async Task DecrementOwned(SetCatalogRow row)
     {
         if (AuthService.CurrentUser == null || row.UserOwnedCount == 0) return;
-        if (await Api.DeleteLastOwnedSetAsync(row.Set.SetId))
-        {
-            row.UserOwnedCount--;
-            _totalOwnedInstances--;
-            StateHasChanged();
-        }
+        if (await Api.DeleteLastOwnedSetAsync(row.Set.SetId)) { row.UserOwnedCount--; _totalOwnedInstances--; StateHasChanged(); }
     }
 
-    private Task OpenImagePopup(string setId, string setName, string? setImgUrl)
-    {
-        var parameters = new DialogParameters<ImagePopup>
-        {
-            { x => x._id, setId },
-            { x => x._name, setName },
-            { x => x._imgUrl, setImgUrl }
-        };
-        return DialogService.ShowAsync<ImagePopup>("Image Popup", parameters,
+    private Task OpenImagePopup(string setId, string setName, string? setImgUrl) =>
+        DialogService.ShowAsync<ImagePopup>("Image Popup",
+            new DialogParameters<ImagePopup> { { x => x._id, setId }, { x => x._name, setName }, { x => x._imgUrl, setImgUrl } },
             new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
-    }
 
-    private void OpenBuildingInstructions(string url)
-    {
-        JsRuntime.InvokeVoidAsync("open", url, "_blank");
-    }
+    private void OpenBuildingInstructions(string url) => JsRuntime.InvokeVoidAsync("open", url, "_blank");
 
     private class SetCatalogRow
     {

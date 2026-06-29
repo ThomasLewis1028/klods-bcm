@@ -109,6 +109,36 @@
             }
         </MudStack>
 
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="mt-3" Style="flex-wrap: wrap;">
+            <MudTextField T="string" Value="_rssCron" ValueChanged="OnCronChanged" Immediate="true" DebounceInterval="500"
+                          Label="Schedule (cron)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 220px;"
+                          HelperText="0 * * * * = hourly · 0 3 * * * = daily 3am"/>
+            <MudAutocomplete T="string" Value="_rssTimezone" ValueChanged="OnTzChanged"
+                             Label="Timezone" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             SearchFunc="SearchTimezones" MaxItems="50" Clearable="false" Style="max-width: 280px;"/>
+            <MudNumericField T="int" @bind-Value="_rssMax" Label="Max imports / run" Min="1" Max="500"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 160px;"/>
+            <MudButton OnClick="SaveRss" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save" Disabled="!_cronValid">
+                Save schedule
+            </MudButton>
+        </MudStack>
+
+        @if (!_cronValid)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">Invalid cron expression.</MudText>
+        }
+        else if (_cronNext.Count > 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                <strong>Next runs (@_rssTimezone):</strong>&nbsp; @string.Join("  ·  ", _cronNext)
+            </MudText>
+        }
+
+        @if (_rssSaveError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_rssSaveError</MudAlert>
+        }
         @if (_rssResult is not null)
         {
             <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">@_rssResult</MudAlert>
@@ -200,8 +230,16 @@
     private List<ApiClient.CatalogImportDto> _catalogImports = [];
 
     private bool _rssEnabled;
+    private string _rssCron = "0 * * * *";
+    private string _rssTimezone = "UTC";
+    private int _rssMax = 25;
     private bool _rssChecking;
     private string? _rssResult;
+    private string? _rssSaveError;
+
+    private List<ApiClient.TimezoneDto> _timezones = [];
+    private bool _cronValid = true;
+    private List<string> _cronNext = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -209,15 +247,62 @@
         _rows = users?.Select(u => new UserRow { User = u }).ToList() ?? [];
 
         _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
-        _rssEnabled = (await Api.GetRssSettingsAsync())?.Enabled ?? false;
+        _timezones = (await Api.GetTimezonesAsync())?.ToList() ?? [];
+
+        var rss = await Api.GetRssSettingsAsync();
+        if (rss != null)
+        {
+            _rssEnabled = rss.Enabled;
+            _rssCron = rss.Cron;
+            _rssTimezone = rss.Timezone;
+            _rssMax = rss.MaxImports;
+        }
+        await RefreshPreview();
 
         _isLoading = false;
+    }
+
+    private Task<IEnumerable<string>> SearchTimezones(string value, CancellationToken token)
+    {
+        var matches = _timezones
+            .Where(t => string.IsNullOrEmpty(value)
+                        || t.Id.Contains(value, StringComparison.OrdinalIgnoreCase)
+                        || t.DisplayName.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Select(t => t.Id)
+            .Take(50);
+        return Task.FromResult<IEnumerable<string>>(matches);
+    }
+
+    private async Task OnCronChanged(string value)
+    {
+        _rssCron = value ?? "";
+        await RefreshPreview();
+    }
+
+    private async Task OnTzChanged(string value)
+    {
+        _rssTimezone = string.IsNullOrWhiteSpace(value) ? "UTC" : value;
+        await RefreshPreview();
+    }
+
+    private async Task RefreshPreview()
+    {
+        var preview = await Api.PreviewCronAsync(_rssCron, _rssTimezone);
+        _cronValid = preview?.Valid ?? false;
+        _cronNext = preview?.Next ?? [];
+        StateHasChanged();
     }
 
     private async Task ToggleRss(bool value)
     {
         _rssEnabled = value;
-        await Api.SetRssEnabledAsync(value);
+        await SaveRss();
+    }
+
+    private async Task SaveRss()
+    {
+        var (ok, error) = await Api.SaveRssSettingsAsync(_rssEnabled, _rssCron, _rssTimezone, _rssMax);
+        _rssSaveError = ok ? null : error;
         StateHasChanged();
     }
 

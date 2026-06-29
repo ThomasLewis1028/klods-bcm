@@ -19,9 +19,16 @@ public class RssUpdateService(
     ILogger<RssUpdateService> logger)
 {
     public const string EnabledKey = "rss.enabled";
+    public const string CronKey = "rss.cron";
+    public const string TimezoneKey = "rss.timezone";
+    public const string MaxImportsKey = "rss.maxImports";
+    public const string LastPollAtKey = "rss.lastPollAt";
+    public const string DefaultCron = "0 * * * *"; // hourly
+    public const string DefaultTimezone = "UTC";
+    public const int DefaultMaxImports = 25;
     private const string LastPubDateKey = "rss.lastPubDate";
 
-    public async Task<CatalogImport> PollAsync(int maxImports = 5, CancellationToken ct = default)
+    public async Task<CatalogImport> PollAsync(int maxImports = DefaultMaxImports, CancellationToken ct = default)
     {
         List<RssSetItem> items;
         try
