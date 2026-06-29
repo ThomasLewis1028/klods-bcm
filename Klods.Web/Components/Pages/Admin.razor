@@ -90,35 +90,53 @@
     </MudPaper>
 
     <MudPaper Elevation="2" Class="pa-4">
-        <MudText Typo="Typo.h6" Class="mb-2">Image Migration</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">RSS Auto-Update</MudText>
         <MudText Typo="Typo.body2" Class="mb-3">
-            Migrate all images from Rebrickable URLs to local MinIO storage.
-            Required for full offline operation after import.
+            When on, the server periodically checks Rebrickable's “newest sets” feed and imports any new
+            sets into the catalog (rate-limited, a few per check).
         </MudText>
 
-        @if (_backfillRunning)
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+            <MudSwitch T="bool" Value="_rssEnabled" ValueChanged="ToggleRss" Color="Color.Primary"
+                       Label="@(_rssEnabled ? "On" : "Off")"/>
+            <MudButton OnClick="CheckNow" Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh" Disabled="_rssChecking">
+                @(_rssChecking ? "Checking..." : "Check now")
+            </MudButton>
+            @if (_rssChecking)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+            }
+        </MudStack>
+
+        @if (_rssResult is not null)
         {
-            <MudStack Spacing="2">
-                <MudProgressLinear Indeterminate="true"
-                                   Rounded="true" Size="Size.Medium" Color="Color.Primary"/>
-                <MudText Typo="Typo.body2">Migrating images...</MudText>
-                <MudButton OnClick="CancelBackfill" Color="Color.Error" Variant="Variant.Outlined" Size="Size.Small">
-                    Cancel
-                </MudButton>
-            </MudStack>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">@_rssResult</MudAlert>
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Recent catalog updates</MudText>
+        @if (_catalogImports.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">No updates yet.</MudText>
         }
         else
         {
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
-                <MudButton OnClick="StartBackfill" Disabled="_pendingCount == 0"
-                           Color="Color.Primary" Variant="Variant.Filled">
-                    @(_pendingCount == 0 ? "All images stored locally" : $"Migrate {_pendingCount} images")
-                </MudButton>
-                @if (_pendingCount == 0)
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
+                <thead>
+                    <tr><th>When</th><th>Source</th><th>Status</th><th>Details</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var ci in _catalogImports)
                 {
-                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                    <tr>
+                        <td style="white-space: nowrap;">@ci.ImportedAt.ToLocalTime().ToString("g")</td>
+                        <td>@(ci.Source == "RssPoll" ? "RSS" : "Bulk")</td>
+                        <td>@ci.Status</td>
+                        <td>@ci.Notes</td>
+                    </tr>
                 }
-            </MudStack>
+                </tbody>
+            </MudSimpleTable>
         }
     </MudPaper>
 
@@ -175,27 +193,46 @@
     private string _search = string.Empty;
     private bool _isLoading = true;
 
-    private int _pendingCount;
-    private bool _backfillRunning;
-    private CancellationTokenSource? _cts;
-
     private IReadOnlyList<IBrowserFile>? _bulkFiles;
     private bool _bulkRunning;
     private bool _bulkSucceeded;
     private string? _bulkResult;
     private List<ApiClient.CatalogImportDto> _catalogImports = [];
 
+    private bool _rssEnabled;
+    private bool _rssChecking;
+    private string? _rssResult;
+
     protected override async Task OnInitializedAsync()
     {
         var users = await Api.GetAdminUsersAsync();
         _rows = users?.Select(u => new UserRow { User = u }).ToList() ?? [];
 
-        var pending = await Api.GetPendingCountAsync();
-        _pendingCount = pending?.Count ?? 0;
-
         _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+        _rssEnabled = (await Api.GetRssSettingsAsync())?.Enabled ?? false;
 
         _isLoading = false;
+    }
+
+    private async Task ToggleRss(bool value)
+    {
+        _rssEnabled = value;
+        await Api.SetRssEnabledAsync(value);
+        StateHasChanged();
+    }
+
+    private async Task CheckNow()
+    {
+        _rssChecking = true;
+        _rssResult = null;
+        StateHasChanged();
+
+        var result = await Api.RssPollNowAsync();
+        _rssResult = result is null ? "Check failed." : $"{result.Status}: {result.Notes}";
+        _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+
+        _rssChecking = false;
+        StateHasChanged();
     }
 
     private async Task RunBulkImport()
@@ -232,27 +269,6 @@
         }
     }
 
-    private async Task StartBackfill()
-    {
-        _cts = new CancellationTokenSource();
-        _backfillRunning = true;
-        StateHasChanged();
-
-        try
-        {
-            await Api.BackfillImagesAsync(_cts.Token);
-        }
-        catch (OperationCanceledException) { }
-        finally
-        {
-            _backfillRunning = false;
-            var pending = await Api.GetPendingCountAsync();
-            _pendingCount = pending?.Count ?? 0;
-            StateHasChanged();
-        }
-    }
-
-    private void CancelBackfill() => _cts?.Cancel();
 
     private bool FilterFunc(UserRow row) =>
         string.IsNullOrWhiteSpace(_search) ||

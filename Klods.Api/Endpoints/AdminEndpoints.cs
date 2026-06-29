@@ -17,12 +17,6 @@ public static class AdminEndpoints
             return ok ? Results.Ok() : Results.BadRequest("Color import failed.");
         });
 
-        group.MapPost("/backfill-images", async (ImportData importer, CancellationToken ct) =>
-        {
-            await importer.BackfillImagesAsync(null, ct);
-            return Results.Ok();
-        });
-
         // Bulk catalog load. Accepts the Rebrickable CSVs as .csv, .csv.gz, or inside a .zip.
         // All-or-nothing: BulkImportService rejects the batch if any required file is missing.
         group.MapPost("/bulk-import", async (HttpRequest request, BulkImportService bulk, CancellationToken ct) =>
@@ -87,6 +81,22 @@ public static class AdminEndpoints
             return Results.Ok(rows);
         });
 
+        // RSS auto-update toggle + manual poll.
+        group.MapGet("/rss-settings", async (SettingsService settings) =>
+            Results.Ok(new RssSettingsDto(await settings.GetBoolAsync(RssUpdateService.EnabledKey))));
+
+        group.MapPut("/rss-settings", async (RssSettingsDto req, SettingsService settings) =>
+        {
+            await settings.SetAsync(RssUpdateService.EnabledKey, req.Enabled ? "true" : "false");
+            return Results.Ok();
+        });
+
+        group.MapPost("/rss-poll", async (RssUpdateService rss, CancellationToken ct) =>
+        {
+            var result = await rss.PollAsync(ct: ct);
+            return Results.Ok(new CatalogImportDto(result.ImportedAt, result.SnapshotDate, result.Source, result.Status, result.Notes));
+        });
+
         group.MapGet("/users", async (IDbContextFactory<InventoryContext> dbFactory) =>
         {
             await using var db = dbFactory.CreateDbContext();
@@ -97,16 +107,6 @@ public static class AdminEndpoints
             return Results.Ok(users);
         });
 
-        // Count of images still hosted at external URLs (not yet migrated to MinIO).
-        group.MapGet("/pending-count", async (IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            await using var db = dbFactory.CreateDbContext();
-            var count =
-                await db.Set<Set>().CountAsync(s => s.SetImg != null && s.SetImg.StartsWith("http")) +
-                await db.Set<Minifig>().CountAsync(m => m.ImgUrl != null && m.ImgUrl.StartsWith("http")) +
-                await db.Set<Brick>().CountAsync(b => b.PartImg != null && b.PartImg.StartsWith("http"));
-            return Results.Ok(new PendingCountDto(count));
-        });
 
         group.MapPatch("/users/{userId:int}/role", async (
             int userId, SetRoleRequest req, IDbContextFactory<InventoryContext> dbFactory) =>
@@ -131,8 +131,8 @@ public static class AdminEndpoints
     }
 
     public record UserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl);
-    public record PendingCountDto(int Count);
     public record SetRoleRequest(string Role);
     public record BulkImportResultDto(string Status, string? Notes, DateTime ImportedAt);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
+    public record RssSettingsDto(bool Enabled);
 }
