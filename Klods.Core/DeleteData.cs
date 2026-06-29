@@ -17,6 +17,13 @@ public class DeleteData(IDbContextFactory<InventoryContext> contextFactory, ILog
             .Where(sbo => sbo.SetId == setId)
             .ExecuteDelete();
 
+        // Release any owned minifigs tied to this set's copies back to loose (clears FK to SetOwned)
+        context.Set<MinifigOwned>()
+            .Where(mo => mo.SetId == setId)
+            .ExecuteUpdate(s => s
+                .SetProperty(mo => mo.SetId, (string?)null)
+                .SetProperty(mo => mo.SetIndex, (int?)null));
+
         // Delete SetOwned instances
         context.Set<SetOwned>()
             .Where(s => s.SetId == setId)
@@ -53,6 +60,13 @@ public class DeleteData(IDbContextFactory<InventoryContext> contextFactory, ILog
         context.Set<SetBrickOwned>()
             .Where(sbo => sbo.UserId == userId && sbo.SetId == setId && sbo.SetIndex == setIndex)
             .ExecuteDelete();
+
+        // Release this copy's owned minifigs back to loose (clears FK to SetOwned)
+        context.Set<MinifigOwned>()
+            .Where(mo => mo.UserId == userId && mo.SetId == setId && mo.SetIndex == setIndex)
+            .ExecuteUpdate(s => s
+                .SetProperty(mo => mo.SetId, (string?)null)
+                .SetProperty(mo => mo.SetIndex, (int?)null));
 
         // Delete the SetOwned record
         context.Set<SetOwned>()

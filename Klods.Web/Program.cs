@@ -56,6 +56,16 @@ app.MapGet("/media/{**path}", async (string path, IHttpClientFactory factory, Ca
     catch { return Results.StatusCode(502); }
 });
 
+// Read-through image cache: fetches a Rebrickable CDN image, stores it in MinIO on first access,
+// then serves from MinIO. Lets imports keep just the remote URL and materialize lazily on demand.
+app.MapGet("/img", async (string u, ImageStorageService img, HttpContext ctx, CancellationToken ct) =>
+{
+    var result = await img.GetThroughCacheAsync(u, ct);
+    if (result is null) return Results.NotFound();
+    ctx.Response.Headers.CacheControl = "public, max-age=2592000, immutable";
+    return Results.File(result.Value.Bytes, result.Value.ContentType);
+});
+
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<Program>();
 logger.LogInformation("Lego application starting.");
 

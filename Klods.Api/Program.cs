@@ -14,8 +14,13 @@ builder.Services.AddDbContextFactory<InventoryContext>();
 // ── Business services ──────────────────────────────────────────────────────
 builder.Services.AddScoped<RebrickableApi>();
 builder.Services.AddScoped<ImportData>();
+builder.Services.AddScoped<BulkImportService>();
 builder.Services.AddScoped<UpdateData>();
 builder.Services.AddScoped<DeleteData>();
+
+// Bulk catalog upload can be large (gzipped CSVs); raise the multipart limit.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+    o.MultipartBodyLengthLimit = 512L * 1024 * 1024);
 builder.Services.AddSingleton<ImageStorageService>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri("https://rebrickable.com/") });

@@ -18,7 +18,10 @@ public class InventoryContext : DbContext
     public DbSet<SetMinifig> SetMinifigs { get; set; }
     public DbSet<MinifigBrick> MinifigBricks { get; set; }
     public DbSet<MinifigOwned> MinifigOwneds { get; set; }
+    public DbSet<MinifigBrickOwned> MinifigBrickOwneds { get; set; }
     public DbSet<Color> Colors { get; set; }
+    public DbSet<PartCategory> PartCategories { get; set; }
+    public DbSet<CatalogImport> CatalogImports { get; set; }
     public DbSet<SetOwned> SetsOwned { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<UserExternalLogin> UserExternalLogins { get; set; }
@@ -96,19 +99,19 @@ public class InventoryContext : DbContext
         // MINIFIG
         modelBuilder.Entity<Minifig>().HasKey(e => new { e.MinifigId });
 
-        // MINIFIG BRICK
-        modelBuilder.Entity<MinifigBrick>().HasKey(e => new { e.MinifigID, e.BrickID, e.ColorId });
+        // MINIFIG BRICK (a minifig's parts inventory — mirrors SetBrick)
+        modelBuilder.Entity<MinifigBrick>().HasKey(e => new { e.MinifigId, e.PartNum, e.ColorId });
 
         modelBuilder.Entity<MinifigBrick>()
             .HasOne<Brick>()
             .WithMany()
-            .HasForeignKey(s => new { s.BrickID, s.ColorId })
+            .HasForeignKey(s => new { s.PartNum, s.ColorId })
             .IsRequired();
 
         modelBuilder.Entity<MinifigBrick>()
             .HasOne<Minifig>()
             .WithMany()
-            .HasForeignKey(s => s.MinifigID)
+            .HasForeignKey(s => s.MinifigId)
             .IsRequired();
 
         // BRICK OWNED (user's loose brick stock)
@@ -126,8 +129,9 @@ public class InventoryContext : DbContext
             .HasForeignKey(s => s.UserId)
             .IsRequired();
 
-        // MINIFIG OWNED (user's minifig stock)
-        modelBuilder.Entity<MinifigOwned>().HasKey(e => new { e.UserId, e.MinifigId });
+        // MINIFIG OWNED — one physical fig instance (instanced like SetOwned).
+        // PK includes MinifigIndex so a user can own multiple copies of the same fig.
+        modelBuilder.Entity<MinifigOwned>().HasKey(e => new { e.UserId, e.MinifigId, e.MinifigIndex });
 
         modelBuilder.Entity<MinifigOwned>()
             .HasOne<Minifig>()
@@ -141,8 +145,35 @@ public class InventoryContext : DbContext
             .HasForeignKey(s => s.UserId)
             .IsRequired();
 
+        // Optional link to the owned set copy this fig belongs to (null = loose).
+        modelBuilder.Entity<MinifigOwned>()
+            .HasOne<SetOwned>()
+            .WithMany()
+            .HasForeignKey(s => new { s.UserId, s.SetId, s.SetIndex })
+            .IsRequired(false);
+
+        // MINIFIG BRICK OWNED — per-instance part stock (mirrors SetBrickOwned)
+        modelBuilder.Entity<MinifigBrickOwned>()
+            .HasKey(e => new { e.UserId, e.MinifigId, e.MinifigIndex, e.PartNum, e.ColorId });
+
+        modelBuilder.Entity<MinifigBrickOwned>()
+            .HasOne<MinifigOwned>()
+            .WithMany()
+            .HasForeignKey(s => new { s.UserId, s.MinifigId, s.MinifigIndex })
+            .IsRequired();
+
+        modelBuilder.Entity<MinifigBrickOwned>()
+            .HasOne<MinifigBrick>()
+            .WithMany()
+            .HasForeignKey(s => new { s.MinifigId, s.PartNum, s.ColorId })
+            .IsRequired();
+
         // COLOR
         modelBuilder.Entity<Color>().HasKey(e => new { e.Id });
+
+        // PART CATEGORY (reference table, synced like Color)
+        modelBuilder.Entity<PartCategory>().HasKey(e => e.Id);
+        modelBuilder.Entity<PartCategory>().Property(e => e.Id).ValueGeneratedNever();
 
         // USER — unique index on UserName for login/uniqueness-check lookups
         modelBuilder.Entity<User>()

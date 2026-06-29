@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Minio;
 using Minio.DataModel.Args;
 
@@ -85,12 +87,79 @@ public class ImageStorageService
         }
     }
 
-    public string? ResolveUrl(string? stored) =>
-        stored is null ? null :
-        stored.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? stored :
-        string.IsNullOrEmpty(_publicEndpoint)
-            ? $"/media/{stored}"
-            : $"{_publicEndpoint.TrimEnd('/')}/{stored}";
+    // Hosts whose images we lazily pull into MinIO (read-through). Other http URLs (e.g. avatars) pass through.
+    private static readonly string[] CacheableHosts = ["cdn.rebrickable.com", "rebrickable.com"];
+
+    public static bool IsCacheableImageHost(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        CacheableHosts.Any(h =>
+            uri.Host.Equals(h, StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.EndsWith("." + h, StringComparison.OrdinalIgnoreCase));
+
+    public string? ResolveUrl(string? stored)
+    {
+        if (stored is null) return null;
+        if (!stored.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return string.IsNullOrEmpty(_publicEndpoint) ? $"/media/{stored}" : $"{_publicEndpoint.TrimEnd('/')}/{stored}";
+        // Rebrickable CDN images are cached on first view via the /img read-through endpoint.
+        return IsCacheableImageHost(stored) ? $"/img?u={Uri.EscapeDataString(stored)}" : stored;
+    }
+
+    /// <summary>
+    /// Read-through cache: returns the bytes for <paramref name="sourceUrl"/>, fetching from the source
+    /// and storing in MinIO on the first request, then serving from MinIO thereafter. Returns null if the
+    /// host isn't cacheable or the fetch fails.
+    /// </summary>
+    public async Task<(byte[] Bytes, string ContentType)?> GetThroughCacheAsync(string sourceUrl, CancellationToken ct = default)
+    {
+        if (!IsCacheableImageHost(sourceUrl)) return null;
+
+        var ext = Path.GetExtension(sourceUrl.Split('?')[0]);
+        if (string.IsNullOrEmpty(ext)) ext = ".jpg";
+        var key = $"cache/{Sha256Hex(sourceUrl)}{ext}";
+        var contentType = GuessContentType(sourceUrl);
+
+        var cached = await TryGetObjectAsync(key, ct);
+        if (cached != null) return (cached, contentType);
+
+        try
+        {
+            var bytes = await _http.GetByteArrayAsync(sourceUrl, ct);
+            using var stream = new MemoryStream(bytes);
+            await _minio.PutObjectAsync(new PutObjectArgs()
+                .WithBucket(_bucket)
+                .WithObject(key)
+                .WithStreamData(stream)
+                .WithObjectSize(bytes.Length)
+                .WithContentType(contentType), ct);
+            return (bytes, contentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Read-through cache failed for {Url}: {Message}", sourceUrl, ex.Message);
+            return null;
+        }
+    }
+
+    private async Task<byte[]?> TryGetObjectAsync(string key, CancellationToken ct)
+    {
+        try
+        {
+            using var ms = new MemoryStream();
+            await _minio.GetObjectAsync(new GetObjectArgs()
+                .WithBucket(_bucket)
+                .WithObject(key)
+                .WithCallbackStream(s => s.CopyTo(ms)), ct);
+            return ms.ToArray();
+        }
+        catch
+        {
+            return null; // not cached yet
+        }
+    }
+
+    private static string Sha256Hex(string input) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
 
     private static string GuessContentType(string url)
     {

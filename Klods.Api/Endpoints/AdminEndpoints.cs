@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using Klods.Database;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 
 namespace Klods.Api.Endpoints;
@@ -21,6 +23,70 @@ public static class AdminEndpoints
             return Results.Ok();
         });
 
+        // Bulk catalog load. Accepts the Rebrickable CSVs as .csv, .csv.gz, or inside a .zip.
+        // All-or-nothing: BulkImportService rejects the batch if any required file is missing.
+        group.MapPost("/bulk-import", async (HttpRequest request, BulkImportService bulk, CancellationToken ct) =>
+        {
+            // Lift Kestrel's ~28 MB default request-body cap for this large upload only.
+            var sizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = null;
+
+            if (!request.HasFormContentType) return Results.BadRequest("Expected a multipart file upload.");
+            var form = await request.ReadFormAsync(ct);
+
+            DateTime? snapshot = DateTime.TryParse(form["snapshotDate"], out var d) ? d.ToUniversalTime() : null;
+
+            var files = new Dictionary<string, Stream>(StringComparer.OrdinalIgnoreCase);
+            var disposables = new List<IDisposable>();
+            try
+            {
+                foreach (var file in form.Files)
+                {
+                    if (file.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var archive = new ZipArchive(file.OpenReadStream(), ZipArchiveMode.Read);
+                        disposables.Add(archive);
+                        foreach (var entry in archive.Entries)
+                        {
+                            if (entry.Length == 0 || LogicalName(entry.Name) is not { } name) continue;
+                            files[name] = entry.Open();
+                        }
+                    }
+                    else if (LogicalName(file.FileName) is { } name)
+                    {
+                        Stream s = file.OpenReadStream();
+                        if (file.FileName.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+                        {
+                            s = new GZipStream(s, CompressionMode.Decompress);
+                            disposables.Add(s);
+                        }
+                        files[name] = s;
+                    }
+                }
+
+                var result = await bulk.ImportAsync(files, snapshot, ct);
+                return result.Status == "Success"
+                    ? Results.Ok(new BulkImportResultDto(result.Status, result.Notes, result.ImportedAt))
+                    : Results.BadRequest(new BulkImportResultDto(result.Status, result.Notes, result.ImportedAt));
+            }
+            finally
+            {
+                foreach (var dispose in disposables) dispose.Dispose();
+            }
+        }).DisableAntiforgery();
+
+        // Most recent catalog loads, for the admin "last refreshed" display.
+        group.MapGet("/catalog-imports", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            await using var db = dbFactory.CreateDbContext();
+            var rows = await db.Set<CatalogImport>().AsNoTracking()
+                .OrderByDescending(c => c.ImportedAt)
+                .Take(10)
+                .Select(c => new CatalogImportDto(c.ImportedAt, c.SnapshotDate, c.Source, c.Status, c.Notes))
+                .ToListAsync();
+            return Results.Ok(rows);
+        });
+
         group.MapGet("/users", async (IDbContextFactory<InventoryContext> dbFactory) =>
         {
             await using var db = dbFactory.CreateDbContext();
@@ -37,7 +103,7 @@ public static class AdminEndpoints
             await using var db = dbFactory.CreateDbContext();
             var count =
                 await db.Set<Set>().CountAsync(s => s.SetImg != null && s.SetImg.StartsWith("http")) +
-                await db.Set<Minifig>().CountAsync(m => m.MinifigImgUrl != null && m.MinifigImgUrl.StartsWith("http")) +
+                await db.Set<Minifig>().CountAsync(m => m.ImgUrl != null && m.ImgUrl.StartsWith("http")) +
                 await db.Set<Brick>().CountAsync(b => b.PartImg != null && b.PartImg.StartsWith("http"));
             return Results.Ok(new PendingCountDto(count));
         });
@@ -54,7 +120,19 @@ public static class AdminEndpoints
         });
     }
 
+    // "inventory_parts.csv.gz" -> "inventory_parts"; ignores non-CSV entries.
+    private static string? LogicalName(string fileName)
+    {
+        var n = Path.GetFileName(fileName).ToLowerInvariant();
+        if (n.EndsWith(".csv.gz")) return n[..^7];
+        if (n.EndsWith(".csv")) return n[..^4];
+        if (n.EndsWith(".gz")) return n[..^3];
+        return null;
+    }
+
     public record UserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl);
     public record PendingCountDto(int Count);
     public record SetRoleRequest(string Role);
+    public record BulkImportResultDto(string Status, string? Notes, DateTime ImportedAt);
+    public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
 }

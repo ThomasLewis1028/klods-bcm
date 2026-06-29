@@ -80,6 +80,12 @@ public class RebrickableApi
         return await GetAllPagesAsync($"{BaseUrl}colors/?page_size={PageSize}&");
     }
 
+    public async Task<JsonArray?> GetPartCategories()
+    {
+        _logger.LogInformation("Getting all part categories");
+        return await GetAllPagesAsync($"{BaseUrl}part_categories/?page_size={PageSize}&");
+    }
+
     // ── Search endpoint (single page — caller controls pagination) ───────────
 
     /// <summary>
