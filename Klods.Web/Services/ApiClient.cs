@@ -160,8 +160,13 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Sets ─────────────────────────────────────────────────────────────────
 
     public Task<SetCatalogStatsDto?>     GetSetCatalogStatsAsync()   => GetAsync<SetCatalogStatsDto>("/api/sets/catalog-stats");
-    public Task<SetCatalogPage?>         GetSetsCatalogPageAsync(string q, int page, int pageSize)
-        => GetAsync<SetCatalogPage>($"/api/sets/catalog?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
+    public Task<ThemeDto[]?>             GetSetThemesAsync()         => GetAsync<ThemeDto[]>("/api/sets/themes");
+    public Task<SetCatalogPage?>         GetSetsCatalogPageAsync(string q, int? theme, string sort, string dir, int page, int pageSize)
+    {
+        var url = $"/api/sets/catalog?q={Uri.EscapeDataString(q)}&sort={sort}&dir={dir}&page={page}&pageSize={pageSize}";
+        if (theme is int t) url += $"&theme={t}";
+        return GetAsync<SetCatalogPage>(url);
+    }
     public Task<MyOwnedSetDto[]?>        GetMyOwnedSetsAsync()       => GetAsync<MyOwnedSetDto[]>("/api/sets/my-owned");
     public async Task<bool> ImportSetAsync(string setId)             => (await PostAsync("/api/sets/import", new { SetId = setId })).Ok;
     public async Task<bool> AddOwnedSetAsync(string setId, bool applyBricks = false)
@@ -253,7 +258,21 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public Task<CatalogImportDto[]?> GetCatalogImportsAsync() => GetAsync<CatalogImportDto[]>("/api/admin/catalog-imports");
 
     public Task<RssSettingsDto?> GetRssSettingsAsync()        => GetAsync<RssSettingsDto>("/api/admin/rss-settings");
-    public async Task<bool> SetRssEnabledAsync(bool enabled)  => (await PutAsync("/api/admin/rss-settings", new { Enabled = enabled })).Ok;
+    public Task<TimezoneDto[]?> GetTimezonesAsync()           => GetAsync<TimezoneDto[]>("/api/admin/timezones");
+    public Task<CronPreviewDto?> PreviewCronAsync(string cron, string tz)
+        => GetAsync<CronPreviewDto>($"/api/admin/cron-preview?cron={Uri.EscapeDataString(cron)}&tz={Uri.EscapeDataString(tz)}");
+    public async Task<(bool Ok, string? Error)> SaveRssSettingsAsync(bool enabled, string cron, string timezone, int maxImports)
+    {
+        try
+        {
+            var resp = await Http().PutAsJsonAsync("/api/admin/rss-settings",
+                new { Enabled = enabled, Cron = cron, Timezone = timezone, MaxImports = maxImports }, JsonOpts);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var body = await resp.Content.ReadAsStringAsync();
+            return (false, string.IsNullOrWhiteSpace(body) ? "Failed to save settings." : body);
+        }
+        catch (Exception e) { return (false, e.Message); }
+    }
     public async Task<CatalogImportDto?> RssPollNowAsync()
     {
         try
@@ -335,8 +354,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl);
     public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
-    public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string ManualUrl, int UserOwnedCount);
+    public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
+    public record ThemeDto(int Id, string Name);
     public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCandidateDto(string SetNum, string Name, int Year, string? ImageUrl);
@@ -368,6 +388,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
-    public record RssSettingsDto(bool Enabled);
+    public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
+    public record TimezoneDto(string Id, string DisplayName);
+    public record CronPreviewDto(bool Valid, List<string> Next);
     public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs);
 }

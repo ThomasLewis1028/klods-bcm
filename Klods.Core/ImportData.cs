@@ -22,8 +22,10 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 logger.LogInformation("Importing all data for set {SetId}", setId);
 
                 await ImportSetInfo(setId);
-                await ImportBricks(setId);
-                await ImportSetBOM(setId);
+                // Fetch the set's parts once and reuse for both the catalog and BOM steps.
+                var setParts = await rebrickable.GetSetParts(setId);
+                await ImportBricks(setId, setParts);
+                await ImportSetBOM(setId, setParts);
                 await ImportSetMinifigBOM(setId);
 
                 logger.LogInformation("Finished importing all data for set {SetId}", setId);
@@ -374,12 +376,11 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     /// <summary>
     /// Creates/updates SetBrick BOM entries for a set (no SetIndex — BOM is per-set).
     /// </summary>
-    public async Task<bool> ImportSetBOM(string setId)
+    public async Task<bool> ImportSetBOM(string setId, JsonArray? setParts = null)
     {
         logger.LogInformation("Importing SetBrick BOM for {SetId}", setId);
-        var api = rebrickable;
 
-        var setParts = await api.GetSetParts(setId);
+        setParts ??= await rebrickable.GetSetParts(setId);
 
         await using var context = contextFactory.CreateDbContext();
 
@@ -575,14 +576,13 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         return await context.SaveChangesAsync() > 0;
     }
 
-    public async Task<bool> ImportBricks(string setId)
+    public async Task<bool> ImportBricks(string setId, JsonArray? setParts = null)
     {
         logger.LogInformation("Importing bricks for {SetId}", setId);
 
         try
         {
-            var api = rebrickable;
-            var setParts = await api.GetSetParts(setId);
+            setParts ??= await rebrickable.GetSetParts(setId);
 
             await using var context = contextFactory.CreateDbContext();
             var brickContext = context.Set<Brick>();
