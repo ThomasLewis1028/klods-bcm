@@ -83,6 +83,13 @@
                                 </MudStack>
                                 <MudNumericField @bind-Value="item.ResolvedCount" Label="Count"
                                                  Min="1" Style="max-width:90px;" Variant="Variant.Outlined"/>
+                                <MudTooltip Text="Mark all parts of this minifig as already in your inventory">
+                                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.caption" Style="white-space:nowrap;">All Parts</MudText>
+                                        <MudSwitch @bind-Value="item.ApplyParts" Color="Color.Primary"
+                                                   Disabled="@(item.ResolvedCount == 0)"/>
+                                    </MudStack>
+                                </MudTooltip>
                                 <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
                                                Color="Color.Default"
                                                OnClick="() => _resolutions.Remove(item)"/>
@@ -92,10 +99,16 @@
                         {
                             @* Multiple results — user picks which ones they own *@
                             <MudStack Spacing="2">
-                                <MudStack Row AlignItems="AlignItems.Center">
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
                                     <MudText Typo="Typo.subtitle2" Style="flex:1">
                                         Results for "@item.Input" — set count to 0 to skip:
                                     </MudText>
+                                    <MudTooltip Text="Mark all parts of these minifigs as already in your inventory">
+                                        <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.caption" Style="white-space:nowrap;">All Parts</MudText>
+                                            <MudSwitch @bind-Value="item.ApplyParts" Color="Color.Primary"/>
+                                        </MudStack>
+                                    </MudTooltip>
                                     <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
                                                    Color="Color.Default"
                                                    OnClick="() => _resolutions.Remove(item)"/>
@@ -288,7 +301,7 @@
             {
                 _statusMessage = $"Importing {item.ResolvedCandidate.Name}...";
                 StateHasChanged();
-                await Api.AddOwnedMinifigAsync(item.ResolvedCandidate.MinifigId, item.ResolvedCount);
+                await Api.AddOwnedMinifigAsync(item.ResolvedCandidate.MinifigId, item.ResolvedCount, item.ApplyParts);
             }
             else
             {
@@ -296,7 +309,7 @@
                 {
                     _statusMessage = $"Importing {candidate.Candidate.Name}...";
                     StateHasChanged();
-                    await Api.AddOwnedMinifigAsync(candidate.Candidate.MinifigId, candidate.Count);
+                    await Api.AddOwnedMinifigAsync(candidate.Candidate.MinifigId, candidate.Count, item.ApplyParts);
                 }
             }
         }
@@ -317,6 +330,7 @@
         public bool NotFound { get; set; }
         public ApiClient.MinifigCandidateDto? ResolvedCandidate { get; set; }
         public int ResolvedCount { get; set; }
+        public bool ApplyParts { get; set; }
         public List<CandidateEntry> Candidates { get; set; } = [];
         public bool HasMore { get; set; }
         public int CurrentPage { get; set; } = 1;

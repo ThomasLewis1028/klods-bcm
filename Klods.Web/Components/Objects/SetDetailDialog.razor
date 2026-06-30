@@ -9,7 +9,7 @@
     <DialogContent>
         <MudStack AlignItems="AlignItems.Center" Spacing="2" Style="min-width: 280px;">
             <MudImage Src="@ImageStorage.ResolveUrl(Set.SetImg)" Alt="@Set.Name"
-                      Style="width: 220px; height: 220px; object-fit: contain;" Class="rounded-lg"/>
+                      Style="max-width: 100%; max-height: 240px; width: auto; height: auto; object-fit: contain;" Class="rounded-lg"/>
             <MudText Typo="Typo.h6" Align="Align.Center">@Set.Name</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">
                 @Set.SetId &middot; @Set.ReleaseYear &middot; @Set.NumBricks.ToString("N0") pcs

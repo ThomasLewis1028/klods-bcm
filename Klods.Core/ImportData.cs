@@ -840,7 +840,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     /// Imports a minifig from Rebrickable (if needed) and creates <paramref name="count"/> loose
     /// MinifigOwned instances (no set link) for the user — each a distinct, indexed physical copy.
     /// </summary>
-    public async Task<bool> AddOwnedMinifig(string minifigId, int? userId, int count = 1)
+    public async Task<bool> AddOwnedMinifig(string minifigId, int? userId, int count = 1, bool applyParts = false)
     {
         if (userId == null)
         {
@@ -857,6 +857,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         var ownedContext = context.Set<MinifigOwned>();
 
         var nextIndex = await NextMinifigIndex(ownedContext, userId.Value, minifigId);
+        var firstIndex = nextIndex;
         for (var i = 0; i < count; i++)
         {
             ownedContext.Add(new MinifigOwned
@@ -867,6 +868,25 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 SetId = null,
                 SetIndex = null,
             });
+        }
+
+        if (applyParts)
+        {
+            var minifigBricks = await context.Set<MinifigBrick>()
+                .Where(mb => mb.MinifigId == minifigId).ToListAsync();
+            var brickOwnedCtx = context.Set<MinifigBrickOwned>();
+            foreach (var mb in minifigBricks)
+            {
+                brickOwnedCtx.Add(new MinifigBrickOwned
+                {
+                    UserId = userId.Value,
+                    MinifigId = minifigId,
+                    MinifigIndex = firstIndex,
+                    PartNum = mb.PartNum,
+                    ColorId = mb.ColorId,
+                    Stock = mb.Count,
+                });
+            }
         }
 
         await context.SaveChangesAsync();
