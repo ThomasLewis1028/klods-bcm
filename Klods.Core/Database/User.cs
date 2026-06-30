@@ -8,4 +8,5 @@ public class User
     public string? ProfilePictureUrl { get; set; }
     public string? PrimaryColor { get; set; }
     public string Role { get; set; } = "User";
+    public string Status { get; set; } = "Active";
 }

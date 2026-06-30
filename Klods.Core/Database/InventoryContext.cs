@@ -188,6 +188,10 @@ public class InventoryContext : DbContext
             .Property(e => e.Role)
             .HasDefaultValue("User");
 
+        modelBuilder.Entity<User>()
+            .Property(e => e.Status)
+            .HasDefaultValue("Active");
+
         // USER EXTERNAL LOGIN
         modelBuilder.Entity<UserExternalLogin>().HasKey(e => new { e.Provider, e.ProviderKey });
 

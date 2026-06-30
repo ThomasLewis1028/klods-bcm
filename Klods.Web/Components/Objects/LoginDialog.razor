@@ -19,6 +19,12 @@
             {
                 <MudAlert Severity="Severity.Error" Dense="true">@_errorMessage</MudAlert>
             }
+            @if (_pendingApproval)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Your account is pending approval. An admin must activate it before you can sign in.
+                </MudAlert>
+            }
 
             @if (!_isRegister && _providers.Length > 0)
             {
@@ -76,6 +82,7 @@
     private bool _showPassword = false;
     private bool _isRegister = false;
     private string? _errorMessage;
+    private bool _pendingApproval = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -85,6 +92,7 @@
     private async Task Submit()
     {
         _errorMessage = null;
+        _pendingApproval = false;
 
         if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
         {
@@ -92,9 +100,15 @@
             return;
         }
 
-        var jwt = _isRegister
+        var (jwt, isPending) = _isRegister
             ? await Api.RegisterAsync(_username, _password)
             : await Api.LoginAsync(_username, _password);
+
+        if (isPending)
+        {
+            _pendingApproval = true;
+            return;
+        }
 
         if (jwt is null)
         {
@@ -119,6 +133,7 @@
     {
         _isRegister = !_isRegister;
         _errorMessage = null;
+        _pendingApproval = false;
     }
 
     private async Task OnKeyDown(KeyboardEventArgs args)

@@ -27,6 +27,7 @@ public static class OAuthEndpoints
             IDbContextFactory<InventoryContext> dbFactory,
             JwtService jwtService,
             PendingAuthService pending,
+            SettingsService settings,
             IConfiguration config) =>
         {
             var result = await ctx.AuthenticateAsync(ExternalScheme);
@@ -83,15 +84,19 @@ public static class OAuthEndpoints
                 if (existing != null)
                 {
                     user = await db.Users.FirstAsync(u => u.UserId == existing.UserId);
+                    if (user.Status != "Active")
+                        return Results.Redirect(BlazorUrl(config, "/auth/pending"));
                 }
                 else
                 {
+                    var autoApprove = await settings.GetBoolAsync(AuthEndpoints.AutoApproveKey, fallback: true);
+
                     var username = displayName;
                     var counter  = 1;
                     while (await db.Users.AnyAsync(u => u.UserName == username))
                         username = $"{displayName}{counter++}";
 
-                    user = new User { UserName = username, PasswordHash = string.Empty };
+                    user = new User { UserName = username, PasswordHash = string.Empty, Status = autoApprove ? "Active" : "Pending" };
                     db.Users.Add(user);
                     await db.SaveChangesAsync();
 
@@ -102,6 +107,9 @@ public static class OAuthEndpoints
                         ProviderKey = providerKey
                     });
                     await db.SaveChangesAsync();
+
+                    if (!autoApprove)
+                        return Results.Redirect(BlazorUrl(config, "/auth/pending"));
                 }
             }
 
