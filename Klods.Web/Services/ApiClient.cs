@@ -207,7 +207,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── Minifigs ─────────────────────────────────────────────────────────────
 
-    public Task<MinifigSearchDto[]?>      SearchMinifigsCatalogAsync(string q)    => GetAsync<MinifigSearchDto[]>($"/api/minifigs/catalog-search?q={Uri.EscapeDataString(q)}");
+    public Task<MinifigSearchPage?>        SearchMinifigsCatalogAsync(string q, int page = 0, int pageSize = 10)
+        => GetAsync<MinifigSearchPage>($"/api/minifigs/catalog-search?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
     public Task<MinifigCatalogStatsDto?>  GetMinifigCatalogStatsAsync()           => GetAsync<MinifigCatalogStatsDto>("/api/minifigs/catalog-stats");
     public Task<MinifigCatalogPage?>      GetMinifigsCatalogPageAsync(string q, string sort, string dir, int page, int pageSize)
         => GetAsync<MinifigCatalogPage>($"/api/minifigs/catalog?q={Uri.EscapeDataString(q)}&sort={sort}&dir={dir}&page={page}&pageSize={pageSize}");
@@ -378,6 +379,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
     public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
+    public record MinifigSearchPage(List<MinifigSearchDto> Items, int Total);
     public record MinifigCatalogStatsDto(int TotalMinifigs, long TotalParts);
     public record MinifigCatalogPage(List<MinifigCatalogViewDto> Items, int Total);
     public record MinifigBrickDto(string BrickId, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Quantity);

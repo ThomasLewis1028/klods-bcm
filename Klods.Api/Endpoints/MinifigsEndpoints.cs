@@ -11,23 +11,28 @@ public static class MinifigsEndpoints
 
         // Server-side catalog search (the full ~17k-fig catalog is too large to ship to the client).
         // Only returns figs that have an image, since this powers the profile-picture picker.
-        group.MapGet("/catalog-search", async (string q, IDbContextFactory<InventoryContext> dbFactory) =>
+        group.MapGet("/catalog-search", async (string q, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var query = (q ?? "").Trim();
-            if (query.Length < 2) return Results.Ok(Array.Empty<MinifigSearchDto>());
+            if (query.Length < 2) return Results.Ok(new MinifigSearchPage([], 0));
+            if (pageSize <= 0) pageSize = 10;
 
             await using var db = dbFactory.CreateDbContext();
             var like = $"%{query}%";
 
-            var matches = await db.Set<Minifig>().AsNoTracking()
+            var baseQuery = db.Set<Minifig>().AsNoTracking()
                 .Where(m => m.ImgUrl != null && m.ImgUrl != ""
                             && (EF.Functions.ILike(m.MinifigId, like) || EF.Functions.ILike(m.Name, like)))
-                .OrderBy(m => m.Name)
-                .Take(100)
+                .OrderBy(m => m.Name);
+
+            var total = await baseQuery.CountAsync();
+            var items = await baseQuery
+                .Skip(page * pageSize)
+                .Take(pageSize)
                 .Select(m => new MinifigSearchDto(m.MinifigId, m.Name, m.ImgUrl))
                 .ToListAsync();
 
-            return Results.Ok(matches);
+            return Results.Ok(new MinifigSearchPage(items, total));
         });
 
         // Current user's loose-owned count for a single fig (for the detail dialog).
@@ -162,6 +167,7 @@ public static class MinifigsEndpoints
 
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
     public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
+    public record MinifigSearchPage(List<MinifigSearchDto> Items, int Total);
     public record MinifigCatalogStatsDto(int TotalMinifigs, long TotalParts);
     public record MinifigCatalogPage(List<MinifigCatalogViewDto> Items, int Total);
     public record LooseCountDto(int Count);
