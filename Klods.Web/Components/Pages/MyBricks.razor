@@ -59,7 +59,7 @@
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
                        StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenImportBrickDialog">
+                       OnClick="OpenAddBrickDialog">
                 Add Bricks
             </MudButton>
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
@@ -91,7 +91,7 @@
                         Add a set to your collection or add loose bricks directly.
                     </MudText>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenImportBrickDialog">
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddBrickDialog">
                         Add Loose Bricks
                     </MudButton>
                 </MudStack>
@@ -419,9 +419,9 @@
         StateHasChanged();
     }
 
-    private async Task OpenImportBrickDialog()
+    private async Task OpenAddBrickDialog()
     {
-        var dialog = await DialogService.ShowAsync<ImportBrickDialog>("Add Loose Bricks",
+        var dialog = await DialogService.ShowAsync<AddBrickDialog>("Add Bricks",
             new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
         var result = await dialog.Result;
         if (result is { Canceled: false })

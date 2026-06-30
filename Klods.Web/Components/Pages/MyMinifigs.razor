@@ -55,12 +55,12 @@
     </MudItem>
 
     <MudItem xs="12">
-        @* Toolbar: Import + view toggle *@
+        @* Toolbar: Add + view toggle *@
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Download"
-                       OnClick="OpenImportMinifigDialog">
-                Import
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddMinifigDialog">
+                Add Minifig
             </MudButton>
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                 @if (_view == "grid")
@@ -91,8 +91,8 @@
                         Add a set containing minifigs, or import them directly.
                     </MudText>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Download" OnClick="OpenImportMinifigDialog">
-                        Import Minifig
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddMinifigDialog">
+                        Add Minifig
                     </MudButton>
                 </MudStack>
             </MudPaper>
@@ -439,9 +439,9 @@
         StateHasChanged();
     }
 
-    private async Task OpenImportMinifigDialog()
+    private async Task OpenAddMinifigDialog()
     {
-        var dialog = await DialogService.ShowAsync<ImportMinifigDialog>("Import Minifigs",
+        var dialog = await DialogService.ShowAsync<AddMinifigDialog>("Add Minifig",
             new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
         var result = await dialog.Result;
         if (result is { Canceled: false })

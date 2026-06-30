@@ -1,0 +1,350 @@
+@inject ApiClient Api
+@inject ImageStorageService ImageStorage
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(_step switch {
+                Step.Search  => "Add Minifig",
+                Step.Confirm => "Confirm Minifig",
+                _            => "Adding..."
+            })
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            @* ── Step 1: Search local catalog ──────────────────────────────── *@
+            @if (_step == Step.Search)
+            {
+                <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged"
+                              Immediate="true" DebounceInterval="350"
+                              Placeholder="Search by minifig ID or name…"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined" Clearable="true"/>
+
+                @if (_isSearching)
+                {
+                    <MudStack AlignItems="AlignItems.Center">
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+                    </MudStack>
+                }
+                else if (_searchResults.Count > 0)
+                {
+                    <MudStack Spacing="1">
+                        @foreach (var r in _searchResults)
+                        {
+                            var result = r;
+                            <MudPaper Elevation="1" Class="pa-2 search-result"
+                                      @onclick="() => SelectLocal(result)">
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudImage Src="@ImageStorage.ResolveUrl(result.ImgUrl)" Height="50" Width="50"
+                                              Style="object-fit:contain; flex-shrink:0;"/>
+                                    <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@result.Name</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@result.MinifigId</MudText>
+                                    </MudStack>
+                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary"/>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                        @if (_totalResults > PageSize)
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small"
+                                               Disabled="@(_page == 0)" OnClick="PrevPage"/>
+                                <MudText Typo="Typo.caption">
+                                    Page @(_page + 1) of @((_totalResults + PageSize - 1) / PageSize)
+                                </MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small"
+                                               Disabled="@((_page + 1) * PageSize >= _totalResults)" OnClick="NextPage"/>
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+                else if (_search.Length >= 2 && !_isSearching)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">No minifigs found in catalog.</MudAlert>
+                }
+
+                @* Rebrickable fallback *@
+                @if (!_showRebrickable)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Not finding it?
+                        <MudLink OnClick="@(() => _showRebrickable = true)" Style="cursor:pointer;">Import from Rebrickable</MudLink>
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        <MudTextField @bind-Value="_rebrickableQuery" Label="Minifig ID or name" Variant="Variant.Outlined"
+                                      Immediate="true" HelperText="e.g. fig-001162 or Darth Vader"/>
+                        @if (_resolveError)
+                        {
+                            <MudAlert Severity="Severity.Error" Dense="true">
+                                "@_rebrickableQuery" could not be found on Rebrickable.
+                            </MudAlert>
+                        }
+                        @if (_rebrickableCandidates.Count > 0)
+                        {
+                            <MudStack Spacing="1">
+                                @foreach (var c in _rebrickableCandidates)
+                                {
+                                    var candidate = c;
+                                    <MudPaper Elevation="1" Class="pa-2 search-result"
+                                              @onclick="() => SelectCandidate(candidate)">
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                            @if (candidate.ImageUrl != null)
+                                            {
+                                                <img src="@candidate.ImageUrl"
+                                                     style="width:50px;height:50px;object-fit:contain;flex-shrink:0;" alt=""/>
+                                            }
+                                            else
+                                            {
+                                                <div style="width:50px;height:50px;background:var(--mud-palette-background-grey);border-radius:4px;flex-shrink:0;"/>
+                                            }
+                                            <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                                <MudText Typo="Typo.body2" Style="font-weight:600;">@candidate.Name</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @candidate.MinifigId — @candidate.NumParts parts
+                                                </MudText>
+                                            </MudStack>
+                                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary"/>
+                                        </MudStack>
+                                    </MudPaper>
+                                }
+                                @if (_rebrickableHasMore)
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="LoadMoreCandidates">
+                                        Load more results
+                                    </MudButton>
+                                }
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+            }
+
+            @* ── Step 2: Confirm + count + All Parts ───────────────────────── *@
+            else if (_step == Step.Confirm && _selected != null)
+            {
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    @if (_selected.ImgUrl != null)
+                    {
+                        <img src="@_selected.ImgUrl" style="height:140px;width:140px;object-fit:contain;" alt=""/>
+                    }
+                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6" Align="Align.Center">@_selected.Name</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+                            @_selected.MinifigId
+                            @if (_selected.NumParts > 0) { <text> · @_selected.NumParts parts</text> }
+                        </MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider/>
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText>Copies to add</MudText>
+                    <MudNumericField @bind-Value="_count" Min="1" Max="20"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:90px;"/>
+                </MudStack>
+                <MudTooltip Text="Mark all parts of this minifig as already in your inventory">
+                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText>All Parts (mark every part owned)</MudText>
+                        <MudSwitch @bind-Value="_applyParts" Color="Color.Primary"/>
+                    </MudStack>
+                </MudTooltip>
+            }
+
+            @* ── Step 3: Adding ────────────────────────────────────────────── *@
+            else if (_step == Step.Adding)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
+                <MudText Typo="Typo.caption" Align="Align.Center">@_statusMessage</MudText>
+            }
+
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        @if (_step == Step.Search)
+        {
+            <MudButton OnClick="Cancel" Variant="Variant.Filled">Cancel</MudButton>
+            <MudSpacer/>
+            @if (_showRebrickable)
+            {
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ResolveRebrickable"
+                           Disabled="@(string.IsNullOrWhiteSpace(_rebrickableQuery) || _isResolving)">
+                    @if (_isResolving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                    }
+                    Look Up
+                </MudButton>
+            }
+        }
+        else if (_step == Step.Confirm)
+        {
+            <MudButton Variant="Variant.Filled" OnClick="BackToSearch">Back</MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartAdding"
+                       Disabled="@(_count < 1)">
+                Add to Collection
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .search-result { cursor: pointer; transition: background .1s ease; }
+    .search-result:hover { background: var(--mud-palette-action-hover); }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private enum Step { Search, Confirm, Adding }
+
+    private Step _step = Step.Search;
+
+    private const int PageSize = 10;
+    private string _search = "";
+    private List<ApiClient.MinifigSearchDto> _searchResults = [];
+    private int _totalResults;
+    private int _page;
+    private bool _isSearching;
+
+    private bool _showRebrickable;
+    private string _rebrickableQuery = "";
+    private bool _isResolving;
+    private bool _resolveError;
+    private List<ApiClient.MinifigCandidateDto> _rebrickableCandidates = [];
+    private bool _rebrickableHasMore;
+    private int _rebrickablePage = 1;
+
+    private SelectedMinifig? _selected;
+    private int _count = 1;
+    private bool _applyParts;
+    private string _statusMessage = "";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void BackToSearch()
+    {
+        _selected = null;
+        _count = 1;
+        _applyParts = false;
+        _step = Step.Search;
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _search = value ?? "";
+        _searchResults = [];
+        _totalResults = 0;
+        _page = 0;
+        if (_search.Length < 2) return;
+        await FetchSearchPage();
+    }
+
+    private async Task PrevPage() { _page--; await FetchSearchPage(); }
+    private async Task NextPage() { _page++; await FetchSearchPage(); }
+
+    private async Task FetchSearchPage()
+    {
+        _isSearching = true;
+        StateHasChanged();
+        var result = await Api.SearchMinifigsCatalogAsync(_search, _page, PageSize);
+        _searchResults = result?.Items ?? [];
+        _totalResults = result?.Total ?? 0;
+        _isSearching = false;
+        StateHasChanged();
+    }
+
+    private void SelectLocal(ApiClient.MinifigSearchDto result)
+    {
+        _selected = new SelectedMinifig
+        {
+            MinifigId = result.MinifigId,
+            Name = result.Name,
+            ImgUrl = ImageStorage.ResolveUrl(result.ImgUrl),
+        };
+        _step = Step.Confirm;
+    }
+
+    private void SelectCandidate(ApiClient.MinifigCandidateDto candidate)
+    {
+        _selected = new SelectedMinifig
+        {
+            MinifigId = candidate.MinifigId,
+            Name = candidate.Name,
+            ImgUrl = candidate.ImageUrl,
+            NumParts = candidate.NumParts,
+        };
+        _step = Step.Confirm;
+    }
+
+    private async Task ResolveRebrickable()
+    {
+        _isResolving = true;
+        _resolveError = false;
+        _rebrickableCandidates = [];
+        _rebrickablePage = 1;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Api.ResolveMinifigIdPostAsync(_rebrickableQuery.Trim());
+            if (response == null || response.Results.Count == 0)
+            {
+                _resolveError = true;
+                return;
+            }
+            _rebrickableCandidates = response.Results;
+            _rebrickableHasMore = response.HasMore;
+        }
+        catch { _resolveError = true; }
+        finally
+        {
+            _isResolving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMoreCandidates()
+    {
+        _rebrickablePage++;
+        try
+        {
+            var response = await Api.ResolveMinifigIdPostAsync(_rebrickableQuery.Trim(), _rebrickablePage);
+            if (response != null)
+            {
+                _rebrickableCandidates.AddRange(response.Results);
+                _rebrickableHasMore = response.HasMore;
+            }
+        }
+        catch { _rebrickableHasMore = false; }
+        StateHasChanged();
+    }
+
+    private async Task StartAdding()
+    {
+        if (_selected == null) return;
+        _step = Step.Adding;
+        _statusMessage = $"Adding {_selected.Name}…";
+        StateHasChanged();
+
+        await Api.AddOwnedMinifigAsync(_selected.MinifigId, _count, _applyParts);
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private class SelectedMinifig
+    {
+        public string MinifigId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? ImgUrl { get; set; }
+        public int NumParts { get; set; }
+    }
+}

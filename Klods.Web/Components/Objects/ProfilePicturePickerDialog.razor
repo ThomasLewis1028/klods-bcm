@@ -88,7 +88,7 @@
 
         _searching = true;
         StateHasChanged();
-        _results = (await Api.SearchMinifigsCatalogAsync(q))?.ToList() ?? [];
+        _results = (await Api.SearchMinifigsCatalogAsync(q))?.Items ?? [];
         _searching = false;
         StateHasChanged();
     }
