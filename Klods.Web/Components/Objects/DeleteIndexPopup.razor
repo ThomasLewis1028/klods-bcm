@@ -45,7 +45,7 @@
 
     private async Task DeleteSet(string id, int setIndex)
     {
-        await Api.DeleteOwnedSetAsync(id, setIndex);
+        await Api.DeleteOwnedSetAsync(id, setIndex, MoveStock);
         MudDialog.Close();
     }
 }
