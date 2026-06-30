@@ -88,30 +88,38 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         return resp?.Token;
     }
 
-    public async Task<string?> LoginAsync(string username, string password)
-    {
-        var resp = await GetTokenResponse("/api/auth/login", new { Username = username, Password = password });
-        return resp?.Token;
-    }
-
-    public async Task<string?> RegisterAsync(string username, string password)
-    {
-        var resp = await GetTokenResponse("/api/auth/register", new { Username = username, Password = password });
-        return resp?.Token;
-    }
-
-    private async Task<TokenResponse?> GetTokenResponse(string url, object body)
+    public async Task<(string? Token, bool IsPending)> LoginAsync(string username, string password)
     {
         try
         {
-            var req = new HttpRequestMessage(HttpMethod.Post, url)
+            var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
             {
-                Content = JsonContent.Create(body, options: JsonOpts)
+                Content = JsonContent.Create(new { Username = username, Password = password }, options: JsonOpts)
             };
             var resp = await factory.CreateClient("api").SendAsync(req);
-            return resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<TokenResponse>(JsonOpts) : null;
+            if (resp.StatusCode == HttpStatusCode.Forbidden) return (null, true);
+            if (!resp.IsSuccessStatusCode) return (null, false);
+            var token = (await resp.Content.ReadFromJsonAsync<TokenResponse>(JsonOpts))?.Token;
+            return (token, false);
         }
-        catch { return null; }
+        catch { return (null, false); }
+    }
+
+    public async Task<(string? Token, bool IsPending)> RegisterAsync(string username, string password)
+    {
+        try
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/register")
+            {
+                Content = JsonContent.Create(new { Username = username, Password = password }, options: JsonOpts)
+            };
+            var resp = await factory.CreateClient("api").SendAsync(req);
+            if (resp.StatusCode == HttpStatusCode.Accepted) return (null, true);
+            if (!resp.IsSuccessStatusCode) return (null, false);
+            var token = (await resp.Content.ReadFromJsonAsync<TokenResponse>(JsonOpts))?.Token;
+            return (token, false);
+        }
+        catch { return (null, false); }
     }
 
     public Task<UserProfileDto?> GetMyProfileAsync(string? bearerToken = null)
@@ -257,6 +265,12 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public async Task<bool> ImportColorsAsync()           => (await PostAsync("/api/admin/import-colors")).Ok;
     public async Task<bool> SetUserRoleAsync(int userId, string role)
         => (await PatchAsync($"/api/admin/users/{userId}/role", new { Role = role })).Ok;
+    public async Task<bool> SetUserStatusAsync(int userId, string status)
+        => (await PatchAsync($"/api/admin/users/{userId}/status", new { Status = status })).Ok;
+    public Task<RegistrationSettingsDto?> GetRegistrationSettingsAsync()
+        => GetAsync<RegistrationSettingsDto>("/api/admin/registration-settings");
+    public async Task<bool> SaveRegistrationSettingsAsync(bool autoApprove)
+        => (await PutAsync("/api/admin/registration-settings", new { AutoApprove = autoApprove })).Ok;
 
     public Task<CatalogImportDto[]?> GetCatalogImportsAsync() => GetAsync<CatalogImportDto[]>("/api/admin/catalog-imports");
 
@@ -392,7 +406,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
     public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs);
 
-    public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl);
+    public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string Status);
+    public record RegistrationSettingsDto(bool AutoApprove);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
     public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
     public record TimezoneDto(string Id, string DisplayName);

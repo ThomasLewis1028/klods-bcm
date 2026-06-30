@@ -49,6 +49,14 @@
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.User.UserId" Title="ID"/>
                 <PropertyColumn Property="x => x.User.UserName" Title="Username"/>
+                <TemplateColumn Title="Status" SortBy="x => x.User.Status">
+                    <CellTemplate>
+                        <MudChip Color="@(context.Item.User.Status == "Active" ? Color.Success : Color.Warning)"
+                                 Size="Size.Small">
+                            @context.Item.User.Status
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
                 <TemplateColumn Title="Role" SortBy="x => x.User.Role">
                     <CellTemplate>
                         <MudChip Color="@(context.Item.User.Role == "Admin" ? Color.Warning : Color.Default)"
@@ -59,7 +67,14 @@
                 </TemplateColumn>
                 <TemplateColumn Title="Actions" Sortable="false">
                     <CellTemplate>
-                        @if (context.Item.User.UserId != AuthService.CurrentUser?.UserId)
+                        @if (context.Item.User.Status == "Pending")
+                        {
+                            <MudButton OnClick="() => ApproveUser(context.Item.User)"
+                                       Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                Approve
+                            </MudButton>
+                        }
+                        else if (context.Item.User.UserId != AuthService.CurrentUser?.UserId)
                         {
                             @if (context.Item.User.Role == "Admin")
                             {
@@ -87,6 +102,15 @@
                 <MudDataGridPager T="UserRow"/>
             </PagerContent>
         </MudDataGrid>
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Registration</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            When auto-approve is off, new accounts require manual admin approval before the user can sign in.
+        </MudText>
+        <MudSwitch T="bool" Value="_registrationAutoApprove" ValueChanged="ToggleAutoApprove" Color="Color.Primary"
+                   Label="@(_registrationAutoApprove ? "Auto-approve new accounts" : "Manual approval required")"/>
     </MudPaper>
 
     <MudPaper Elevation="2" Class="pa-4">
@@ -222,6 +246,7 @@
     private List<UserRow> _rows = [];
     private string _search = string.Empty;
     private bool _isLoading = true;
+    private bool _registrationAutoApprove = true;
 
     private IReadOnlyList<IBrowserFile>? _bulkFiles;
     private bool _bulkRunning;
@@ -258,6 +283,10 @@
             _rssMax = rss.MaxImports;
         }
         await RefreshPreview();
+
+        var regSettings = await Api.GetRegistrationSettingsAsync();
+        if (regSettings != null)
+            _registrationAutoApprove = regSettings.AutoApprove;
 
         _isLoading = false;
     }
@@ -338,6 +367,23 @@
         _bulkRunning = false;
         _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
         StateHasChanged();
+    }
+
+    private async Task ToggleAutoApprove(bool value)
+    {
+        _registrationAutoApprove = value;
+        await Api.SaveRegistrationSettingsAsync(value);
+    }
+
+    private async Task ApproveUser(ApiClient.AdminUserDto user)
+    {
+        if (await Api.SetUserStatusAsync(user.UserId, "Active"))
+        {
+            var idx = _rows.FindIndex(r => r.User.UserId == user.UserId);
+            if (idx >= 0)
+                _rows[idx] = new UserRow { User = user with { Status = "Active" } };
+            StateHasChanged();
+        }
     }
 
     private Task MakeAdmin(ApiClient.AdminUserDto user)   => SetRole(user, "Admin");

@@ -128,16 +128,35 @@ public static class AdminEndpoints
             return Results.Ok(new CatalogImportDto(result.ImportedAt, result.SnapshotDate, result.Source, result.Status, result.Notes));
         });
 
+        group.MapGet("/registration-settings", async (SettingsService settings) =>
+            Results.Ok(new RegistrationSettingsDto(await settings.GetBoolAsync(AuthEndpoints.AutoApproveKey, true))));
+
+        group.MapPut("/registration-settings", async (RegistrationSettingsDto req, SettingsService settings) =>
+        {
+            await settings.SetAsync(AuthEndpoints.AutoApproveKey, req.AutoApprove ? "true" : "false");
+            return Results.Ok();
+        });
+
         group.MapGet("/users", async (IDbContextFactory<InventoryContext> dbFactory) =>
         {
             await using var db = dbFactory.CreateDbContext();
             var users = await db.Users.AsNoTracking()
                 .OrderBy(u => u.UserName)
-                .Select(u => new UserDto(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl))
+                .Select(u => new UserDto(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl, u.Status))
                 .ToListAsync();
             return Results.Ok(users);
         });
 
+        group.MapPatch("/users/{userId:int}/status", async (
+            int userId, SetStatusRequest req, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            if (req.Status != "Active" && req.Status != "Pending")
+                return Results.BadRequest("Status must be 'Active' or 'Pending'.");
+            await using var db = dbFactory.CreateDbContext();
+            var rows = await db.Users.Where(u => u.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, req.Status));
+            return rows > 0 ? Results.Ok() : Results.NotFound();
+        });
 
         group.MapPatch("/users/{userId:int}/role", async (
             int userId, SetRoleRequest req, IDbContextFactory<InventoryContext> dbFactory) =>
@@ -161,8 +180,10 @@ public static class AdminEndpoints
         return null;
     }
 
-    public record UserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl);
+    public record UserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string Status);
     public record SetRoleRequest(string Role);
+    public record SetStatusRequest(string Status);
+    public record RegistrationSettingsDto(bool AutoApprove);
     public record BulkImportResultDto(string Status, string? Notes, DateTime ImportedAt);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
     public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
