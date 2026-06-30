@@ -45,7 +45,17 @@
     </MudItem>
 
     <MudItem xs="12">
-        <MudStack Row Justify="Justify.FlexEnd" Class="mb-2">
+        <MudStack Row Justify="Justify.FlexEnd" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+            @if (_view == "grid")
+            {
+                <MudMenu Label="@SortLabel" StartIcon="@Icons.Material.Filled.Sort"
+                         EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined" Size="Size.Small">
+                    @foreach (var (field, label) in _sortOptions)
+                    {
+                        <MudMenuItem OnClick="@(() => SetSort(field))">@label@(Arrow(field))</MudMenuItem>
+                    }
+                </MudMenu>
+            }
             <MudToggleGroup T="string" Value="_view" ValueChanged="OnViewChanged" Size="Size.Small"
                             Color="Color.Primary" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Dense="true">
                 <MudToggleItem Value="@("list")"><MudIcon Icon="@Icons.Material.Filled.ViewList" Size="Size.Small"/></MudToggleItem>
@@ -197,6 +207,11 @@
     private List<BrickInfo> _rows = [];
     private string _query = "";
     private string _sort = "sets";
+    private static readonly (string Field, string Label)[] _sortOptions =
+    [
+        ("sets", "Sets"), ("name", "Name"), ("id", "Part Number"), ("color", "Color"),
+    ];
+    private string SortLabel => "Sort: " + (_sortOptions.FirstOrDefault(o => o.Field == _sort).Label ?? "Sets");
     private string _dir = "desc";
     private int _page = 1;
     private int _pageSize = 25;

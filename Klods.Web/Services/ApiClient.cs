@@ -222,8 +222,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         }
         catch { return null; }
     }
-    public async Task<bool> AddOwnedMinifigAsync(string minifigId, int count)
-        => (await PostAsync("/api/minifigs/owned", new { MinifigId = minifigId, Count = count })).Ok;
+    public async Task<bool> AddOwnedMinifigAsync(string minifigId, int count, bool applyParts = false)
+        => (await PostAsync("/api/minifigs/owned", new { MinifigId = minifigId, Count = count, ApplyParts = applyParts })).Ok;
     public async Task<bool> UpdateMinifigStockAsync(string minifigId, int stock)
         => (await PatchAsync($"/api/minifigs/owned/{Uri.EscapeDataString(minifigId)}", new { Stock = stock })).Ok;
 

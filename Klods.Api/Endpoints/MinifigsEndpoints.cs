@@ -132,7 +132,7 @@ public static class MinifigsEndpoints
         group.MapPost("/owned", async (AddOwnedMinifigRequest req, HttpContext http, ImportData importer) =>
         {
             var userId = http.UserId();
-            var ok = await importer.AddOwnedMinifig(req.MinifigId, userId, req.Count);
+            var ok = await importer.AddOwnedMinifig(req.MinifigId, userId, req.Count, req.ApplyParts);
             return ok ? Results.Ok() : Results.BadRequest("Could not add owned minifig.");
         });
 
@@ -169,6 +169,6 @@ public static class MinifigsEndpoints
     public record OwnedMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock);
     public record ImportMinifigRequest(string Query, int Page = 0);
     public record ResolveMinifigResponse(IEnumerable<MinifigCandidate> Results, bool Resolved, bool HasMore);
-    public record AddOwnedMinifigRequest(string MinifigId, int Count);
+    public record AddOwnedMinifigRequest(string MinifigId, int Count, bool ApplyParts = false);
     public record UpdateStockRequest(int Stock);
 }

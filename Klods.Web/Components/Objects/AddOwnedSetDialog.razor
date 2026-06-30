@@ -1,0 +1,282 @@
+@inject ApiClient Api
+@inject ImageStorageService ImageStorage
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(_step switch {
+                Step.Search  => "Add Set",
+                Step.Confirm => "Confirm Set",
+                _            => "Adding..."
+            })
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            @* ── Step 1: Search ────────────────────────────────────────────── *@
+            @if (_step == Step.Search)
+            {
+                <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged"
+                              Immediate="true" DebounceInterval="350"
+                              Placeholder="Search by name or set number (e.g. 75192)…"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined" Clearable="true"/>
+
+                @if (_isSearching)
+                {
+                    <MudStack AlignItems="AlignItems.Center">
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+                    </MudStack>
+                }
+                else if (_searchResults.Count > 0)
+                {
+                    <MudStack Spacing="1">
+                        @foreach (var r in _searchResults)
+                        {
+                            var result = r;
+                            <MudPaper Elevation="1" Class="pa-2 search-result" @onclick="() => SelectCatalogResult(result)">
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudImage Src="@ImageStorage.ResolveUrl(result.SetImg)" Height="50" Width="50"
+                                              Style="object-fit:contain; flex-shrink:0;"/>
+                                    <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@result.Name</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @result.SetId · @result.ReleaseYear · @result.NumBricks pcs
+                                        </MudText>
+                                    </MudStack>
+                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary"/>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+                else if (_search.Length >= 2 && !_isSearching)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">No sets found in catalog.</MudAlert>
+                }
+
+                @* Rebrickable fallback *@
+                @if (!_showRebrickable)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Not finding it?
+                        <MudLink OnClick="@(() => _showRebrickable = true)" Style="cursor:pointer;">Import from Rebrickable</MudLink>
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        <MudTextField @bind-Value="_rebrickableId" Label="Set ID" Variant="Variant.Outlined"
+                                      Immediate="true" HelperText="e.g. 75192-1"/>
+                        @if (_resolveError)
+                        {
+                            <MudAlert Severity="Severity.Error" Dense="true">
+                                "@_rebrickableId" could not be found on Rebrickable.
+                            </MudAlert>
+                        }
+                    </MudStack>
+                }
+            }
+
+            @* ── Step 2: Confirm ───────────────────────────────────────────── *@
+            else if (_step == Step.Confirm && _selected != null)
+            {
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudImage Src="@ImageStorage.ResolveUrl(_selected.ImgUrl)" Height="140" Width="140"
+                              Style="object-fit:contain;"/>
+                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6" Align="Align.Center">@_selected.Name</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+                            @_selected.SetId
+                            @if (_selected.Year > 0) { <text> · @_selected.Year</text> }
+                            @if (_selected.NumBricks > 0) { <text> · @_selected.NumBricks pieces</text> }
+                            @if (!string.IsNullOrEmpty(_selected.ThemeName)) { <text> · @_selected.ThemeName</text> }
+                        </MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider/>
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText>Copies to add</MudText>
+                    <MudNumericField @bind-Value="_copies" Min="1" Max="20"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:90px;"/>
+                </MudStack>
+                <MudTooltip Text="Mark all bricks in this set as already in your inventory">
+                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText>Full Stock (all pieces in inventory)</MudText>
+                        <MudSwitch @bind-Value="_applyBricks" Color="Color.Primary"/>
+                    </MudStack>
+                </MudTooltip>
+            }
+
+            @* ── Step 3: Adding ────────────────────────────────────────────── *@
+            else if (_step == Step.Adding)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
+                <MudText Typo="Typo.caption" Align="Align.Center">@_statusMessage</MudText>
+            }
+
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        @if (_step == Step.Search)
+        {
+            <MudButton OnClick="Cancel" Variant="Variant.Filled">Cancel</MudButton>
+            <MudSpacer/>
+            @if (_showRebrickable)
+            {
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ResolveRebrickable"
+                           Disabled="@(string.IsNullOrWhiteSpace(_rebrickableId) || _isResolving)">
+                    @if (_isResolving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                    }
+                    Resolve
+                </MudButton>
+            }
+        }
+        else if (_step == Step.Confirm)
+        {
+            <MudButton Variant="Variant.Filled" OnClick="BackToSearch">Back</MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartAdding"
+                       Disabled="@(_copies < 1)">
+                Add to Collection
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .search-result { cursor: pointer; transition: background .1s ease; }
+    .search-result:hover { background: var(--mud-palette-action-hover); }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private enum Step { Search, Confirm, Adding }
+
+    private Step _step = Step.Search;
+
+    private string _search = "";
+    private List<ApiClient.SetCatalogSearchDto> _searchResults = [];
+    private bool _isSearching;
+
+    private bool _showRebrickable;
+    private string _rebrickableId = "";
+    private bool _isResolving;
+    private bool _resolveError;
+
+    private SelectedSetInfo? _selected;
+    private int _copies = 1;
+    private bool _applyBricks;
+    private string _statusMessage = "";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void BackToSearch()
+    {
+        _selected = null;
+        _step = Step.Search;
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _search = value ?? "";
+        _searchResults = [];
+        if (_search.Length < 2) return;
+
+        _isSearching = true;
+        StateHasChanged();
+        var page = await Api.GetSetsCatalogPageAsync(_search, null, "year", "desc", 0, 6);
+        _searchResults = page?.Items ?? [];
+        _isSearching = false;
+        StateHasChanged();
+    }
+
+    private void SelectCatalogResult(ApiClient.SetCatalogSearchDto result)
+    {
+        _selected = new SelectedSetInfo
+        {
+            SetId = result.SetId,
+            Name = result.Name,
+            ImgUrl = result.SetImg,
+            Year = result.ReleaseYear,
+            NumBricks = result.NumBricks,
+            ThemeName = result.ThemeName,
+            NeedsImport = false,
+        };
+        _step = Step.Confirm;
+    }
+
+    private async Task ResolveRebrickable()
+    {
+        _isResolving = true;
+        _resolveError = false;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Api.ResolveSetIdPostAsync(_rebrickableId.Trim());
+            if (response == null || !response.Results.Any())
+            {
+                _resolveError = true;
+                return;
+            }
+
+            var candidate = response.Results.First();
+            _selected = new SelectedSetInfo
+            {
+                SetId = candidate.SetNum,
+                Name = candidate.Name,
+                ImgUrl = candidate.ImageUrl,
+                Year = candidate.Year,
+                NeedsImport = true,
+            };
+            _step = Step.Confirm;
+        }
+        catch { _resolveError = true; }
+        finally
+        {
+            _isResolving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartAdding()
+    {
+        if (_selected == null) return;
+        _step = Step.Adding;
+        StateHasChanged();
+
+        if (_selected.NeedsImport)
+        {
+            _statusMessage = $"Importing {_selected.SetId}…";
+            StateHasChanged();
+            await Api.ImportSetAsync(_selected.SetId);
+        }
+
+        for (var i = 0; i < _copies; i++)
+        {
+            _statusMessage = $"Adding copy {i + 1} of {_copies}…";
+            StateHasChanged();
+            await Api.AddOwnedSetAsync(_selected.SetId, _applyBricks);
+        }
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private class SelectedSetInfo
+    {
+        public string SetId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? ImgUrl { get; set; }
+        public int Year { get; set; }
+        public int NumBricks { get; set; }
+        public string? ThemeName { get; set; }
+        public bool NeedsImport { get; set; }
+    }
+}
