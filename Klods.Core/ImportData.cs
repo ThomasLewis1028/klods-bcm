@@ -72,7 +72,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
             await CreateSetBrickOwned(userId.Value, setId, index, applyBricks);
             await EnsureBrickOwnedForSet(userId.Value, setId);
-            await EnsureMinifigOwnedForSet(userId.Value, setId, index);
+            await EnsureMinifigOwnedForSet(userId.Value, setId, index, applyBricks);
 
             logger.LogInformation("Finished adding owned set {SetId} for user {UserId}", setId, userId);
             return true;
@@ -165,13 +165,14 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
     /// <summary>
     /// Creates MinifigOwned instances for an owned set copy: one per fig per SetMinifig.Count,
-    /// each linked to (setId, setIndex). Tops up to the required count if some already exist,
-    /// so it's safe to call repeatedly for the same copy.
+    /// each linked to (setId, setIndex). Also seeds MinifigBrickOwned rows for each new instance.
+    /// Tops up to the required count if some already exist, so it's safe to call repeatedly.
     /// </summary>
-    public async Task EnsureMinifigOwnedForSet(int userId, string setId, int setIndex)
+    public async Task EnsureMinifigOwnedForSet(int userId, string setId, int setIndex, bool applyBricks = false)
     {
         await using var context = contextFactory.CreateDbContext();
         var ownedContext = context.Set<MinifigOwned>();
+        var brickOwnedContext = context.Set<MinifigBrickOwned>();
 
         var bom = await context.Set<SetMinifig>()
             .Where(sm => sm.SetId == setId)
@@ -180,6 +181,10 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
         foreach (var fig in bom)
         {
+            var figBricks = await context.Set<MinifigBrick>()
+                .Where(mb => mb.MinifigId == fig.MinifigId)
+                .ToListAsync();
+
             var alreadyOnCopy = await ownedContext.CountAsync(mo =>
                 mo.UserId == userId && mo.MinifigId == fig.MinifigId &&
                 mo.SetId == setId && mo.SetIndex == setIndex);
@@ -188,14 +193,28 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
             for (var i = alreadyOnCopy; i < fig.Count; i++)
             {
+                var minifigIndex = nextIndex++;
                 ownedContext.Add(new MinifigOwned
                 {
                     UserId = userId,
                     MinifigId = fig.MinifigId,
-                    MinifigIndex = nextIndex++,
+                    MinifigIndex = minifigIndex,
                     SetId = setId,
                     SetIndex = setIndex,
                 });
+
+                foreach (var brick in figBricks)
+                {
+                    brickOwnedContext.Add(new MinifigBrickOwned
+                    {
+                        UserId = userId,
+                        MinifigId = fig.MinifigId,
+                        MinifigIndex = minifigIndex,
+                        PartNum = brick.PartNum,
+                        ColorId = brick.ColorId,
+                        Stock = applyBricks ? brick.Count : 0,
+                    });
+                }
             }
         }
 

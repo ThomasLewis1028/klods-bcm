@@ -55,10 +55,10 @@ public static class SetsEndpoints
         });
 
         group.MapDelete("/owned/{setId}/{setIndex:int}", async (
-            string setId, int setIndex, HttpContext http, DeleteData deleter) =>
+            string setId, int setIndex, bool moveStock, HttpContext http, DeleteData deleter) =>
         {
             var userId = http.UserId();
-            var ok = deleter.DeleteOwnedSetInfo(userId, setId, setIndex, moveStock: false);
+            var ok = deleter.DeleteOwnedSetInfo(userId, setId, setIndex, moveStock);
             return ok ? Results.Ok() : Results.NotFound();
         });
 
@@ -94,14 +94,24 @@ public static class SetsEndpoints
                 .Where(s => setIds.Contains(s.SetId))
                 .ToDictionaryAsync(s => s.SetId);
 
-            // Total required bricks per setId
+            // Total required set bricks per setId
             var requiredPerSet = await db.Set<SetBrick>().AsNoTracking()
                 .Where(sb => setIds.Contains(sb.SetId))
                 .GroupBy(sb => sb.SetId)
                 .Select(g => new { SetId = g.Key, Total = g.Sum(sb => sb.Count) })
                 .ToDictionaryAsync(x => x.SetId, x => x.Total);
 
-            // Stock per (setId, setIndex)
+            // Required minifig parts per setId: for each set's minifigs, count × that minifig's part total
+            var minifigRequiredPerSet = await db.Set<SetMinifig>().AsNoTracking()
+                .Where(sm => setIds.Contains(sm.SetId))
+                .Join(db.Set<MinifigBrick>().AsNoTracking(),
+                    sm => sm.MinifigId, mb => mb.MinifigId,
+                    (sm, mb) => new { sm.SetId, Parts = sm.Count * mb.Count })
+                .GroupBy(x => x.SetId)
+                .Select(g => new { SetId = g.Key, Total = g.Sum(x => x.Parts) })
+                .ToDictionaryAsync(x => x.SetId, x => x.Total);
+
+            // Set-brick stock per (setId, setIndex)
             var stockPerInstance = await db.Set<SetBrickOwned>().AsNoTracking()
                 .Where(sbo => sbo.UserId == userId && setIds.Contains(sbo.SetId))
                 .GroupBy(sbo => new { sbo.SetId, sbo.SetIndex })
@@ -109,16 +119,31 @@ public static class SetsEndpoints
                 .ToListAsync();
             var stockDict = stockPerInstance.ToDictionary(x => (x.SetId, x.SetIndex), x => x.Stock);
 
+            // Minifig-part stock per (setId, setIndex), from the figs tied to each owned set copy
+            var minifigStockPerInstance = await db.Set<MinifigOwned>().AsNoTracking()
+                .Where(mo => mo.UserId == userId && mo.SetId != null && mo.SetIndex != null && setIds.Contains(mo.SetId))
+                .Join(db.Set<MinifigBrickOwned>().AsNoTracking(),
+                    mo => new { mo.UserId, mo.MinifigId, mo.MinifigIndex },
+                    mbo => new { mbo.UserId, mbo.MinifigId, mbo.MinifigIndex },
+                    (mo, mbo) => new { mo.SetId, mo.SetIndex, mbo.Stock })
+                .GroupBy(x => new { x.SetId, x.SetIndex })
+                .Select(g => new { g.Key.SetId, g.Key.SetIndex, Stock = g.Sum(x => x.Stock) })
+                .ToListAsync();
+            var minifigStockDict = minifigStockPerInstance
+                .ToDictionary(x => (x.SetId!, x.SetIndex!.Value), x => x.Stock);
+
             var result = ownedList
                 .GroupBy(so => so.SetId)
                 .Where(g => sets.ContainsKey(g.Key))
                 .Select(g =>
                 {
                     var set = sets[g.Key];
-                    var required = requiredPerSet.GetValueOrDefault(g.Key, 0);
+                    var required = requiredPerSet.GetValueOrDefault(g.Key, 0)
+                                 + minifigRequiredPerSet.GetValueOrDefault(g.Key, 0);
                     var instances = g.OrderBy(so => so.SetIndex).Select(so =>
                     {
-                        var stock = stockDict.GetValueOrDefault((so.SetId, so.SetIndex), 0);
+                        var stock = stockDict.GetValueOrDefault((so.SetId, so.SetIndex), 0)
+                                  + minifigStockDict.GetValueOrDefault((so.SetId, so.SetIndex), 0);
                         return new OwnedInstanceDto(so.SetIndex, Math.Max(0, required - stock), stock);
                     }).ToList();
                     return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,

@@ -171,8 +171,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public async Task<bool> ImportSetAsync(string setId)             => (await PostAsync("/api/sets/import", new { SetId = setId })).Ok;
     public async Task<bool> AddOwnedSetAsync(string setId, bool applyBricks = false)
         => (await PostAsync("/api/sets/owned", new { SetId = setId, ApplyBricks = applyBricks })).Ok;
-    public async Task<bool> DeleteOwnedSetAsync(string setId, int setIndex)
-        => (await DeleteAsync($"/api/sets/owned/{Uri.EscapeDataString(setId)}/{setIndex}")).Ok;
+    public async Task<bool> DeleteOwnedSetAsync(string setId, int setIndex, bool moveStock = false)
+        => (await DeleteAsync($"/api/sets/owned/{Uri.EscapeDataString(setId)}/{setIndex}?moveStock={moveStock}")).Ok;
     public async Task<bool> DeleteLastOwnedSetAsync(string setId)
         => (await DeleteAsync($"/api/sets/owned/{Uri.EscapeDataString(setId)}/last")).Ok;
     public async Task<bool> DeleteSetFromCatalogAsync(string setId)

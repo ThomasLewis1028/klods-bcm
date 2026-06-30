@@ -115,17 +115,17 @@
         else if (_view == "grid")
         {
             <div class="card-grid">
-                @foreach (var info in PagedItems)
+                @foreach (var r in FlatPagedItems)
                 {
-                    var r = info;
-                    <MudPaper Class="catalog-card" Elevation="2" @onclick="() => OpenSetDetailDialog(r)">
+                    var row = r;
+                    <MudPaper Class="catalog-card" Elevation="2" @onclick="() => OpenSetDetailDialog(row)">
                         <div class="card-img">
-                            <MudImage Src="@ImageStorage.ResolveUrl(r.Set.SetImg)"
+                            <MudImage Src="@ImageStorage.ResolveUrl(row.Set.SetImg)"
                                       Style="max-width:100%; max-height:100%; object-fit:contain;"/>
                         </div>
                         <div class="card-label">
-                            <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@r.Set.Name</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@r.Set.SetId · ×@r.OwnedSets.Count</MudText>
+                            <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@row.Set.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@row.Set.SetId · #@row.Instance.SetIndex</MudText>
                         </div>
                     </MudPaper>
                 }
@@ -133,9 +133,8 @@
         }
         else
         {
-            <MudDataGrid T="SetInfo" Items="@PagedItems.ToList()" SortMode="SortMode.None" ReadOnly="true">
+            <MudDataGrid T="FlatSetRow" Items="@FlatPagedItems.ToList()" SortMode="SortMode.None" ReadOnly="true">
                 <Columns>
-                    <HierarchyColumn T="SetInfo" ButtonDisabledFunc="@(info => info.OwnedSets.Count < 0)"/>
                     <TemplateColumn Title="Image" Editable="false">
                         <CellTemplate>
                             <MudImage class="cursor-pointer rounded-3" Elevation="2"
@@ -146,6 +145,9 @@
                     <TemplateColumn Editable="false">
                         <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("id")'>Id@(Arrow("id"))</span></HeaderTemplate>
                         <CellTemplate>@context.Item.Set.SetId</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Index" Editable="false">
+                        <CellTemplate>@context.Item.Instance.SetIndex</CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
                         <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("name")'>Name@(Arrow("name"))</span></HeaderTemplate>
@@ -159,9 +161,11 @@
                         <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("year")'>Year@(Arrow("year"))</span></HeaderTemplate>
                         <CellTemplate>@context.Item.Set.ReleaseYear</CellTemplate>
                     </TemplateColumn>
-                    <TemplateColumn Editable="false">
-                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("count")'>Copies@(Arrow("count"))</span></HeaderTemplate>
-                        <CellTemplate>@context.Item.OwnedSets.Count</CellTemplate>
+                    <TemplateColumn Title="Stock" Editable="false">
+                        <CellTemplate>@context.Item.Instance.StockCount</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Missing" Editable="false">
+                        <CellTemplate>@context.Item.Instance.MissingPieceCount</CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
                         <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("pieces")'>Pieces@(Arrow("pieces"))</span></HeaderTemplate>
@@ -174,52 +178,34 @@
                                       Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
                         </CellTemplate>
                     </TemplateColumn>
+                    <TemplateColumn Title="BoM" Editable="false">
+                        <CellTemplate>
+                            <MudIconButton
+                                href=@($"/bom/{context.Item.Set.SetId}/{context.Item.Instance.SetIndex}")
+                                Icon="@Icons.Material.Filled.List"
+                                Variant="Variant.Filled" Color="Color.Primary"
+                                Size="Size.Small"/>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Add" Editable="false">
+                        <CellTemplate>
+                            <MudIconButton
+                                Icon="@Icons.Material.Filled.Add"
+                                Variant="Variant.Filled" Color="Color.Info"
+                                Size="Size.Small"
+                                OnClick="() => AddOwnedSet(context.Item.Set.SetId)"/>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Delete" Editable="false">
+                        <CellTemplate>
+                            <MudIconButton
+                                Icon="@Icons.Material.Filled.Delete"
+                                Variant="Variant.Filled" Color="Color.Error"
+                                Size="Size.Small"
+                                OnClick="() => DeleteOwnedSet(context.Item.Set.SetId, context.Item.Instance.SetIndex, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
+                        </CellTemplate>
+                    </TemplateColumn>
                 </Columns>
-
-                <ChildRowContent Context="setContext">
-                    <div class="child-row-content">
-                    <MudGrid Spacing="10" Class="d-flex">
-                        <MudItem xs="1" Style="display: flex; align-items: stretch;">
-                            <MudButton Style="height: 100%;"
-                                       StartIcon="@Icons.Material.Filled.Add" IconSize="Size.Large"
-                                       Variant="Variant.Filled" Color="Color.Info"
-                                       OnClick="() => AddOwnedSet(setContext.Item.Set.SetId)"/>
-                        </MudItem>
-                        <MudItem xs="11">
-                            @if (setContext.Item.OwnedSets.Count > 0)
-                            {
-                                <MudCard>
-                                    <MudDataGrid T="ApiClient.OwnedInstanceDto" Items="setContext.Item.OwnedSets">
-                                        <Columns>
-                                            <PropertyColumn Title="Index" Property="x => x.SetIndex"/>
-                                            <PropertyColumn Title="Stock" Property="x => x.StockCount"/>
-                                            <PropertyColumn Title="Missing" Property="x => x.MissingPieceCount"/>
-                                            <TemplateColumn Title="BoM" Editable="false">
-                                                <CellTemplate>
-                                                    <MudIconButton
-                                                        href=@($"/bom/{setContext.Item.Set.SetId}/{context.Item.SetIndex}")
-                                                        Icon="@Icons.Material.Filled.List"
-                                                        Variant="Variant.Filled" Color="Color.Primary"
-                                                        Size="Size.Small"/>
-                                                </CellTemplate>
-                                            </TemplateColumn>
-                                            <TemplateColumn Title="Delete" Editable="false">
-                                                <CellTemplate>
-                                                    <MudIconButton
-                                                        Icon="@Icons.Material.Filled.Delete"
-                                                        Variant="Variant.Filled" Color="Color.Error"
-                                                        Size="Size.Small"
-                                                        OnClick="() => DeleteOwnedSet(setContext.Item.Set.SetId, context.Item.SetIndex, setContext.Item.Set.Name, ImageStorage.ResolveUrl(setContext.Item.Set.SetImg))"/>
-                                                </CellTemplate>
-                                            </TemplateColumn>
-                                        </Columns>
-                                    </MudDataGrid>
-                                </MudCard>
-                            }
-                        </MudItem>
-                    </MudGrid>
-                    </div>
-                </ChildRowContent>
             </MudDataGrid>
         }
 
@@ -271,7 +257,7 @@
     private static readonly (string Field, string Label)[] _sortOptions =
     [
         ("name", "Name"), ("id", "Set Number"), ("theme", "Theme"),
-        ("year", "Year"), ("count", "Copies"), ("pieces", "Pieces"),
+        ("year", "Year"), ("pieces", "Pieces"),
     ];
     private string SortLabel => "Sort: " + (_sortOptions.FirstOrDefault(o => o.Field == _sort).Label ?? "Name");
 
@@ -288,31 +274,33 @@
         .OrderBy(t => t);
 
     // ── Filter / sort / page pipeline ─────────────────────────────────────────
-    private IEnumerable<SetInfo> FilteredItems => _setInfos.Where(s =>
-        (string.IsNullOrWhiteSpace(_query) ||
-         s.Set.SetId.Contains(_query, StringComparison.OrdinalIgnoreCase) ||
-         s.Set.Name.Contains(_query, StringComparison.OrdinalIgnoreCase)) &&
-        (string.IsNullOrEmpty(_selectedTheme) || s.Set.ThemeName == _selectedTheme));
+    private IEnumerable<FlatSetRow> FlatFilteredItems => _setInfos
+        .SelectMany(s => s.OwnedSets.Select(o => new FlatSetRow(s.Set, o)))
+        .Where(r =>
+            (string.IsNullOrWhiteSpace(_query) ||
+             r.Set.SetId.Contains(_query, StringComparison.OrdinalIgnoreCase) ||
+             r.Set.Name.Contains(_query, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(_selectedTheme) || r.Set.ThemeName == _selectedTheme));
 
-    private IEnumerable<SetInfo> SortedItems
+    private IEnumerable<FlatSetRow> FlatSortedItems
     {
         get
         {
             var asc = _dir == "asc";
             return _sort switch
             {
-                "id"     => asc ? FilteredItems.OrderBy(s => s.Set.SetId)        : FilteredItems.OrderByDescending(s => s.Set.SetId),
-                "theme"  => asc ? FilteredItems.OrderBy(s => s.Set.ThemeName)    : FilteredItems.OrderByDescending(s => s.Set.ThemeName),
-                "year"   => asc ? FilteredItems.OrderBy(s => s.Set.ReleaseYear)  : FilteredItems.OrderByDescending(s => s.Set.ReleaseYear),
-                "count"  => asc ? FilteredItems.OrderBy(s => s.OwnedSets.Count)  : FilteredItems.OrderByDescending(s => s.OwnedSets.Count),
-                "pieces" => asc ? FilteredItems.OrderBy(s => s.Set.NumBricks)    : FilteredItems.OrderByDescending(s => s.Set.NumBricks),
-                _        => asc ? FilteredItems.OrderBy(s => s.Set.Name)         : FilteredItems.OrderByDescending(s => s.Set.Name),
+                "id"     => asc ? FlatFilteredItems.OrderBy(r => r.Set.SetId)       : FlatFilteredItems.OrderByDescending(r => r.Set.SetId),
+                "theme"  => asc ? FlatFilteredItems.OrderBy(r => r.Set.ThemeName)   : FlatFilteredItems.OrderByDescending(r => r.Set.ThemeName),
+                "year"   => asc ? FlatFilteredItems.OrderBy(r => r.Set.ReleaseYear) : FlatFilteredItems.OrderByDescending(r => r.Set.ReleaseYear),
+                "pieces" => asc ? FlatFilteredItems.OrderBy(r => r.Set.NumBricks)   : FlatFilteredItems.OrderByDescending(r => r.Set.NumBricks),
+                _        => asc ? FlatFilteredItems.OrderBy(r => r.Set.Name)        : FlatFilteredItems.OrderByDescending(r => r.Set.Name),
             };
         }
     }
 
-    private IEnumerable<SetInfo> PagedItems => SortedItems.Skip((_page - 1) * _pageSize).Take(_pageSize);
-    private int TotalFiltered => FilteredItems.Count();
+    private IEnumerable<FlatSetRow> FlatPagedItems => FlatSortedItems.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalFiltered => FlatFilteredItems.Count();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalFiltered / (double)_pageSize));
 
     private string RangeText
@@ -429,19 +417,20 @@
             await LoadDataAsync();
     }
 
-    private async Task OpenSetDetailDialog(SetInfo info)
+    private async Task OpenSetDetailDialog(FlatSetRow row)
     {
+        var totalOwned = _setInfos.FirstOrDefault(si => si.Set.SetId == row.Set.SetId)?.OwnedSets.Count ?? 1;
         var dto = new ApiClient.SetCatalogSearchDto(
-            info.Set.SetId, info.Set.Name, info.Set.SetImg,
-            info.Set.NumBricks, info.Set.ReleaseYear,
-            info.Set.ThemeName, info.Set.ManualUrl,
-            info.OwnedSets.Count);
+            row.Set.SetId, row.Set.Name, row.Set.SetImg,
+            row.Set.NumBricks, row.Set.ReleaseYear,
+            row.Set.ThemeName, row.Set.ManualUrl,
+            totalOwned);
         var parameters = new DialogParameters<SetDetailDialog>
         {
             { x => x.Set, dto },
-            { x => x.Owned, info.OwnedSets.Count }
+            { x => x.Owned, totalOwned }
         };
-        var dialog = await DialogService.ShowAsync<SetDetailDialog>(info.Set.Name, parameters,
+        var dialog = await DialogService.ShowAsync<SetDetailDialog>(row.Set.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
         var result = await dialog.Result;
         if (result is { Canceled: false })
@@ -490,4 +479,6 @@
         public ApiClient.MyOwnedSetDto Set { get; set; } = null!;
         public List<ApiClient.OwnedInstanceDto> OwnedSets { get; set; } = [];
     }
+
+    private record FlatSetRow(ApiClient.MyOwnedSetDto Set, ApiClient.OwnedInstanceDto Instance);
 }
