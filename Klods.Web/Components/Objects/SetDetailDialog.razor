@@ -2,6 +2,7 @@
 @inject AuthService AuthService
 @inject ImageStorageService ImageStorage
 @inject IJSRuntime JsRuntime
+@inject IDialogService DialogService
 @using Klods.Services
 @using Color = MudBlazor.Color
 
@@ -28,9 +29,18 @@
                                Disabled="@(AuthService.CurrentUser == null)" OnClick="Increment"/>
             </MudStack>
 
-            <MudButton StartIcon="@Icons.Material.Filled.MenuBook" Variant="Variant.Text" OnClick="OpenManual">
-                Building instructions
-            </MudButton>
+            <MudStack Row Spacing="1" Justify="Justify.Center">
+                <MudButton StartIcon="@Icons.Material.Filled.MenuBook" Variant="Variant.Text" OnClick="OpenManual">
+                    Building instructions
+                </MudButton>
+                @if (BomInstanceIndex.HasValue)
+                {
+                    <MudButton StartIcon="@Icons.Material.Filled.FormatListBulleted" Variant="Variant.Text"
+                               Color="Color.Primary" OnClick="OpenBom">
+                        Bill of Materials
+                    </MudButton>
+                }
+            </MudStack>
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -42,6 +52,7 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public ApiClient.SetCatalogSearchDto Set { get; set; } = null!;
     [Parameter] public int Owned { get; set; }
+    [Parameter] public int? BomInstanceIndex { get; set; }
 
     private int _owned;
 
@@ -60,6 +71,18 @@
     }
 
     private void OpenManual() => JsRuntime.InvokeVoidAsync("open", Set.ManualUrl, "_blank");
+
+    private Task OpenBom()
+    {
+        var parameters = new DialogParameters<BomDialog>
+        {
+            { x => x.SetId, Set.SetId },
+            { x => x.SetImg, Set.SetImg },
+            { x => x.SetIndex, BomInstanceIndex ?? 0 }
+        };
+        return DialogService.ShowAsync<BomDialog>("Bill of Materials", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseOnEscapeKey = true });
+    }
 
     private void Close() => MudDialog.Close(DialogResult.Ok(_owned));
 }

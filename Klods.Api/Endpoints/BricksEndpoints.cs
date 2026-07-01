@@ -21,13 +21,12 @@ public static class BricksEndpoints
         {
             await using var db = dbFactory.CreateDbContext();
             var totalBricks = await db.Set<Brick>().CountAsync();
-            var ownedLoose  = await db.Set<BrickOwned>().SumAsync(bo => (long)bo.Stock);
-            var ownedInSets = await db.Set<SetBrickOwned>().SumAsync(sbo => (long)sbo.Stock);
-            return Results.Ok(new BrickCatalogStatsDto(totalBricks, ownedLoose + ownedInSets));
+            var totalUsed   = await db.Set<SetBrick>().SumAsync(sb => (long)sb.Count);
+            return Results.Ok(new BrickCatalogStatsDto(totalBricks, totalUsed));
         });
 
         // Server-side, paginated catalog browse/search. Empty query => most-used bricks first.
-        // Per-row stock/needed computed only for the current page; SetCount is the denormalized column.
+        // Per-row used-count computed only for the current page; SetCount is the denormalized column.
         group.MapGet("/catalog", async (string? q, string? sort, string? dir, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             if (pageSize is <= 0 or > 200) pageSize = 25;
@@ -51,6 +50,7 @@ public static class BricksEndpoints
 
             var partNums = pageItems.Select(b => b.PartNum).Distinct().ToList();
 
+            // Loose + in-set owned stock (community aggregate) — still surfaced to the Add Brick dialog.
             var brickStock = (await db.Set<BrickOwned>().AsNoTracking()
                     .Where(bo => partNums.Contains(bo.PartNum)).ToListAsync())
                 .GroupBy(bo => (bo.PartNum, bo.ColorId)).ToDictionary(g => g.Key, g => g.Sum(x => x.Stock));
@@ -58,9 +58,8 @@ public static class BricksEndpoints
                     .Where(sbo => partNums.Contains(sbo.PartNum)).ToListAsync())
                 .GroupBy(sbo => (sbo.PartNum, sbo.ColorId)).ToDictionary(g => g.Key, g => g.Sum(x => x.Stock));
 
-            var setBricks  = await db.Set<SetBrick>().AsNoTracking().Where(sb => partNums.Contains(sb.PartNum)).ToListAsync();
-            var setCopies  = await InventoryAggregates.GetSetCopiesAsync(db);
-            var neededDict = InventoryAggregates.GetBrickNeededDict(setBricks, setCopies);
+            var setBricks = await db.Set<SetBrick>().AsNoTracking().Where(sb => partNums.Contains(sb.PartNum)).ToListAsync();
+            var usedDict  = InventoryAggregates.GetBrickUsedDict(setBricks);
 
             var items = pageItems.Select(b =>
             {
@@ -68,7 +67,7 @@ public static class BricksEndpoints
                 return new BrickCatalogViewDto(
                     b.PartNum, b.Name, b.PartImg, b.ColorId, b.ColorName, b.HexColor, b.IsTrans, b.BricklinkId,
                     brickStock.GetValueOrDefault(key, 0) + setBrickStock.GetValueOrDefault(key, 0),
-                    neededDict.GetValueOrDefault(key, 0),
+                    usedDict.GetValueOrDefault(key, 0),
                     b.SetCount);
             }).ToList();
 
@@ -92,15 +91,34 @@ public static class BricksEndpoints
             return Results.Ok(owned);
         });
 
-        // Lazy-load: which sets contain a given brick+color combination.
-        group.MapGet("/{partNum}/{colorId}/sets", async (
-            string partNum, string colorId, IDbContextFactory<InventoryContext> dbFactory) =>
+        // Paginated + searchable sets containing a brick+color, with set name/image (row expander + detail dialog).
+        group.MapGet("/{partNum}/{colorId}/sets/paged", async (
+            string partNum, string colorId, string? q, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
         {
+            if (pageSize is <= 0 or > 50) pageSize = 10;
+            if (page < 0) page = 0;
+            var query = (q ?? "").Trim();
+
             await using var db = dbFactory.CreateDbContext();
-            var setBricks = await db.Set<SetBrick>().AsNoTracking()
+
+            var joined = db.Set<SetBrick>().AsNoTracking()
                 .Where(sb => sb.PartNum == partNum && sb.ColorId == colorId)
+                .Join(db.Set<Set>().AsNoTracking(), sb => sb.SetId, s => s.SetId,
+                    (sb, s) => new { s.SetId, s.Name, s.SetImg, sb.Count });
+
+            if (query.Length >= 1)
+            {
+                var like = $"%{query}%";
+                joined = joined.Where(x => EF.Functions.ILike(x.SetId, like) || EF.Functions.ILike(x.Name, like));
+            }
+
+            var total = await joined.CountAsync();
+            var items = await joined.OrderBy(x => x.SetId)
+                .Skip(page * pageSize).Take(pageSize)
+                .Select(x => new SetForBrickDto(x.SetId, x.Name, x.SetImg, x.Count))
                 .ToListAsync();
-            return Results.Ok(setBricks);
+
+            return Results.Ok(new SetForBrickPage(items, total));
         });
 
         // Current user's loose stock for a single brick (for the detail dialog).
@@ -145,7 +163,7 @@ public static class BricksEndpoints
         });
     }
 
-    // Whitelisted server-side sort. Default: most-used (set count) first. Stock/Needed are per-page aggregates, not sortable.
+    // Whitelisted server-side sort. Default: most-used (set count) first. Used is a per-page aggregate, not sortable.
     private static IQueryable<Brick> SortBricks(IQueryable<Brick> q, string? sort, string? dir)
     {
         var desc = dir != "asc";
@@ -165,9 +183,11 @@ public static class BricksEndpoints
     }
 
     public record OwnedBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Stock);
-    public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int TotalStock, int TotalNeeded, int SetCount);
-    public record BrickCatalogStatsDto(int TotalBricks, long TotalOwnedStock);
+    public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int TotalStock, int TotalUsed, int SetCount);
+    public record BrickCatalogStatsDto(int TotalBricks, long TotalUsed);
     public record BrickCatalogPage(List<BrickCatalogViewDto> Items, int Total);
+    public record SetForBrickDto(string SetId, string Name, string? SetImg, int Count);
+    public record SetForBrickPage(List<SetForBrickDto> Items, int Total);
     public record OwnedStockDto(int Stock);
     public record ResolveBrickRequest(string PartNum);
     public record ResolveBrickResponse(string? PartName, IEnumerable<PartColorInfo> Colors);

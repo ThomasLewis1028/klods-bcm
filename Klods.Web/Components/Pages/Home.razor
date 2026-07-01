@@ -101,7 +101,7 @@
         <MudItem xs="12" style="position: relative;">
             <MudGrid Justify="Justify.Center"
                      Style="@(_locked ? "filter: blur(5px); pointer-events: none; user-select: none;" : "")">
-                <MudItem xs="12" sm="6" lg="3">
+                <MudItem xs="12" sm="6" lg="4">
                     <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/sets")'>
                         <div class="card-image-wrapper" style="position: relative;">
                             <MudCardMedia Image="@_mySetImg" Height="180"/>
@@ -121,7 +121,7 @@
                     </MudCard>
                 </MudItem>
 
-                <MudItem xs="12" sm="6" lg="3">
+                <MudItem xs="12" sm="6" lg="4">
                     <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/bricks")'>
                         <div class="card-image-wrapper" style="position: relative;">
                             <MudCardMedia Image="@_myBrickImg" Height="180"/>
@@ -141,7 +141,7 @@
                     </MudCard>
                 </MudItem>
 
-                <MudItem xs="12" sm="6" lg="3">
+                <MudItem xs="12" sm="6" lg="4">
                     <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/minifigs")'>
                         <div class="card-image-wrapper" style="position: relative;">
                             <MudCardMedia Image="@_myMinifigImg" Height="180"/>
@@ -157,26 +157,6 @@
                                 <MudText Typo="Typo.h6" Style="font-weight: 700;">My Minifigs</MudText>
                             </MudStack>
                             <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Your minifig collection</MudText>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" lg="3">
-                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bom")'>
-                        <div class="card-image-wrapper" style="position: relative;">
-                            <MudCardMedia Image="@_myBomImg" Height="180"/>
-                            @if (_myBomName != null)
-                            {
-                                <div class="card-info-badge">?</div>
-                                <div class="card-name-label">@_myBomName</div>
-                            }
-                        </div>
-                        <MudCardContent>
-                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                <MudIcon Icon="@Icons.Material.Filled.FormatListBulleted" Color="Color.Primary"/>
-                                <MudText Typo="Typo.h6" Style="font-weight: 700;">My Bill of Materials</MudText>
-                            </MudStack>
-                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Missing pieces across your sets</MudText>
                         </MudCardContent>
                     </MudCard>
                 </MudItem>
@@ -217,8 +197,6 @@
     private string? _myBrickName;
     private string? _myMinifigImg;
     private string? _myMinifigName;
-    private string? _myBomImg;
-    private string? _myBomName;
 
     protected override void OnInitialized()
     {
@@ -247,8 +225,6 @@
             (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(preview.Sets[0].ImgUrl), preview.Sets[0].Name);
         if (preview.Sets.Count >= 2)
             (_mySetImg, _mySetName) = (ImageStorage.ResolveUrl(preview.Sets[1].ImgUrl), preview.Sets[1].Name);
-        if (preview.Sets.Count >= 3)
-            (_myBomImg, _myBomName) = (ImageStorage.ResolveUrl(preview.Sets[2].ImgUrl), preview.Sets[2].Name);
 
         if (preview.Bricks.Count >= 1)
             (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(preview.Bricks[0].ImgUrl), preview.Bricks[0].Name);

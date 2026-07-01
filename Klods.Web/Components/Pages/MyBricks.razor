@@ -207,7 +207,7 @@
                                     </TemplateColumn>
                                     <TemplateColumn Title="BoM">
                                         <CellTemplate>
-                                            <MudIconButton href="@($"/bom/{context.Item.SetId}")"
+                                            <MudIconButton OnClick="() => OpenBomDialog(context.Item.SetId, context.Item.SetImg)"
                                                            Icon="@Icons.Material.Filled.List"
                                                            Variant="Variant.Filled" Color="Color.Primary"
                                                            Size="Size.Small"/>
@@ -434,7 +434,7 @@
             info.Brick.PartNum, info.Brick.Name, info.Brick.PartImg,
             info.Brick.ColorId, info.Brick.ColorName, info.Brick.HexColor,
             info.Brick.IsTrans, info.Brick.BricklinkId,
-            info.Stock, info.Brick.UserNeeded, info.Brick.UserSetCount);
+            info.Stock, 0, info.Brick.UserSetCount);
         var parameters = new DialogParameters<BrickDetailDialog> { { x => x.Brick, dto } };
         await DialogService.ShowAsync<BrickDetailDialog>(info.Brick.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
@@ -445,6 +445,11 @@
         DialogService.ShowAsync<ImagePopup>("Image Popup",
             new DialogParameters<ImagePopup> { { x => x._id, id }, { x => x._name, name }, { x => x._imgUrl, imgUrl } },
             new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+
+    private Task OpenBomDialog(string setId, string? setImg) =>
+        DialogService.ShowAsync<BomDialog>("Bill of Materials",
+            new DialogParameters<BomDialog> { { x => x.SetId, setId }, { x => x.SetImg, setImg } },
+            new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseOnEscapeKey = true });
 
     private Task OpenColorPopup(string? hex, string? name)
     {
