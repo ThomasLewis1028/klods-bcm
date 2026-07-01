@@ -32,8 +32,8 @@
     </MudItem>
     <MudItem xs="12" sm="6">
         <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
-            <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalOwnedStock.ToString("N0")</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Total Owned Stock</MudText>
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@_totalUsed.ToString("N0")</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Pieces Across All Sets</MudText>
         </MudStack></MudPaper>
     </MudItem>
 
@@ -135,8 +135,7 @@
                             }
                         </CellTemplate>
                     </TemplateColumn>
-                    <PropertyColumn Property="x => x.Brick.TotalStock" Title="Stock" Editable="false"/>
-                    <PropertyColumn Property="x => x.Brick.TotalNeeded" Title="Needed" Editable="false"/>
+                    <PropertyColumn Property="x => x.Brick.TotalUsed" Title="Total Used" Editable="false"/>
                     <TemplateColumn Editable="false">
                         <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("sets")'>Sets@(Arrow("sets"))</span></HeaderTemplate>
                         <CellTemplate>@context.Item.Brick.SetCount</CellTemplate>
@@ -144,27 +143,51 @@
                 </Columns>
 
                 <ChildRowContent Context="brickContext">
+                    @{ var info = brickContext.Item; }
                     <div class="child-row-content">
-                    @if (!brickContext.Item.IsLoaded)
+                    @if (!info.IsLoaded)
                     {
-                        <MudText>Loading sets...</MudText>
-                        { _ = LoadSetBricksAsync(brickContext.Item); }
+                        <MudStack AlignItems="AlignItems.Center" Class="pa-4"><MudProgressCircular Indeterminate="true" Size="Size.Small"/></MudStack>
+                        { _ = LoadSetsForBrickAsync(info); }
                     }
-                    else if (brickContext.Item.SetBricks.Any())
+                    else
                     {
-                        <MudCard>
-                            <MudDataGrid T="ApiClient.SetBrickDto" Items="brickContext.Item.SetBricks.OrderBy(s => s.SetId)">
-                                <Columns>
-                                    <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
-                                    <TemplateColumn Title="Needed per Copy"><CellTemplate><MudText>@context.Item.Count</MudText></CellTemplate></TemplateColumn>
-                                    <TemplateColumn Title="BoM">
-                                        <CellTemplate>
-                                            <MudIconButton href="@($"/bom/{context.Item.SetId}")" Icon="@Icons.Material.Filled.List"
-                                                           Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"/>
-                                        </CellTemplate>
-                                    </TemplateColumn>
-                                </Columns>
-                            </MudDataGrid>
+                        <MudCard Class="pa-3">
+                            <MudTextField T="string" Value="info.SetQuery" ValueChanged="@(v => OnSetSearch(info, v))"
+                                          Immediate="true" DebounceInterval="350" Placeholder="Search sets by id or name…"
+                                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="mb-2"/>
+                            @if (info.SetLoading)
+                            {
+                                <MudStack AlignItems="AlignItems.Center" Class="pa-4"><MudProgressCircular Indeterminate="true" Size="Size.Small"/></MudStack>
+                            }
+                            else if (info.SetItems.Count == 0)
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-2">No sets match your search.</MudText>
+                            }
+                            else
+                            {
+                                <MudDataGrid T="ApiClient.SetForBrickDto" Items="info.SetItems" SortMode="SortMode.None" ReadOnly="true">
+                                    <Columns>
+                                        <TemplateColumn Title="Set">
+                                            <CellTemplate>
+                                                <MudImage class="rounded-2" Elevation="1" Src="@ImageStorage.ResolveUrl(context.Item.SetImg)"
+                                                          Height="40" Style="object-fit:contain;"/>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+                                        <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
+                                        <PropertyColumn Title="Name" Property="x => x.Name"/>
+                                        <PropertyColumn Title="Needed per Copy" Property="x => x.Count"/>
+                                    </Columns>
+                                </MudDataGrid>
+                                @if (info.SetTotalPages > 1)
+                                {
+                                    <MudStack Row Justify="Justify.Center" Class="mt-2">
+                                        <MudPagination Color="Color.Primary" Count="info.SetTotalPages" Selected="info.SetPage"
+                                                       SelectedChanged="@(p => OnSetPageChanged(info, p))" Size="Size.Small"/>
+                                    </MudStack>
+                                }
+                            }
                         </MudCard>
                     }
                     </div>
@@ -219,7 +242,7 @@
     private int _total;
     private int _totalPages = 1;
     private int _totalBricks;
-    private long _totalOwnedStock;
+    private long _totalUsed;
     private bool _isLoading = true;
     private bool _loadingResults;
 
@@ -239,7 +262,7 @@
     protected override async Task OnInitializedAsync()
     {
         var stats = await Api.GetBrickCatalogStatsAsync();
-        if (stats != null) { _totalBricks = stats.TotalBricks; _totalOwnedStock = stats.TotalOwnedStock; }
+        if (stats != null) { _totalBricks = stats.TotalBricks; _totalUsed = stats.TotalUsed; }
         ParseUrl();
         await LoadAsync();
         _isLoading = false;
@@ -309,13 +332,39 @@
 
     private string Arrow(string field) => field == _sort ? (_dir == "asc" ? " ▲" : " ▼") : "";
 
-    private async Task LoadSetBricksAsync(BrickInfo info)
+    private const int SetPageSize = 10;
+
+    private async Task LoadSetsForBrickAsync(BrickInfo info)
     {
-        if (info.IsLoaded) return;
-        var result = await Api.GetSetsForBrickAsync(info.Brick.PartNum, info.Brick.ColorId ?? "");
-        info.SetBricks = result?.ToList() ?? [];
+        if (info.IsLoaded || info.SetLoading) return;
+        await FetchSetsForBrickAsync(info);
         info.IsLoaded = true;
+    }
+
+    private async Task FetchSetsForBrickAsync(BrickInfo info)
+    {
+        info.SetLoading = true;
         StateHasChanged();
+        var page = await Api.GetSetsForBrickPageAsync(
+            info.Brick.PartNum, info.Brick.ColorId ?? "", info.SetQuery.Trim(), info.SetPage - 1, SetPageSize);
+        info.SetItems = page?.Items ?? [];
+        info.SetTotal = page?.Total ?? 0;
+        info.SetTotalPages = Math.Max(1, (int)Math.Ceiling(info.SetTotal / (double)SetPageSize));
+        info.SetLoading = false;
+        StateHasChanged();
+    }
+
+    private Task OnSetSearch(BrickInfo info, string? value)
+    {
+        info.SetQuery = value ?? "";
+        info.SetPage = 1;
+        return FetchSetsForBrickAsync(info);
+    }
+
+    private Task OnSetPageChanged(BrickInfo info, int page)
+    {
+        info.SetPage = page;
+        return FetchSetsForBrickAsync(info);
     }
 
     private Task OpenImagePopup(string id, string name, string? imgUrl) =>
@@ -332,6 +381,11 @@
     {
         public ApiClient.BrickCatalogViewDto Brick { get; set; } = null!;
         public bool IsLoaded { get; set; }
-        public List<ApiClient.SetBrickDto> SetBricks { get; set; } = [];
+        public bool SetLoading { get; set; }
+        public string SetQuery { get; set; } = "";
+        public int SetPage { get; set; } = 1;
+        public int SetTotal { get; set; }
+        public int SetTotalPages { get; set; } = 1;
+        public List<ApiClient.SetForBrickDto> SetItems { get; set; } = [];
     }
 }

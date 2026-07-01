@@ -181,7 +181,7 @@
                     <TemplateColumn Title="BoM" Editable="false">
                         <CellTemplate>
                             <MudIconButton
-                                href=@($"/bom/{context.Item.Set.SetId}/{context.Item.Instance.SetIndex}")
+                                OnClick="() => OpenBomDialog(context.Item)"
                                 Icon="@Icons.Material.Filled.List"
                                 Variant="Variant.Filled" Color="Color.Primary"
                                 Size="Size.Small"/>
@@ -428,13 +428,26 @@
         var parameters = new DialogParameters<SetDetailDialog>
         {
             { x => x.Set, dto },
-            { x => x.Owned, totalOwned }
+            { x => x.Owned, totalOwned },
+            { x => x.BomInstanceIndex, row.Instance.SetIndex }
         };
         var dialog = await DialogService.ShowAsync<SetDetailDialog>(row.Set.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
         var result = await dialog.Result;
         if (result is { Canceled: false })
             await LoadDataAsync();
+    }
+
+    private Task OpenBomDialog(FlatSetRow row)
+    {
+        var parameters = new DialogParameters<BomDialog>
+        {
+            { x => x.SetId, row.Set.SetId },
+            { x => x.SetImg, row.Set.SetImg },
+            { x => x.SetIndex, row.Instance.SetIndex }
+        };
+        return DialogService.ShowAsync<BomDialog>("Bill of Materials", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseOnEscapeKey = true });
     }
 
     private Task OpenImagePopup(string setId, string setName, string? setImgUrl) =>

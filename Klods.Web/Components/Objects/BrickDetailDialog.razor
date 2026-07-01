@@ -27,23 +27,46 @@
             </MudStack>
 
             <MudDivider Class="my-2" FlexItem="true"/>
-            <MudText Typo="Typo.subtitle2">Used in @_sets.Count set(s)</MudText>
+            <MudText Typo="Typo.subtitle2" Style="align-self:flex-start;">Used in @_total set(s)</MudText>
+
+            <MudTextField T="string" Value="_query" ValueChanged="OnSearch" Immediate="true" DebounceInterval="350"
+                          Placeholder="Search sets by id or name…" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Clearable="true" Style="width:100%;"/>
+
             @if (_loading)
             {
                 <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
             }
-            else if (_sets.Count > 0)
+            else if (_items.Count == 0)
             {
-                <div style="max-height: 240px; overflow-y: auto; width: 100%;">
-                    <MudList T="string" Dense="true">
-                        @foreach (var s in _sets.OrderBy(s => s.SetId))
-                        {
-                            <MudListItem T="string" Href="@($"/bom/{s.SetId}")" Icon="@Icons.Material.Filled.List">
-                                @s.SetId &mdash; @s.Count per copy
-                            </MudListItem>
-                        }
-                    </MudList>
-                </div>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">No sets match your search.</MudText>
+            }
+            else
+            {
+                <MudList T="string" Dense="true" Style="width:100%;">
+                    @foreach (var s in _items)
+                    {
+                        <MudListItem T="string">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudImage class="rounded-2" Elevation="1" Src="@ImageStorage.ResolveUrl(s.SetImg)"
+                                          Height="36" Width="36" Style="object-fit:contain; flex-shrink:0;"/>
+                                <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@s.Name</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@s.SetId</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">&times;@s.Count</MudText>
+                            </MudStack>
+                        </MudListItem>
+                    }
+                </MudList>
+                @if (_totalPages > 1)
+                {
+                    <MudStack Row Justify="Justify.Center" Class="mt-1" Style="width:100%;">
+                        <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_page"
+                                       SelectedChanged="OnPageChanged" Size="Size.Small"/>
+                    </MudStack>
+                }
             }
         </MudStack>
     </DialogContent>
@@ -56,17 +79,37 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public ApiClient.BrickCatalogViewDto Brick { get; set; } = null!;
 
+    private const int SetPageSize = 6;
+
     private int _stock;
-    private List<ApiClient.SetBrickDto> _sets = [];
+    private string _query = "";
+    private int _page = 1;
+    private int _total;
+    private int _totalPages = 1;
+    private List<ApiClient.SetForBrickDto> _items = [];
     private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
-        var color = Brick.ColorId ?? "";
-        _stock = (await Api.GetMyBrickStockAsync(Brick.PartNum, color))?.Stock ?? 0;
-        _sets = (await Api.GetSetsForBrickAsync(Brick.PartNum, color))?.ToList() ?? [];
-        _loading = false;
+        _stock = (await Api.GetMyBrickStockAsync(Brick.PartNum, Brick.ColorId ?? ""))?.Stock ?? 0;
+        await LoadSetsAsync();
     }
+
+    private async Task LoadSetsAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        var page = await Api.GetSetsForBrickPageAsync(
+            Brick.PartNum, Brick.ColorId ?? "", _query.Trim(), _page - 1, SetPageSize);
+        _items = page?.Items ?? [];
+        _total = page?.Total ?? 0;
+        _totalPages = Math.Max(1, (int)Math.Ceiling(_total / (double)SetPageSize));
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private Task OnSearch(string? value) { _query = value ?? ""; _page = 1; return LoadSetsAsync(); }
+    private Task OnPageChanged(int page) { _page = page; return LoadSetsAsync(); }
 
     private async Task SaveStock()
     {

@@ -191,7 +191,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public Task<BrickCatalogStatsDto?>   GetBrickCatalogStatsAsync()          => GetAsync<BrickCatalogStatsDto>("/api/bricks/catalog-stats");
     public Task<BrickCatalogPage?>       GetBricksCatalogPageAsync(string q, string sort, string dir, int page, int pageSize)
         => GetAsync<BrickCatalogPage>($"/api/bricks/catalog?q={Uri.EscapeDataString(q)}&sort={sort}&dir={dir}&page={page}&pageSize={pageSize}");
-    public Task<SetBrickDto[]?>          GetSetsForBrickAsync(string p, string c) => GetAsync<SetBrickDto[]>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets");
+    public Task<SetForBrickPage?>        GetSetsForBrickPageAsync(string p, string c, string q, int page, int pageSize)
+        => GetAsync<SetForBrickPage>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets/paged?q={Uri.EscapeDataString(q)}&page={page}&pageSize={pageSize}");
     public Task<OwnedStockDto?>          GetMyBrickStockAsync(string p, string c) => GetAsync<OwnedStockDto>($"/api/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/owned");
     public async Task<ResolveBrickResponse?> ResolvePartColorsPostAsync(string partNum)
     {
@@ -380,10 +381,11 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record ResolveSetResponse(List<SetCandidateDto> Results, bool Resolved, bool HasMore);
 
     public record BrickDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId);
-    public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int TotalStock, int TotalNeeded, int SetCount);
-    public record BrickCatalogStatsDto(int TotalBricks, long TotalOwnedStock);
+    public record BrickCatalogViewDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int TotalStock, int TotalUsed, int SetCount);
+    public record BrickCatalogStatsDto(int TotalBricks, long TotalUsed);
     public record BrickCatalogPage(List<BrickCatalogViewDto> Items, int Total);
-    public record SetBrickDto(string SetId, string PartNum, string ColorId, int Count, int SpareCount);
+    public record SetForBrickDto(string SetId, string Name, string? SetImg, int Count);
+    public record SetForBrickPage(List<SetForBrickDto> Items, int Total);
     public record OwnedStockDto(int Stock);
     public record LooseCountDto(int Count);
     public record PartColorInfoDto(string ColorId, string ColorName, string? PartImgUrl);
