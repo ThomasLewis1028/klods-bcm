@@ -8,21 +8,21 @@ It's open source under the MIT license, so if you want to fix my late-night, alc
 
 - Fully self-hosted. As much as I'd love to make money on a side project, I care a lot more about providing my talents to the open source community when possible.
 - Relatively easy to build and deploy with Docker Compose (thanks dad).
-- Pulls data from Rebrickable on-demand and stores it locally so that you only use an API call as needed.
 - Stores data in a postgres database, which makes it easy to look at the data and fix things if needed.
-- Track a personal inventory of loose bricks.
-- Tracks the bill of materials for each set and allows you to denote what pieces you have for each set. If you need eight technic axles, but you only have seven, it will mark how many pieces you're missing.
-- Allow the user to move stock from the loose inventory to the set stock.
-- Allow a user to have more than one of the same set, each with their own inventories.
+- Pulls data from Rebrickable on-demand and stores it locally so that you only use an API call as needed.
+- Ability to upload bulk data sets from Rebrickable to avoid the need to use an API key for every set.
+- RSS feed to keep track of new sets and updates from Rebrickable and automatically import them.
 - User authentication via Discord, Microsoft, Google, and plain ol' email/password.
 - Admin panel to manage system settings.
-- Multiple users can have their own inventories and track their own stock.
 - Admins can require new registrations to be approved before they get access, or leave auto-approve on.
+- Multiple users can have their own inventories and track their own stock.
+- Track a personal inventory of loose bricks.
+- Allow a user to have more than one of the same set, each with their own inventories.
+- Allow the user to move stock from the loose inventory to the set stock.
+- Tracks the bill of materials for each set and allows you to denote what pieces you have for each set. If you need eight technic axles, but you only have seven, it will mark how many pieces you're missing.
 - When looking at a brick, you can see how many you need, how many you have, and which sets need that brick and how many it needs.
 - Track minifigs the same way as bricks, owned and needed, and see which sets need them.
 - Search, sort, and filter the brick, minifig, and set catalogs.
-- Ability to upload bulk data sets from Rebrickable to avoid the need to use an API key for every set.
-- RSS feed to keep track of new sets and updates from Rebrickable and automatically import them.
 - Link directly to the instruction on LEGO's official instructions.
 - It's neat (I am not biased).
 
