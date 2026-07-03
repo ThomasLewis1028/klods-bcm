@@ -26,7 +26,9 @@ public class ThemeService
         PaletteLight = new PaletteLight()
         {
             Primary = "#DA291C",
-            Secondary = "#E6B800",
+            // Darker gold/amber than the dark-mode accent — the bright gold is unreadable as text on light.
+            Secondary = "#8A6D00",
+            Warning = "#A15C00",
             AppbarBackground = "#DA291C",
             AppbarText = "rgba(255,255,255,0.87)",
         }

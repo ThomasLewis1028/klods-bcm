@@ -199,17 +199,6 @@
                             </div>
                         </CellTemplate>
                     </TemplateColumn>
-                    <TemplateColumn Title="Add" Editable="false">
-                        <CellTemplate>
-                            <div @onclick:stopPropagation="true">
-                                <MudIconButton
-                                    Icon="@Icons.Material.Filled.Add"
-                                    Variant="Variant.Filled" Color="Color.Info"
-                                    Size="Size.Small"
-                                    OnClick="() => AddOwnedSet(context.Item.Set.SetId)"/>
-                            </div>
-                        </CellTemplate>
-                    </TemplateColumn>
                     <TemplateColumn Title="Delete" Editable="false">
                         <CellTemplate>
                             <div @onclick:stopPropagation="true">
@@ -455,7 +444,10 @@
         {
             { x => x.Set, dto },
             { x => x.Owned, totalOwned },
-            { x => x.BomInstanceIndex, row.Instance.SetIndex }
+            { x => x.BomInstanceIndex, row.Instance.SetIndex },
+            { x => x.MyCopy, true },
+            { x => x.Percent, row.Instance.Percent },
+            { x => x.Status, row.Instance.Status }
         };
         var dialog = await DialogService.ShowAsync<SetDetailDialog>(row.Set.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
@@ -481,12 +473,6 @@
 
     private void OpenBuildingInstructions(string url) => JsRuntime.InvokeVoidAsync("open", url, "_blank");
 
-    private async Task AddOwnedSet(string setId)
-    {
-        await Api.AddOwnedSetAsync(setId);
-        await LoadDataAsync();
-    }
-
     private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string? setImgUrl)
     {
         var parameters = new DialogParameters<DeleteIndexPopup>
@@ -499,16 +485,8 @@
         var result = await dialog.Result;
 
         if (result is { Canceled: false })
-        {
-            var setInfo = _setInfos.FirstOrDefault(si => si.Set.SetId == setId);
-            if (setInfo != null)
-            {
-                setInfo.OwnedSets.RemoveAll(i => i.SetIndex == setIndex);
-                if (setInfo.OwnedSets.Count == 0)
-                    _setInfos.Remove(setInfo);
-            }
-            StateHasChanged();
-        }
+            // Returning pieces to loose can change other copies' completeness — reload for accuracy.
+            await LoadDataAsync();
     }
 
     private class SetInfo

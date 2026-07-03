@@ -139,7 +139,14 @@
         }
         else if (_step == Step.Confirm)
         {
-            <MudButton Variant="Variant.Filled" OnClick="BackToSearch">Back</MudButton>
+            @if (PreselectedSet == null)
+            {
+                <MudButton Variant="Variant.Filled" OnClick="BackToSearch">Back</MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            }
             <MudSpacer/>
             <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartAdding"
                        Disabled="@(_copies < 1)">
@@ -157,9 +164,28 @@
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
+    /// <summary>When set, skip the search and open straight on the confirm step for this set.</summary>
+    [Parameter] public ApiClient.SetCatalogSearchDto? PreselectedSet { get; set; }
+
     private enum Step { Search, Confirm, Adding }
 
     private Step _step = Step.Search;
+
+    protected override void OnInitialized()
+    {
+        if (PreselectedSet is null) return;
+        _selected = new SelectedSetInfo
+        {
+            SetId = PreselectedSet.SetId,
+            Name = PreselectedSet.Name,
+            ImgUrl = PreselectedSet.SetImg,
+            Year = PreselectedSet.ReleaseYear,
+            NumBricks = PreselectedSet.NumBricks,
+            ThemeName = PreselectedSet.ThemeName,
+            NeedsImport = false,
+        };
+        _step = Step.Confirm;
+    }
 
     private string _search = "";
     private List<ApiClient.SetCatalogSearchDto> _searchResults = [];
@@ -266,7 +292,7 @@
             await Api.AddOwnedSetAsync(_selected.SetId, _applyBricks);
         }
 
-        MudDialog.Close(DialogResult.Ok(true));
+        MudDialog.Close(DialogResult.Ok(_copies));
     }
 
     private class SelectedSetInfo
