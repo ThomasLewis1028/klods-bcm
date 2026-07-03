@@ -176,11 +176,43 @@
             }
         </MudItem>
 
+        @* ── Quick links (signed-in only) ── *@
+        @if (AuthService.CurrentUser != null)
+        {
+            <MudItem xs="12" sm="6" lg="4">
+                <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/users")'>
+                    <MudCardContent>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@Icons.Material.Filled.Group" Color="Color.Primary"/>
+                            <MudText Typo="Typo.h6" Style="font-weight: 700;">Users</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Browse other collectors</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @if (_isAdmin)
+            {
+                <MudItem xs="12" sm="6" lg="4">
+                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/admin")'>
+                        <MudCardContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Primary"/>
+                                <MudText Typo="Typo.h6" Style="font-weight: 700;">Admin</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">System administration</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        }
+
     </MudGrid>
 </div>
 
 @code {
     private bool _locked => AuthService.CurrentUser == null;
+    private bool _isAdmin => AuthService.CurrentUser?.Role == "Admin";
 
     // Catalog
     private string? _catalogSetImg;
@@ -203,7 +235,9 @@
         AuthService.OnChange += OnAuthChanged;
     }
 
-    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+    // Re-pull the preview when auth changes (login/logout, or session restore on load) so the
+    // "My" images switch between the user's own collection and the global fallback.
+    private void OnAuthChanged() => _ = InvokeAsync(LoadPreviewAsync);
 
     public void Dispose() => AuthService.OnChange -= OnAuthChanged;
 
@@ -216,24 +250,27 @@
             FullWidth = true
         });
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => LoadPreviewAsync();
+
+    private async Task LoadPreviewAsync()
     {
         var preview = await Api.GetHomePreviewAsync();
         if (preview == null) return;
 
-        if (preview.Sets.Count >= 1)
-            (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(preview.Sets[0].ImgUrl), preview.Sets[0].Name);
-        if (preview.Sets.Count >= 2)
-            (_mySetImg, _mySetName) = (ImageStorage.ResolveUrl(preview.Sets[1].ImgUrl), preview.Sets[1].Name);
+        if (preview.CatalogSet != null)
+            (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(preview.CatalogSet.ImgUrl), preview.CatalogSet.Name);
+        if (preview.CatalogBrick != null)
+            (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(preview.CatalogBrick.ImgUrl), preview.CatalogBrick.Name);
+        if (preview.CatalogMinifig != null)
+            (_catalogMinifigImg, _catalogMinifigName) = (ImageStorage.ResolveUrl(preview.CatalogMinifig.ImgUrl), preview.CatalogMinifig.Name);
 
-        if (preview.Bricks.Count >= 1)
-            (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(preview.Bricks[0].ImgUrl), preview.Bricks[0].Name);
-        if (preview.Bricks.Count >= 2)
-            (_myBrickImg, _myBrickName) = (ImageStorage.ResolveUrl(preview.Bricks[1].ImgUrl), preview.Bricks[1].Name);
+        if (preview.MySet != null)
+            (_mySetImg, _mySetName) = (ImageStorage.ResolveUrl(preview.MySet.ImgUrl), preview.MySet.Name);
+        if (preview.MyBrick != null)
+            (_myBrickImg, _myBrickName) = (ImageStorage.ResolveUrl(preview.MyBrick.ImgUrl), preview.MyBrick.Name);
+        if (preview.MyMinifig != null)
+            (_myMinifigImg, _myMinifigName) = (ImageStorage.ResolveUrl(preview.MyMinifig.ImgUrl), preview.MyMinifig.Name);
 
-        if (preview.Minifigs.Count >= 1)
-            (_catalogMinifigImg, _catalogMinifigName) = (ImageStorage.ResolveUrl(preview.Minifigs[0].ImgUrl), preview.Minifigs[0].Name);
-        if (preview.Minifigs.Count >= 2)
-            (_myMinifigImg, _myMinifigName) = (ImageStorage.ResolveUrl(preview.Minifigs[1].ImgUrl), preview.Minifigs[1].Name);
+        StateHasChanged();
     }
 }

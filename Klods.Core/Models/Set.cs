@@ -21,7 +21,6 @@ public class Set
     
     public string ManualUrl { get; set; }
 
+    // Soft reference to Theme.Id (no DB FK), mirroring Brick.PartCatId → PartCategory.
     public int? ThemeId { get; set; }
-
-    public string? ThemeName { get; set; }
 }

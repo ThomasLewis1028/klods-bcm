@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject ThemeService ThemeService
 @inject AuthService AuthService
+@inject ApiClient Api
 @inject IDialogService DialogService
 @inject ProtectedLocalStorage LocalStorage
 @inject ImageStorageService ImageStorage
@@ -80,8 +81,30 @@
                 var darkMode = await LocalStorage.GetAsync<bool>("darkMode");
                 if (darkMode.Success)
                     ThemeService.SetDarkMode(darkMode.Value);
+
+                var storedJwt = await LocalStorage.GetAsync<string>("jwt");
+                if (storedJwt.Success && !string.IsNullOrEmpty(storedJwt.Value))
+                {
+                    // Bootstrap token so ApiClient can call the API.
+                    AuthService.SetSession(new UserInfo(0, "", "User", null, null, false), storedJwt.Value);
+                    var profile = await Api.GetMyProfileAsync();
+                    if (profile is not null)
+                    {
+                        var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
+                            profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword);
+                        AuthService.SetSession(user, storedJwt.Value);
+                        ThemeService.SetPrimaryColor(profile.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
+                    }
+                    else
+                    {
+                        // Token invalid or API unreachable — clear it.
+                        AuthService.Logout();
+                        await LocalStorage.DeleteAsync("jwt");
+                    }
+                }
             }
             catch { /* storage unavailable or tampered */ }
+            finally { AuthService.MarkSessionRestored(); }
 
             StateHasChanged();
         }
@@ -94,10 +117,22 @@
         StateHasChanged();
     }
 
-    private void OnAuthChanged()
+    private async void OnAuthChanged()
     {
-        var color = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
-        ThemeService.SetPrimaryColor(color);
+        try
+        {
+            if (AuthService.CurrentUser != null)
+            {
+                ThemeService.SetPrimaryColor(AuthService.CurrentUser.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
+            }
+            else
+            {
+                await LocalStorage.DeleteAsync("jwt");
+                ThemeService.SetPrimaryColor(ThemeService.DefaultPrimaryColor);
+            }
+        }
+        catch { /* storage unavailable */ }
+
         StateHasChanged();
     }
 

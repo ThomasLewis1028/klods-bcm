@@ -128,6 +128,36 @@ public static class AdminEndpoints
             return Results.Ok(new CatalogImportDto(result.ImportedAt, result.SnapshotDate, result.Source, result.Status, result.Notes));
         });
 
+        // Theme visibility: every theme in the catalog with its set count and whether it's hidden
+        // from the set browse/search surfaces.
+        group.MapGet("/theme-visibility", async (IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
+        {
+            await using var db = dbFactory.CreateDbContext();
+
+            var setCounts = await db.Set<Set>().AsNoTracking()
+                .Where(s => s.ThemeId != null)
+                .GroupBy(s => s.ThemeId!.Value)
+                .Select(g => new { Id = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Id, x => x.Count);
+
+            var themes = await db.Set<Theme>().AsNoTracking().ToListAsync();
+            // Raw picks (not expanded) so the checkboxes reflect exactly what the admin chose.
+            var hidden = (await CatalogSettings.GetHiddenThemeIdsAsync(settings)).ToHashSet();
+
+            var result = themes
+                .Select(t => new ThemeVisibilityDto(
+                    t.Id, t.Name, t.ParentId, setCounts.GetValueOrDefault(t.Id, 0), hidden.Contains(t.Id)))
+                .OrderBy(t => t.Name)
+                .ToList();
+            return Results.Ok(result);
+        });
+
+        group.MapPut("/theme-visibility", async (ThemeVisibilityUpdateDto req, SettingsService settings) =>
+        {
+            await CatalogSettings.SetHiddenThemeIdsAsync(settings, req.HiddenThemeIds ?? []);
+            return Results.Ok();
+        });
+
         group.MapGet("/registration-settings", async (SettingsService settings) =>
             Results.Ok(new RegistrationSettingsDto(await settings.GetBoolAsync(AuthEndpoints.AutoApproveKey, true))));
 
@@ -187,6 +217,8 @@ public static class AdminEndpoints
     public record BulkImportResultDto(string Status, string? Notes, DateTime ImportedAt);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
     public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
+    public record ThemeVisibilityDto(int Id, string Name, int? ParentId, int SetCount, bool Hidden);
+    public record ThemeVisibilityUpdateDto(int[] HiddenThemeIds);
     public record TimezoneDto(string Id, string DisplayName);
     public record CronPreviewDto(bool Valid, List<string> Next);
 }
