@@ -133,13 +133,13 @@
         }
         else
         {
-            <MudDataGrid T="FlatSetRow" Items="@FlatPagedItems.ToList()" SortMode="SortMode.None" ReadOnly="true">
+            <MudDataGrid T="FlatSetRow" Items="@FlatPagedItems.ToList()" SortMode="SortMode.None" ReadOnly="true"
+                         Hover="true" RowClass="cursor-pointer" RowClick="@(args => OpenSetDetailDialog(args.Item))">
                 <Columns>
                     <TemplateColumn Title="Image" Editable="false">
                         <CellTemplate>
-                            <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                      Src="@ImageStorage.ResolveUrl(context.Item.Set.SetImg)" Height="50"
-                                      @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
+                            <MudImage class="rounded-3" Elevation="2"
+                                      Src="@ImageStorage.ResolveUrl(context.Item.Set.SetImg)" Height="50"/>
                         </CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
@@ -173,36 +173,44 @@
                     </TemplateColumn>
                     <TemplateColumn Title="Manual" Editable="false">
                         <CellTemplate>
-                            <MudImage @onclick="() => OpenBuildingInstructions(context.Item.Set.ManualUrl)"
-                                      class="cursor-pointer rounded-2" Elevation="2" Height="30"
-                                      Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
+                            <div @onclick:stopPropagation="true">
+                                <MudImage @onclick="() => OpenBuildingInstructions(context.Item.Set.ManualUrl)"
+                                          class="cursor-pointer rounded-2" Elevation="2" Height="30"
+                                          Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
+                            </div>
                         </CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Title="BoM" Editable="false">
                         <CellTemplate>
-                            <MudIconButton
-                                OnClick="() => OpenBomDialog(context.Item)"
-                                Icon="@Icons.Material.Filled.List"
-                                Variant="Variant.Filled" Color="Color.Primary"
-                                Size="Size.Small"/>
+                            <div @onclick:stopPropagation="true">
+                                <MudIconButton
+                                    OnClick="() => OpenBomDialog(context.Item)"
+                                    Icon="@Icons.Material.Filled.List"
+                                    Variant="Variant.Filled" Color="Color.Primary"
+                                    Size="Size.Small"/>
+                            </div>
                         </CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Title="Add" Editable="false">
                         <CellTemplate>
-                            <MudIconButton
-                                Icon="@Icons.Material.Filled.Add"
-                                Variant="Variant.Filled" Color="Color.Info"
-                                Size="Size.Small"
-                                OnClick="() => AddOwnedSet(context.Item.Set.SetId)"/>
+                            <div @onclick:stopPropagation="true">
+                                <MudIconButton
+                                    Icon="@Icons.Material.Filled.Add"
+                                    Variant="Variant.Filled" Color="Color.Info"
+                                    Size="Size.Small"
+                                    OnClick="() => AddOwnedSet(context.Item.Set.SetId)"/>
+                            </div>
                         </CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Title="Delete" Editable="false">
                         <CellTemplate>
-                            <MudIconButton
-                                Icon="@Icons.Material.Filled.Delete"
-                                Variant="Variant.Filled" Color="Color.Error"
-                                Size="Size.Small"
-                                OnClick="() => DeleteOwnedSet(context.Item.Set.SetId, context.Item.Instance.SetIndex, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
+                            <div @onclick:stopPropagation="true">
+                                <MudIconButton
+                                    Icon="@Icons.Material.Filled.Delete"
+                                    Variant="Variant.Filled" Color="Color.Error"
+                                    Size="Size.Small"
+                                    OnClick="() => DeleteOwnedSet(context.Item.Set.SetId, context.Item.Instance.SetIndex, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
+                            </div>
                         </CellTemplate>
                     </TemplateColumn>
                 </Columns>
@@ -449,11 +457,6 @@
         return DialogService.ShowAsync<BomDialog>("Bill of Materials", parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseOnEscapeKey = true });
     }
-
-    private Task OpenImagePopup(string setId, string setName, string? setImgUrl) =>
-        DialogService.ShowAsync<ImagePopup>("Image Popup",
-            new DialogParameters<ImagePopup> { { x => x._id, setId }, { x => x._name, setName }, { x => x._imgUrl, setImgUrl } },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
 
     private void OpenBuildingInstructions(string url) => JsRuntime.InvokeVoidAsync("open", url, "_blank");
 
