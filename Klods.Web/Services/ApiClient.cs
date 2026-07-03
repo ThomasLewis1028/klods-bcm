@@ -275,6 +275,10 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public Task<CatalogImportDto[]?> GetCatalogImportsAsync() => GetAsync<CatalogImportDto[]>("/api/admin/catalog-imports");
 
+    public Task<ThemeVisibilityDto[]?> GetThemeVisibilityAsync() => GetAsync<ThemeVisibilityDto[]>("/api/admin/theme-visibility");
+    public async Task<bool> SaveThemeVisibilityAsync(IEnumerable<int> hiddenThemeIds)
+        => (await PutAsync("/api/admin/theme-visibility", new { HiddenThemeIds = hiddenThemeIds.ToArray() })).Ok;
+
     public Task<RssSettingsDto?> GetRssSettingsAsync()        => GetAsync<RssSettingsDto>("/api/admin/rss-settings");
     public Task<TimezoneDto[]?> GetTimezonesAsync()           => GetAsync<TimezoneDto[]>("/api/admin/timezones");
     public Task<CronPreviewDto?> PreviewCronAsync(string cron, string tz)
@@ -367,7 +371,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record LinkIntentResponse(string Token);
     public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword);
     public record LinkedLoginDto(string Provider);
-    public record HomePreviewDto(List<PreviewItemDto> Sets, List<PreviewItemDto> Bricks, List<PreviewItemDto> Minifigs);
+    public record HomePreviewDto(
+        PreviewItemDto? CatalogSet, PreviewItemDto? CatalogBrick, PreviewItemDto? CatalogMinifig,
+        PreviewItemDto? MySet, PreviewItemDto? MyBrick, PreviewItemDto? MyMinifig);
     public record PreviewItemDto(string Id, string Name, string? ImgUrl);
 
     public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl);
@@ -412,6 +418,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record RegistrationSettingsDto(bool AutoApprove);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
     public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
+    public record ThemeVisibilityDto(int Id, string Name, int? ParentId, int SetCount, bool Hidden);
     public record TimezoneDto(string Id, string DisplayName);
     public record CronPreviewDto(bool Valid, List<string> Next);
     public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs);

@@ -240,6 +240,78 @@
         }
     </MudPaper>
 
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Catalog Themes</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Hidden themes are removed from the set catalog browse, search, and theme filter — handy for hiding
+            non-building “gear” (bags, keychains, posters, books…). Check a parent to hide its whole branch, or
+            expand it and hide individual subthemes. Sets stay in the database, so un-hiding brings them back.
+        </MudText>
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="mb-2" Style="flex-wrap: wrap;">
+            <MudTextField @bind-Value="_themeSearch" Placeholder="Filter themes" Immediate="true"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Margin="Margin.Dense" Style="max-width: 260px;"/>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@_hiddenThemeIds.Count hidden</MudText>
+            <MudSpacer/>
+            <MudButton OnClick="SaveThemeVisibility" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save" Disabled="_themesSaving">
+                @(_themesSaving ? "Saving..." : "Save")
+            </MudButton>
+        </MudStack>
+
+        @if (_themesSaved)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">Theme visibility saved.</MudAlert>
+        }
+
+        @if (_themes.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                No themes yet — run a catalog bulk import to populate the theme tree.
+            </MudText>
+        }
+        else
+        {
+            <div style="max-height: 360px; overflow-y: auto;">
+                @if (!string.IsNullOrWhiteSpace(_themeSearch))
+                {
+                    @foreach (var t in _themes
+                        .Where(x => x.Name.Contains(_themeSearch, StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(x => x.Name))
+                    {
+                        <div style="display: flex; align-items: center; padding-left: 30px;">
+                            <MudCheckBox T="bool" Value="_hiddenThemeIds.Contains(t.Id)" Dense="true" Color="Color.Primary"
+                                         ValueChanged="(bool v) => ToggleOne(t.Id, v)"/>
+                            <MudText Typo="Typo.body2">@t.Name <span style="opacity: 0.55;">(@t.SetCount)</span></MudText>
+                        </div>
+                    }
+                }
+                else
+                {
+                    @foreach (var (node, depth) in VisibleRows())
+                    {
+                        <div style="display: flex; align-items: center; padding-left: @(depth * 20)px;">
+                            @if (node.Children.Count > 0)
+                            {
+                                <MudIconButton Size="Size.Small" Style="min-width: 30px;"
+                                               Icon="@(_expanded.Contains(node.Id) ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
+                                               OnClick="() => ToggleExpand(node.Id)"/>
+                            }
+                            else
+                            {
+                                <div style="width: 30px;"></div>
+                            }
+                            <MudCheckBox T="bool?" Value="NodeState(node)" TriState="true" Dense="true" Color="Color.Primary"
+                                         ValueChanged="(bool? _) => ToggleNode(node)"/>
+                            <MudText Typo="Typo.body2">@node.Name <span style="opacity: 0.55;">(@SubtreeCount(node))</span></MudText>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </MudPaper>
+
 </MudStack>
 
 @code {
@@ -266,6 +338,12 @@
     private bool _cronValid = true;
     private List<string> _cronNext = [];
 
+    private List<ApiClient.ThemeVisibilityDto> _themes = [];
+    private HashSet<int> _hiddenThemeIds = [];
+    private string _themeSearch = string.Empty;
+    private bool _themesSaving;
+    private bool _themesSaved;
+
     protected override async Task OnInitializedAsync()
     {
         var users = await Api.GetAdminUsersAsync();
@@ -288,7 +366,109 @@
         if (regSettings != null)
             _registrationAutoApprove = regSettings.AutoApprove;
 
+        _themes = (await Api.GetThemeVisibilityAsync())?.ToList() ?? [];
+        _hiddenThemeIds = _themes.Where(t => t.Hidden).Select(t => t.Id).ToHashSet();
+        BuildThemeTree();
+
         _isLoading = false;
+    }
+
+    private sealed class ThemeNode
+    {
+        public int Id;
+        public string Name = "";
+        public int SetCount;
+        public List<ThemeNode> Children = [];
+    }
+
+    private List<ThemeNode> _themeRoots = [];
+    private readonly HashSet<int> _expanded = [];
+
+    private void BuildThemeTree()
+    {
+        var nodes = _themes.ToDictionary(
+            t => t.Id, t => new ThemeNode { Id = t.Id, Name = t.Name, SetCount = t.SetCount });
+        _themeRoots = [];
+        foreach (var t in _themes)
+        {
+            if (t.ParentId is int pid && nodes.TryGetValue(pid, out var parent))
+                parent.Children.Add(nodes[t.Id]);
+            else
+                _themeRoots.Add(nodes[t.Id]);
+        }
+    }
+
+    // Flattens the tree into display order, honouring expand state; indent = depth.
+    private IEnumerable<(ThemeNode Node, int Depth)> VisibleRows()
+    {
+        var rows = new List<(ThemeNode, int)>();
+        void Walk(IEnumerable<ThemeNode> nodes, int depth)
+        {
+            foreach (var n in nodes.OrderBy(x => x.Name))
+            {
+                rows.Add((n, depth));
+                if (n.Children.Count > 0 && _expanded.Contains(n.Id))
+                    Walk(n.Children, depth + 1);
+            }
+        }
+        Walk(_themeRoots, 0);
+        return rows;
+    }
+
+    // Tri-state: all descendants hidden → true, none → false, mixed → null (dash).
+    private bool? NodeState(ThemeNode n)
+    {
+        if (n.Children.Count == 0) return _hiddenThemeIds.Contains(n.Id);
+        bool allHidden = true, noneHidden = true;
+        foreach (var c in n.Children)
+        {
+            var s = NodeState(c);
+            if (s != true) allHidden = false;
+            if (s != false) noneHidden = false;
+        }
+        return allHidden ? true : noneHidden ? false : null;
+    }
+
+    private static IEnumerable<int> Subtree(ThemeNode n)
+    {
+        yield return n.Id;
+        foreach (var c in n.Children)
+            foreach (var id in Subtree(c))
+                yield return id;
+    }
+
+    private int SubtreeCount(ThemeNode n) => n.SetCount + n.Children.Sum(SubtreeCount);
+
+    // Checking a parent writes every theme in its subtree, so the cascade is stored explicitly.
+    private void ToggleNode(ThemeNode n)
+    {
+        var hide = NodeState(n) != true;
+        foreach (var id in Subtree(n))
+        {
+            if (hide) _hiddenThemeIds.Add(id); else _hiddenThemeIds.Remove(id);
+        }
+        _themesSaved = false;
+    }
+
+    private void ToggleOne(int id, bool hidden)
+    {
+        if (hidden) _hiddenThemeIds.Add(id); else _hiddenThemeIds.Remove(id);
+        _themesSaved = false;
+    }
+
+    private void ToggleExpand(int id)
+    {
+        if (!_expanded.Remove(id)) _expanded.Add(id);
+    }
+
+    private async Task SaveThemeVisibility()
+    {
+        _themesSaving = true;
+        _themesSaved = false;
+        StateHasChanged();
+        _themesSaved = await Api.SaveThemeVisibilityAsync(_hiddenThemeIds);
+        _themesSaving = false;
+        StateHasChanged();
     }
 
     private Task<IEnumerable<string>> SearchTimezones(string value, CancellationToken token)

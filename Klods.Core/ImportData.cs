@@ -8,12 +8,11 @@ namespace Klods;
 
 public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger, ImageStorageService imageStorage, RebrickableApi rebrickable)
 {
-    private readonly Dictionary<int, string> _themeCache = new();
     /// <summary>
     /// Imports set catalog info, bricks, and BOM data from Rebrickable.
     /// Does NOT create an owned set — call AddOwnedSet separately.
     /// </summary>
-    public async Task<bool> ImportAll(List<string> setIds)
+    public async Task<bool> ImportAll(List<string> setIds, bool throwOnError = false)
     {
         foreach (string setId in setIds)
         {
@@ -33,6 +32,9 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to import all data for set {SetId}", setId);
+                // Callers that need to distinguish failure kinds (e.g. the RSS poller telling a
+                // permanent 404 from a transient error) opt into the raw exception.
+                if (throwOnError) throw;
                 return false;
             }
         }
@@ -352,7 +354,8 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         var setImg = setInfo!["set_img_url"]?.ToString();
 
         int? themeId = setInfo!["theme_id"] != null ? (int)setInfo["theme_id"]! : null;
-        var themeName = themeId.HasValue ? await ResolveThemeNameAsync(api, themeId.Value) : null;
+        if (themeId.HasValue)
+            await EnsureThemeAsync(context, api, themeId.Value);
 
         var existingSet = await setContext.FirstOrDefaultAsync(s => s.SetId == setId);
         if (existingSet != null)
@@ -368,7 +371,6 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 existingSet.ReleaseYear = int.Parse(setInfo!["year"]!.ToString());
                 existingSet.ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId!.Split('-').First()}";
                 existingSet.ThemeId = themeId;
-                existingSet.ThemeName = themeName;
             }
         }
         else
@@ -384,7 +386,6 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
                 ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId!.Split('-').First()}",
                 ThemeId = themeId,
-                ThemeName = themeName,
             });
         }
 
@@ -722,22 +723,27 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         node["set_img_url"]?.ToString()
     );
 
-    private async Task<string?> ResolveThemeNameAsync(RebrickableApi api, int themeId)
+    /// <summary>
+    /// Ensures a <see cref="Theme"/> row exists for <paramref name="themeId"/> so <see cref="Set.ThemeId"/>
+    /// always resolves to a name. Only calls the API for themes we don't already have (the bulk import
+    /// loads the full tree, including parents). Added to the caller's context; saved with the set.
+    /// </summary>
+    private async Task EnsureThemeAsync(InventoryContext context, RebrickableApi api, int themeId)
     {
-        if (_themeCache.TryGetValue(themeId, out var cached))
-            return cached;
-        try
+        var themeContext = context.Set<Theme>();
+        if (await themeContext.AnyAsync(t => t.Id == themeId))
+            return;
+
+        JsonObject? info = null;
+        try { info = await api.GetTheme(themeId); }
+        catch (Exception ex) { logger.LogWarning(ex, "Failed to fetch theme {ThemeId}; storing id only", themeId); }
+
+        themeContext.Add(new Theme
         {
-            var theme = await api.GetTheme(themeId);
-            var name = theme?["name"]?.ToString();
-            if (name != null)
-                _themeCache[themeId] = name;
-            return name;
-        }
-        catch
-        {
-            return null;
-        }
+            Id = themeId,
+            Name = info?["name"]?.ToString() ?? themeId.ToString(),
+            ParentId = info?["parent_id"] != null ? (int)info["parent_id"]! : null,
+        });
     }
 
     /// <summary>

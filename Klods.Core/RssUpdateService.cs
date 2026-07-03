@@ -48,38 +48,63 @@ public class RssUpdateService(
             return await RecordAsync("Success", "No new sets in feed.", ct);
 
         var imported = new List<string>();
-        var skipped = 0;
+        var alreadyInCatalog = 0;
+        var failed = new List<string>();
         var processedThrough = baseline;
+        // Once a set fails transiently we stop advancing the watermark, so it (and everything newer)
+        // is retried next poll instead of being silently skipped forever.
+        var watermarkFrozen = false;
+        var capReached = false;
 
         await using (var db = await contextFactory.CreateDbContextAsync(ct))
         {
             foreach (var item in newItems)
             {
-                if (imported.Count >= maxImports) break;
-                processedThrough = item.PubDate;
+                if (imported.Count >= maxImports) { capReached = true; break; }
 
-                if (await db.Set<Set>().AnyAsync(s => s.SetId == item.SetNum, ct)) { skipped++; continue; }
+                bool handled;
+                if (await db.Set<Set>().AnyAsync(s => s.SetId == item.SetNum, ct))
+                {
+                    alreadyInCatalog++;
+                    handled = true;
+                }
+                else
+                {
+                    try
+                    {
+                        await importer.ImportAll([item.SetNum], throwOnError: true);
+                        imported.Add(item.SetNum);
+                        handled = true;
+                    }
+                    catch (RebrickableApiException ex) when (ex.StatusCode == 404)
+                    {
+                        // The feed listed a set the sets API doesn't have — retrying won't help.
+                        logger.LogWarning("RSS: set {SetNum} not found on the sets API (404); skipping permanently", item.SetNum);
+                        handled = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "RSS import of {SetNum} failed; holding watermark to retry next poll", item.SetNum);
+                        failed.Add(item.SetNum);
+                        handled = false;
+                    }
+                }
 
-                try
-                {
-                    if (await importer.ImportAll([item.SetNum])) imported.Add(item.SetNum);
-                    else skipped++;
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "RSS import of {SetNum} failed", item.SetNum);
-                    skipped++;
-                }
+                if (!handled) watermarkFrozen = true;
+                else if (!watermarkFrozen) processedThrough = item.PubDate;
             }
         }
 
         await settings.SetAsync(LastPubDateKey, processedThrough.ToString("o"), ct);
 
-        var remaining = newItems.Count(i => i.PubDate > processedThrough);
-        var notes = imported.Count > 0
-            ? $"Imported {imported.Count}: {string.Join(", ", imported)}" + (skipped > 0 ? $" (skipped {skipped})" : "")
-            : $"No new imports (skipped {skipped} already in catalog)";
-        if (remaining > 0) notes += $"; {remaining} more queued for next poll";
+        var segments = new List<string>
+        {
+            imported.Count > 0 ? $"Imported {imported.Count}: {string.Join(", ", imported)}" : "Imported 0"
+        };
+        if (alreadyInCatalog > 0) segments.Add($"{alreadyInCatalog} already in catalog");
+        if (failed.Count > 0) segments.Add($"{failed.Count} failed, will retry: {string.Join(", ", failed)}");
+        var notes = string.Join("; ", segments);
+        if (capReached) notes += $"; import cap ({maxImports}) reached, remaining sets import next poll";
 
         logger.LogInformation("RSS poll: {Notes}", notes);
         return await RecordAsync("Success", notes, ct);

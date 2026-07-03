@@ -60,6 +60,12 @@ public class BulkImportService(IDbContextFactory<InventoryContext> contextFactor
         SELECT id::int, name FROM stg_part_categories
         ON CONFLICT ("Id") DO UPDATE SET "Name"=EXCLUDED."Name";
         """,
+        // Themes — the full theme/subtheme tree (ParentId is a soft self-reference).
+        """
+        INSERT INTO "Themes" ("Id","Name","ParentId")
+        SELECT id::int, name, NULLIF(parent_id,'')::int FROM stg_themes
+        ON CONFLICT ("Id") DO UPDATE SET "Name"=EXCLUDED."Name","ParentId"=EXCLUDED."ParentId";
+        """,
         // Bricks (part+color). Cover every (part,color) used by inventories OR listed as an element,
         // so downstream BOM FKs always resolve.
         """
@@ -91,18 +97,18 @@ public class BulkImportService(IDbContextFactory<InventoryContext> contextFactor
             "PartImg"=COALESCE("Bricks"."PartImg", EXCLUDED."PartImg");
         """,
         // Sets. DateModified seeded to MinValue so a later API import (which has last_modified_dt) refreshes it.
+        // ThemeId is a soft reference into "Themes" (loaded above); the theme name is joined at read time.
         """
-        INSERT INTO "Sets" ("SetId","Name","SetURL","SetImg","NumBricks","ReleaseYear","DateModified","ManualUrl","ThemeId","ThemeName")
+        INSERT INTO "Sets" ("SetId","Name","SetURL","SetImg","NumBricks","ReleaseYear","DateModified","ManualUrl","ThemeId")
         SELECT s.set_num, s.name, NULL, NULLIF(s.img_url,''),
                COALESCE(NULLIF(s.num_parts,'')::int,0), COALESCE(NULLIF(s.year,'')::int,0),
                TIMESTAMPTZ '0001-01-01 00:00:00+00',
                'https://www.lego.com/en-us/service/buildinginstructions/' || split_part(s.set_num,'-',1),
-               NULLIF(s.theme_id,'')::int, t.name
+               NULLIF(s.theme_id,'')::int
         FROM stg_sets s
-        LEFT JOIN stg_themes t ON t.id = s.theme_id
         ON CONFLICT ("SetId") DO UPDATE SET
             "Name"=EXCLUDED."Name","NumBricks"=EXCLUDED."NumBricks","ReleaseYear"=EXCLUDED."ReleaseYear",
-            "ManualUrl"=EXCLUDED."ManualUrl","ThemeId"=EXCLUDED."ThemeId","ThemeName"=EXCLUDED."ThemeName",
+            "ManualUrl"=EXCLUDED."ManualUrl","ThemeId"=EXCLUDED."ThemeId",
             "SetImg"=COALESCE("Sets"."SetImg", EXCLUDED."SetImg");
         """,
         // Minifigs
@@ -245,8 +251,8 @@ public class BulkImportService(IDbContextFactory<InventoryContext> contextFactor
     {
         await using var ctx = await contextFactory.CreateDbContextAsync(ct);
         return $"sets={await ctx.Set<Set>().CountAsync(ct)}, bricks={await ctx.Set<Brick>().CountAsync(ct)}, " +
-               $"minifigs={await ctx.Set<Minifig>().CountAsync(ct)}, set-bricks={await ctx.Set<SetBrick>().CountAsync(ct)}, " +
-               $"set-minifigs={await ctx.Set<SetMinifig>().CountAsync(ct)}";
+               $"minifigs={await ctx.Set<Minifig>().CountAsync(ct)}, themes={await ctx.Set<Theme>().CountAsync(ct)}, " +
+               $"set-bricks={await ctx.Set<SetBrick>().CountAsync(ct)}, set-minifigs={await ctx.Set<SetMinifig>().CountAsync(ct)}";
     }
 
     private async Task<CatalogImport> RecordAsync(

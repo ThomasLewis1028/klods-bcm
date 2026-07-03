@@ -21,6 +21,7 @@ public class InventoryContext : DbContext
     public DbSet<MinifigBrickOwned> MinifigBrickOwneds { get; set; }
     public DbSet<Color> Colors { get; set; }
     public DbSet<PartCategory> PartCategories { get; set; }
+    public DbSet<Theme> Themes { get; set; }
     public DbSet<CatalogImport> CatalogImports { get; set; }
     public DbSet<Setting> Settings { get; set; }
     public DbSet<SetOwned> SetsOwned { get; set; }
@@ -175,6 +176,10 @@ public class InventoryContext : DbContext
         // PART CATEGORY (reference table, synced like Color)
         modelBuilder.Entity<PartCategory>().HasKey(e => e.Id);
         modelBuilder.Entity<PartCategory>().Property(e => e.Id).ValueGeneratedNever();
+
+        // THEME (reference table; Id is Rebrickable's, ParentId is a soft self-reference — no FK)
+        modelBuilder.Entity<Theme>().HasKey(e => e.Id);
+        modelBuilder.Entity<Theme>().Property(e => e.Id).ValueGeneratedNever();
 
         // SETTING (key/value app settings)
         modelBuilder.Entity<Setting>().HasKey(e => e.Key);

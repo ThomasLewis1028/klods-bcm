@@ -1,4 +1,5 @@
 using Klods.Database;
+using Klods.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Klods.Api.Endpoints;
@@ -9,11 +10,16 @@ public static class SetsEndpoints
     {
         var group = app.MapGroup("/api/sets").RequireAuthorization();
 
-        group.MapGet("/", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        group.MapGet("/", async (IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
         {
             await using var db = dbFactory.CreateDbContext();
-            var sets = await db.Set<Set>().AsNoTracking().OrderBy(s => s.Name).ToListAsync();
-            return Results.Ok(sets.Select(SetDto.From));
+            var hidden = await CatalogSettings.GetHiddenThemeIdsAsync(settings);
+            var sets = await ExcludeHidden(db.Set<Set>().AsNoTracking(), hidden)
+                .OrderBy(s => s.Name)
+                .Select(s => new SetDto(s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear,
+                    db.Set<Theme>().Where(t => t.Id == s.ThemeId).Select(t => t.Name).FirstOrDefault()))
+                .ToListAsync();
+            return Results.Ok(sets);
         });
 
         group.MapGet("/owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
@@ -25,7 +31,8 @@ public static class SetsEndpoints
                 .AsNoTracking()
                 .Where(so => so.UserId == userId)
                 .Join(db.Set<Set>().AsNoTracking(), so => so.SetId, s => s.SetId, (so, s) => new OwnedSetDto(
-                    so.SetId, so.SetIndex, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ThemeName))
+                    so.SetId, so.SetIndex, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear,
+                    db.Set<Theme>().Where(t => t.Id == s.ThemeId).Select(t => t.Name).FirstOrDefault()))
                 .OrderBy(s => s.Name)
                 .ToListAsync();
 
@@ -94,6 +101,11 @@ public static class SetsEndpoints
                 .Where(s => setIds.Contains(s.SetId))
                 .ToDictionaryAsync(s => s.SetId);
 
+            var themeIds = sets.Values.Where(s => s.ThemeId != null).Select(s => s.ThemeId!.Value).Distinct().ToList();
+            var themeNames = await db.Set<Theme>().AsNoTracking()
+                .Where(t => themeIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.Name);
+
             // Total required set bricks per setId
             var requiredPerSet = await db.Set<SetBrick>().AsNoTracking()
                 .Where(sb => setIds.Contains(sb.SetId))
@@ -146,8 +158,9 @@ public static class SetsEndpoints
                                   + minifigStockDict.GetValueOrDefault((so.SetId, so.SetIndex), 0);
                         return new OwnedInstanceDto(so.SetIndex, Math.Max(0, required - stock), stock);
                     }).ToList();
+                    var themeName = set.ThemeId is int tid ? themeNames.GetValueOrDefault(tid) : null;
                     return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,
-                        set.ReleaseYear, set.ThemeName, set.ManualUrl, instances);
+                        set.ReleaseYear, themeName, set.ManualUrl, instances);
                 })
                 .ToList();
 
@@ -155,20 +168,22 @@ public static class SetsEndpoints
         });
 
         // Lightweight catalog stats (no row load) for the Sets page header.
-        group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
         {
             await using var db = dbFactory.CreateDbContext();
-            var totalSets   = await db.Set<Set>().CountAsync();
+            var hidden = await CatalogSettings.GetHiddenThemeIdsAsync(settings);
+            var visibleSets = ExcludeHidden(db.Set<Set>().AsNoTracking(), hidden);
+            var totalSets   = await visibleSets.CountAsync();
             var totalOwned  = await db.Set<SetOwned>().CountAsync();
             var totalOwners = await db.Set<SetOwned>().Select(so => so.UserId).Distinct().CountAsync();
-            var totalPieces = await db.Set<Set>().SumAsync(s => (long)s.NumBricks);
+            var totalPieces = await visibleSets.SumAsync(s => (long)s.NumBricks);
             return Results.Ok(new SetCatalogStatsDto(totalSets, totalOwned, totalOwners, totalPieces));
         });
 
         // Server-side, paginated catalog browse/search with optional theme filter + sort.
         group.MapGet("/catalog", async (
             string? q, int? theme, string? sort, string? dir, int page, int pageSize,
-            HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+            HttpContext http, IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
         {
             var userId = http.UserId();
             if (pageSize is <= 0 or > 200) pageSize = 25;
@@ -177,7 +192,8 @@ public static class SetsEndpoints
 
             await using var db = dbFactory.CreateDbContext();
 
-            IQueryable<Set> baseQ = db.Set<Set>().AsNoTracking();
+            var hidden = await CatalogSettings.GetHiddenThemeIdsAsync(settings);
+            IQueryable<Set> baseQ = ExcludeHidden(db.Set<Set>().AsNoTracking(), hidden);
             if (query.Length >= 2)
             {
                 var like = $"%{query}%";
@@ -186,7 +202,7 @@ public static class SetsEndpoints
             if (theme is int themeId)
                 baseQ = baseQ.Where(s => s.ThemeId == themeId);
 
-            baseQ = SortSets(baseQ, sort, dir);
+            baseQ = SortSets(baseQ, sort, dir, db);
 
             var total = await baseQ.CountAsync();
             var pageItems = await baseQ.Skip(page * pageSize).Take(pageSize).ToListAsync();
@@ -196,24 +212,29 @@ public static class SetsEndpoints
                     .Where(so => so.UserId == userId && ids.Contains(so.SetId)).ToListAsync())
                 .GroupBy(so => so.SetId).ToDictionary(g => g.Key, g => g.Count());
 
+            var pageThemeIds = pageItems.Where(s => s.ThemeId != null).Select(s => s.ThemeId!.Value).Distinct().ToList();
+            var themeNames = await db.Set<Theme>().AsNoTracking()
+                .Where(t => pageThemeIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Name);
+
             var items = pageItems.Select(s => new SetCatalogSearchDto(
-                s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ThemeName, s.ManualUrl,
+                s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear,
+                s.ThemeId is int tid ? themeNames.GetValueOrDefault(tid) : null, s.ManualUrl,
                 ownedCounts.GetValueOrDefault(s.SetId, 0))).ToList();
 
             return Results.Ok(new SetCatalogPage(items, total));
         });
 
-        // Distinct themes that have sets, for the filter dropdown.
-        group.MapGet("/themes", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        // Distinct themes that have visible sets, for the filter dropdown (hidden themes omitted).
+        group.MapGet("/themes", async (IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
         {
             await using var db = dbFactory.CreateDbContext();
-            var themes = await db.Set<Set>().AsNoTracking()
-                .Where(s => s.ThemeId != null && s.ThemeName != null)
-                .Select(s => new { Id = s.ThemeId!.Value, Name = s.ThemeName! })
-                .Distinct()
+            var hidden = await CatalogSettings.GetHiddenThemeIdsAsync(settings);
+            var themes = await db.Set<Theme>().AsNoTracking()
+                .Where(t => !hidden.Contains(t.Id) && db.Set<Set>().Any(s => s.ThemeId == t.Id))
                 .OrderBy(t => t.Name)
+                .Select(t => new ThemeDto(t.Id, t.Name))
                 .ToListAsync();
-            return Results.Ok(themes.Select(t => new ThemeDto(t.Id, t.Name)).ToList());
+            return Results.Ok(themes);
         });
 
         // Admin: remove a set from the catalog entirely.
@@ -224,8 +245,12 @@ public static class SetsEndpoints
         }).RequireAuthorization("Admin");
     }
 
-    // Whitelisted server-side sort. Default: latest sets first.
-    private static IQueryable<Set> SortSets(IQueryable<Set> q, string? sort, string? dir)
+    // Drops sets in admin-hidden themes. Sets with no theme are always shown.
+    private static IQueryable<Set> ExcludeHidden(IQueryable<Set> q, int[] hidden) =>
+        hidden.Length == 0 ? q : q.Where(s => s.ThemeId == null || !hidden.Contains(s.ThemeId.Value));
+
+    // Whitelisted server-side sort. Default: latest sets first. Theme sort orders by the joined name.
+    private static IQueryable<Set> SortSets(IQueryable<Set> q, string? sort, string? dir, InventoryContext db)
     {
         var desc = dir != "asc";
         return (sort ?? "year") switch
@@ -233,16 +258,14 @@ public static class SetsEndpoints
             "name"   => desc ? q.OrderByDescending(s => s.Name) : q.OrderBy(s => s.Name),
             "id"     => desc ? q.OrderByDescending(s => s.SetId) : q.OrderBy(s => s.SetId),
             "pieces" => desc ? q.OrderByDescending(s => s.NumBricks) : q.OrderBy(s => s.NumBricks),
-            "theme"  => desc ? q.OrderByDescending(s => s.ThemeName) : q.OrderBy(s => s.ThemeName),
+            "theme"  => desc ? q.OrderByDescending(s => db.Set<Theme>().Where(t => t.Id == s.ThemeId).Select(t => t.Name).FirstOrDefault())
+                             : q.OrderBy(s => db.Set<Theme>().Where(t => t.Id == s.ThemeId).Select(t => t.Name).FirstOrDefault()),
             _        => desc ? q.OrderByDescending(s => s.ReleaseYear).ThenBy(s => s.Name)
                              : q.OrderBy(s => s.ReleaseYear).ThenBy(s => s.Name),
         };
     }
 
-    public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName)
-    {
-        public static SetDto From(Set s) => new(s.SetId, s.Name, s.SetImg, s.NumBricks, s.ReleaseYear, s.ThemeName);
-    }
+    public record SetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName);
 
     public record OwnedSetDto(string SetId, int SetIndex, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName);
     public record ResolveSetRequest(string Query, int Page = 0);

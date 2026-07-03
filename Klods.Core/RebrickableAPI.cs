@@ -1,10 +1,20 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace Klods;
 
 /// <summary>A recently-added set from Rebrickable's public sets RSS feed.</summary>
 public record RssSetItem(string SetNum, string Name, DateTime PubDate);
+
+/// <summary>
+/// Thrown when the Rebrickable API returns a non-success status. Carries the HTTP status code so
+/// callers can distinguish a permanent 404 from a transient 429/5xx (worth retrying).
+/// </summary>
+public class RebrickableApiException(int statusCode, string message) : Exception(message)
+{
+    public int StatusCode { get; } = statusCode;
+}
 
 public class RebrickableApi
 {
@@ -112,6 +122,7 @@ public class RebrickableApi
         var doc = XDocument.Parse(xml);
 
         var items = new List<RssSetItem>();
+        var skippedNonSets = 0;
         foreach (var item in doc.Descendants("item"))
         {
             // title is "<set_num> <name>", e.g. "75192-1 Millennium Falcon"
@@ -120,13 +131,28 @@ public class RebrickableApi
             var setNum = split[0];
             if (setNum.Length == 0) continue;
 
+            // The feed also carries minifigs (fig-*) and alternate-build/subset variants
+            // ("31313-1-b11", "60509-1-s1") that don't exist on the sets API — skip them so we
+            // don't spend rate-limited calls 404ing on entries that were never sets.
+            if (!IsSetNumber(setNum)) { skippedNonSets++; continue; }
+
             var name = split.Length > 1 ? split[1] : setNum;
             if (!DateTimeOffset.TryParse(item.Element("pubDate")?.Value, out var pub)) continue;
 
             items.Add(new RssSetItem(setNum, name, pub.UtcDateTime));
         }
+
+        _logger.LogInformation("RSS feed: {SetCount} sets, {NonSetCount} non-set entries skipped",
+            items.Count, skippedNonSets);
         return items;
     }
+
+    // A real catalog set number is "<base>-<variant>" with a numeric variant: "42238-1", "POSTER-3".
+    // Minifigs ("fig-017933") and alternate builds/subsets ("31313-1-b11", "60509-1-s1") don't match.
+    private static readonly Regex SetNumberPattern = new(@"^\w+-\d+$", RegexOptions.Compiled);
+
+    private static bool IsSetNumber(string setNum) =>
+        !setNum.StartsWith("fig-", StringComparison.OrdinalIgnoreCase) && SetNumberPattern.IsMatch(setNum);
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
@@ -184,7 +210,8 @@ public class RebrickableApi
                 return JsonNode.Parse(body)?.AsObject();
 
             var safeUri = uri.GetLeftPart(UriPartial.Path);
-            throw new Exception($"Rebrickable API {(int)response.StatusCode} at {safeUri} — {body}");
+            throw new RebrickableApiException((int)response.StatusCode,
+                $"Rebrickable API {(int)response.StatusCode} at {safeUri} — {body}");
         }
         catch (Exception e)
         {
