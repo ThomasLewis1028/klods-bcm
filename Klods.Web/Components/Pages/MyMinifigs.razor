@@ -133,7 +133,6 @@
             <MudDataGrid T="MyMinifigInfo" Items="@PagedItems.ToList()" SortMode="SortMode.None" ReadOnly="false"
                          Hover="true" RowClass="cursor-pointer" RowClick="@(args => OpenMinifigDialog(args.Item))">
                 <Columns>
-                    <HierarchyColumn T="MyMinifigInfo" ButtonDisabledFunc="@(info => info.Minifig.PartCount == 0)"/>
                     <TemplateColumn Title="Image" Editable="false">
                         <CellTemplate>
                             <MudImage class="rounded-3" Elevation="2"
@@ -176,59 +175,6 @@
                         <CellTemplate>@context.Item.Minifig.PartCount</CellTemplate>
                     </TemplateColumn>
                 </Columns>
-
-                <ChildRowContent Context="minifigContext">
-                    <div class="child-row-content">
-                    @if (!minifigContext.Item.IsLoaded)
-                    {
-                        <MudCard><MudCardContent><MudText>Loading parts…</MudText></MudCardContent></MudCard>
-                        { _ = LoadMinifigBricksAsync(minifigContext.Item); }
-                    }
-                    else if (minifigContext.Item.Bricks.Any())
-                    {
-                        <MudCard>
-                            <MudDataGrid T="BrickEntry" Items="minifigContext.Item.Bricks.OrderBy(b => b.BrickId)">
-                                <Columns>
-                                    <TemplateColumn Title="Image" Editable="false">
-                                        <CellTemplate>
-                                            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
-                                                <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                          Src="@ImageStorage.ResolveUrl(context.Item.PartImg)" Height="50"
-                                                          @onclick="() => OpenImagePopup(context.Item.BrickId, context.Item.Name, ImageStorage.ResolveUrl(context.Item.PartImg))"/>
-                                            </MudStack>
-                                        </CellTemplate>
-                                    </TemplateColumn>
-                                    <PropertyColumn Title="Part Id" Property="x => x.BrickId"/>
-                                    <PropertyColumn Title="Name" Property="x => x.Name"/>
-                                    <TemplateColumn Title="Color" SortBy="x => x.ColorId" Sortable="true" Editable="false">
-                                        <CellTemplate>
-                                            @if (context.Item.HexColor != null)
-                                            {
-                                                <MudChip T="string"
-                                                    OnClick="() => OpenColorPopup(context.Item.HexColor, context.Item.ColorName)"
-                                                    class="mud-elevation-2"
-                                                    Style="@ColorHelper.ColorChipStyle(context.Item.HexColor)">
-                                                    @context.Item.ColorName
-                                                </MudChip>
-                                            }
-                                            else { <MudChip T="string" Color="Color.Default">N/A</MudChip> }
-                                        </CellTemplate>
-                                    </TemplateColumn>
-                                    <PropertyColumn Title="Need" Property="x => x.Need" Editable="false"/>
-                                    <TemplateColumn Title="Owned">
-                                        <CellTemplate>
-                                            <MudNumericField T="int" Value="@context.Item.Owned"
-                                                             ValueChanged="@(v => SaveLooseBrickStock(minifigContext.Item, context.Item, v))"
-                                                             Min="0" Disabled="@(AuthService.CurrentUser == null)"
-                                                             Variant="Variant.Text"/>
-                                        </CellTemplate>
-                                    </TemplateColumn>
-                                </Columns>
-                            </MudDataGrid>
-                        </MudCard>
-                    }
-                    </div>
-                </ChildRowContent>
             </MudDataGrid>
         }
 
@@ -391,19 +337,6 @@
         StateHasChanged();
     }
 
-    private async Task LoadMinifigBricksAsync(MyMinifigInfo info)
-    {
-        if (info.IsLoaded) return;
-        var bricks = await Api.GetMyMinifigLooseBricksAsync(info.Minifig.MinifigId);
-        info.Bricks = bricks?.Select(b => new BrickEntry
-        {
-            BrickId = b.PartNum, ColorId = b.ColorId, Name = b.Name, PartImg = b.PartImg,
-            ColorName = b.ColorName, HexColor = b.HexColor, Need = b.Need, Owned = b.Owned
-        }).ToList() ?? [];
-        info.IsLoaded = true;
-        StateHasChanged();
-    }
-
     // ── Handlers ──────────────────────────────────────────────────────────────
     private void OnSearch(string value) { _query = value ?? ""; _page = 1; Navigate(); }
     private void OnViewChanged(string view) { _view = view == "grid" ? "grid" : "list"; Navigate(); }
@@ -433,14 +366,6 @@
         StateHasChanged();
     }
 
-    private async Task SaveLooseBrickStock(MyMinifigInfo minifig, BrickEntry brick, int newValue)
-    {
-        if (newValue < 0) return;
-        brick.Owned = newValue;
-        await Api.UpdateMyMinifigLooseBrickStockAsync(minifig.Minifig.MinifigId, brick.BrickId, brick.ColorId, newValue);
-        StateHasChanged();
-    }
-
     private async Task OpenAddMinifigDialog()
     {
         var dialog = await DialogService.ShowAsync<AddMinifigDialog>("Add Minifig",
@@ -454,42 +379,19 @@
     {
         var dto = new ApiClient.MinifigCatalogViewDto(
             info.Minifig.MinifigId, info.Minifig.MinifigName, info.Minifig.ImgUrl, "", info.Minifig.PartCount);
-        var parameters = new DialogParameters<MinifigDetailDialog> { { x => x.Minifig, dto } };
+        var parameters = new DialogParameters<MinifigDetailDialog>
+        {
+            { x => x.Minifig, dto },
+            { x => x.OwnedContext, true }
+        };
         await DialogService.ShowAsync<MinifigDetailDialog>(info.Minifig.MinifigName, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
         await LoadDataAsync();
-    }
-
-    private Task OpenImagePopup(string id, string name, string? imgUrl) =>
-        DialogService.ShowAsync<ImagePopup>("Image Popup",
-            new DialogParameters<ImagePopup> { { x => x._id, id }, { x => x._name, name }, { x => x._imgUrl, imgUrl } },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
-
-    private Task OpenColorPopup(string? hex, string? name)
-    {
-        if (hex == null || name == null) return Task.CompletedTask;
-        return DialogService.ShowAsync<ColorPopup>("Color Popup",
-            new DialogParameters<ColorPopup> { { x => x._hexColor, hex }, { x => x._name, name } },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
     }
 
     private class MyMinifigInfo
     {
         public ApiClient.MyMinifigDto Minifig { get; set; } = null!;
         public int Stock { get; set; }
-        public bool IsLoaded { get; set; }
-        public List<BrickEntry> Bricks { get; set; } = [];
-    }
-
-    private class BrickEntry
-    {
-        public string BrickId { get; set; } = "";
-        public string ColorId { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string? PartImg { get; set; }
-        public string? ColorName { get; set; }
-        public string? HexColor { get; set; }
-        public int Need { get; set; }
-        public int Owned { get; set; }
     }
 }
