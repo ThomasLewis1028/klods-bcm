@@ -126,6 +126,14 @@
                         <div class="card-label">
                             <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@row.Set.Name</MudText>
                             <MudText Typo="Typo.caption" Color="Color.Secondary">@row.Set.SetId · #@row.Instance.SetIndex</MudText>
+                            <div class="card-progress">
+                                <CompletenessBar Percent="@row.Instance.Percent" Status="@row.Instance.Status"
+                                                 Label="@($"{row.Instance.Percent}% assembled")"/>
+                                <div class="card-progress-meta">
+                                    <span>@row.Instance.Percent%</span>
+                                    <span class="cstatus cstatus-@row.Instance.Status">@StatusWord(row.Instance.Status)</span>
+                                </div>
+                            </div>
                         </div>
                     </MudPaper>
                 }
@@ -248,6 +256,9 @@
     .card-img { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; padding: 14px;
                 background: var(--mud-palette-surface); }
     .card-label { padding: 8px 12px; }
+    .card-progress { margin-top: 8px; }
+    .card-progress-meta { display: flex; justify-content: space-between; margin-top: 3px; font-size: .7rem; }
+    .card-progress-meta > span:first-child { color: var(--mud-palette-text-secondary); }
 </style>
 
 @code {
@@ -411,6 +422,13 @@
 
     private string Arrow(string field) => field == _sort ? (_dir == "asc" ? " ▲" : " ▼") : "";
 
+    private static string StatusWord(string status) => status switch
+    {
+        "complete"    => "Complete",
+        "completable" => "Buildable",
+        _             => "Missing parts",
+    };
+
     private Task<IEnumerable<string>> SearchThemes(string value, CancellationToken token)
         => Task.FromResult<IEnumerable<string>>(
             AvailableThemes.Where(t => string.IsNullOrEmpty(value) || t.Contains(value, StringComparison.OrdinalIgnoreCase)));
@@ -441,12 +459,12 @@
         };
         var dialog = await DialogService.ShowAsync<SetDetailDialog>(row.Set.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
-        var result = await dialog.Result;
-        if (result is { Canceled: false })
-            await LoadDataAsync();
+        await dialog.Result;
+        // Owned count and/or BOM stock (hence completeness) may have changed — always refresh.
+        await LoadDataAsync();
     }
 
-    private Task OpenBomDialog(FlatSetRow row)
+    private async Task OpenBomDialog(FlatSetRow row)
     {
         var parameters = new DialogParameters<BomDialog>
         {
@@ -454,8 +472,11 @@
             { x => x.SetImg, row.Set.SetImg },
             { x => x.SetIndex, row.Instance.SetIndex }
         };
-        return DialogService.ShowAsync<BomDialog>("Bill of Materials", parameters,
+        var dialog = await DialogService.ShowAsync<BomDialog>("Bill of Materials", parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseOnEscapeKey = true });
+        await dialog.Result;
+        // Completeness may have changed while editing the BOM — refresh the grid cards.
+        await LoadDataAsync();
     }
 
     private void OpenBuildingInstructions(string url) => JsRuntime.InvokeVoidAsync("open", url, "_blank");

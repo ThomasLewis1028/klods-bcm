@@ -18,6 +18,13 @@
             <MudStack Spacing="0" Style="flex:1; min-width:0;">
                 <MudText Typo="Typo.h6" Style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@_setName</MudText>
                 <MudText Typo="Typo.caption" Color="Color.Secondary">@SetId</MudText>
+                @if (!_isLoading)
+                {
+                    <div style="margin-top:6px; max-width:280px; display:flex; flex-direction:column; gap:3px;">
+                        <CompletenessBar Percent="@_percent" Status="@_status" Label="@($"{_percent}% assembled")"/>
+                        <span class="cstatus cstatus-@_status" style="font-size:.72rem;">@_percent% · @StatusWord(_status)</span>
+                    </div>
+                }
             </MudStack>
             @if (_ownedInstances.Count > 1)
             {
@@ -55,7 +62,7 @@
                                  QuickFilter="SetBrickFilterFunc" ReadOnly="false" Bordered="false" Dense="true">
                         <ToolBarContent>
                             <MudText Typo="Typo.body1">Missing
-                                Pieces: @_setBrickInfo.Sum(sb => sb.Brick.Count - sb.SetStock)
+                                Pieces: @_setBrickInfo.Sum(sb => Math.Max(0, sb.Brick.Count - sb.SetStock))
                             </MudText>
                             <MudSpacer/>
                             <MudSwitch @bind-Value="_showMissing" UncheckedColor="Color.Default" Color="Color.Error"
@@ -236,6 +243,15 @@
     private List<int> _ownedInstances = new();
     private string _setName = "";
     private string? _manualUrl;
+    private int _percent;
+    private string _status = "short";
+
+    private static string StatusWord(string status) => status switch
+    {
+        "complete"    => "Complete",
+        "completable" => "Buildable",
+        _             => "Missing parts",
+    };
     private string _searchString = "";
     private bool _showMissing;
     private bool _isLoading = true;
@@ -284,6 +300,8 @@
         _setName = bom.SetName;
         _manualUrl = bom.ManualUrl;
         _ownedInstances = bom.OwnedInstances;
+        _percent = bom.Percent;
+        _status = bom.Status;
 
         _setBrickInfo = bom.Bricks.Select(b => new SetBrickInfo
         {
@@ -339,6 +357,18 @@
         return false;
     }
 
+    // Re-pull just the copy's completeness so the header bar tracks edits live (no grid rebuild).
+    private async Task RefreshCompletenessAsync()
+    {
+        var comp = await Api.GetBomCompletenessAsync(SetId, _currentSetIndex);
+        if (comp != null)
+        {
+            _percent = comp.Percent;
+            _status = comp.Status;
+            StateHasChanged();
+        }
+    }
+
     private async Task SaveSetBrickOwnedStock(SetBrickInfo info, int newValue)
     {
         if (AuthService.CurrentUser == null) return;
@@ -346,6 +376,7 @@
         if (!await Api.UpdateSetBrickStockAsync(SetId, _currentSetIndex, info.Brick.PartNum, info.Brick.ColorId, newValue))
             Snackbar.Add("Failed to save set stock. The set may not be in your inventory yet.", Severity.Error);
         StateHasChanged();
+        await RefreshCompletenessAsync();
     }
 
     private async Task SaveBrickOwnedStock(SetBrickInfo info, int newValue)
@@ -355,6 +386,7 @@
         if (!await Api.UpdateLooseBrickStockAsync(SetId, _currentSetIndex, info.Brick.PartNum, info.Brick.ColorId, newValue))
             Snackbar.Add("Failed to save loose brick stock.", Severity.Error);
         StateHasChanged();
+        await RefreshCompletenessAsync();
     }
 
     private async Task SaveMinifigOwnedStock(SetMinifigInfo info, int newValue)
@@ -364,6 +396,7 @@
         if (!await Api.UpdateBomMinifigStockAsync(SetId, _currentSetIndex, info.Minifig.MinifigId, newValue))
             Snackbar.Add("Failed to save minifig stock.", Severity.Error);
         StateHasChanged();
+        await RefreshCompletenessAsync();
     }
 
     private async Task SaveMinifigBrickOwnedStock(SetMinifigInfo minifig, SetBrickInfo info, int newValue)
@@ -374,6 +407,7 @@
                 SetId, _currentSetIndex, minifig.Minifig.MinifigId, info.Brick.PartNum, info.Brick.ColorId, newValue))
             Snackbar.Add("Failed to save minifig part stock.", Severity.Error);
         StateHasChanged();
+        await RefreshCompletenessAsync();
     }
 
     private async Task MoveBrickStock(Direction dir, SetBrickInfo info)
@@ -406,6 +440,7 @@
         if (!setOk || !looseOk)
             Snackbar.Add("Failed to move stock.", Severity.Error);
         StateHasChanged();
+        await RefreshCompletenessAsync();
     }
 
     private Task OpenImagePopup(string id, string name, string? imgUrl) =>

@@ -1,0 +1,10 @@
+@* Status-coloured completeness bar. Status: "complete" | "completable" | "short". *@
+<div class="cbar cbar-@Status" role="progressbar" aria-valuenow="@Percent" aria-valuemin="0" aria-valuemax="100" title="@Label">
+    <div class="cbar-fill" style="width:@Percent%;"></div>
+</div>
+
+@code {
+    [Parameter] public int Percent { get; set; }
+    [Parameter] public string Status { get; set; } = "short";
+    [Parameter] public string? Label { get; set; }
+}

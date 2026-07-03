@@ -260,6 +260,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public Task<BomResponseDto?> GetBomAsync(string setId, int setIndex)
         => GetAsync<BomResponseDto>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}");
+    public Task<CompletenessDto?> GetBomCompletenessAsync(string setId, int setIndex)
+        => GetAsync<CompletenessDto>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/completeness");
     public async Task<bool> UpdateSetBrickStockAsync(string setId, int setIndex, string partNum, string colorId, int stock)
         => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
     public async Task<bool> UpdateLooseBrickStockAsync(string setId, int setIndex, string partNum, string colorId, int stock)
@@ -392,7 +394,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
     public record ThemeDto(int Id, string Name);
-    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);
+    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCandidateDto(string SetNum, string Name, int Year, string? ImageUrl);
     public record ResolveSetResponse(List<SetCandidateDto> Results, bool Resolved, bool HasMore);
@@ -426,7 +428,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
-    public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs);
+    public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status);
+    public record CompletenessDto(int Percent, string Status);
 
     public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string Status);
     public record RegistrationSettingsDto(bool AutoApprove);
