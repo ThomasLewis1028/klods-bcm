@@ -27,7 +27,15 @@
             </MudStack>
 
             <MudDivider Class="my-2" FlexItem="true"/>
-            <MudText Typo="Typo.subtitle2" Style="align-self:flex-start;">Used in @_total set(s)</MudText>
+
+            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width:100%;">
+                <MudText Typo="Typo.subtitle2">@(_mySetsOnly ? $"In {_total} of your set(s)" : $"Used in {_total} set(s)")</MudText>
+                @if (AuthService.CurrentUser != null)
+                {
+                    <MudSwitch T="bool" Value="_mySetsOnly" ValueChanged="OnToggleMine" Color="Color.Primary"
+                               Label="Only my sets" Size="Size.Small"/>
+                }
+            </MudStack>
 
             <MudTextField T="string" Value="_query" ValueChanged="OnSearch" Immediate="true" DebounceInterval="350"
                           Placeholder="Search sets by id or name…" Adornment="Adornment.Start"
@@ -40,7 +48,9 @@
             }
             else if (_items.Count == 0)
             {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">No sets match your search.</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @(_mySetsOnly ? "None of your sets need this brick." : "No sets match your search.")
+                </MudText>
             }
             else
             {
@@ -55,7 +65,7 @@
                                     <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@s.Name</MudText>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">@s.SetId</MudText>
                                 </MudStack>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">&times;@s.Count</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@s.CountText</MudText>
                             </MudStack>
                         </MudListItem>
                     }
@@ -79,6 +89,9 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public ApiClient.BrickCatalogViewDto Brick { get; set; } = null!;
 
+    /// <summary>When true (opened from the user's own bricks), default to showing only their sets.</summary>
+    [Parameter] public bool OwnedContext { get; set; }
+
     private const int SetPageSize = 6;
 
     private int _stock;
@@ -86,12 +99,16 @@
     private int _page = 1;
     private int _total;
     private int _totalPages = 1;
-    private List<ApiClient.SetForBrickDto> _items = [];
+    private bool _mySetsOnly;
+    private List<SetRow> _items = [];
     private bool _loading = true;
+
+    private record SetRow(string SetId, string Name, string? SetImg, string CountText);
 
     protected override async Task OnInitializedAsync()
     {
         _stock = (await Api.GetMyBrickStockAsync(Brick.PartNum, Brick.ColorId ?? ""))?.Stock ?? 0;
+        _mySetsOnly = OwnedContext && AuthService.CurrentUser != null;
         await LoadSetsAsync();
     }
 
@@ -99,15 +116,35 @@
     {
         _loading = true;
         StateHasChanged();
-        var page = await Api.GetSetsForBrickPageAsync(
-            Brick.PartNum, Brick.ColorId ?? "", _query.Trim(), _page - 1, SetPageSize);
-        _items = page?.Items ?? [];
-        _total = page?.Total ?? 0;
-        _totalPages = Math.Max(1, (int)Math.Ceiling(_total / (double)SetPageSize));
+
+        if (_mySetsOnly)
+        {
+            var mine = await Api.GetUserSetsForBrickAsync(Brick.PartNum, Brick.ColorId ?? "") ?? [];
+            var q = _query.Trim();
+            if (q.Length > 0)
+                mine = mine.Where(s => s.SetId.Contains(q, StringComparison.OrdinalIgnoreCase)
+                                    || s.SetName.Contains(q, StringComparison.OrdinalIgnoreCase)).ToArray();
+            _total = mine.Length;
+            _page = 1;
+            _totalPages = 1;
+            _items = mine.OrderBy(s => s.SetId)
+                .Select(s => new SetRow(s.SetId, s.SetName, s.SetImg, $"×{s.BrickCount * s.CopiesOwned}"))
+                .ToList();
+        }
+        else
+        {
+            var page = await Api.GetSetsForBrickPageAsync(
+                Brick.PartNum, Brick.ColorId ?? "", _query.Trim(), _page - 1, SetPageSize);
+            _total = page?.Total ?? 0;
+            _totalPages = Math.Max(1, (int)Math.Ceiling(_total / (double)SetPageSize));
+            _items = (page?.Items ?? []).Select(s => new SetRow(s.SetId, s.Name, s.SetImg, $"×{s.Count}")).ToList();
+        }
+
         _loading = false;
         StateHasChanged();
     }
 
+    private Task OnToggleMine(bool value) { _mySetsOnly = value; _page = 1; return LoadSetsAsync(); }
     private Task OnSearch(string? value) { _query = value ?? ""; _page = 1; return LoadSetsAsync(); }
     private Task OnPageChanged(int page) { _page = page; return LoadSetsAsync(); }
 
