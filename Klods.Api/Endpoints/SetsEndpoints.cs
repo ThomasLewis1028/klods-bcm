@@ -106,43 +106,9 @@ public static class SetsEndpoints
                 .Where(t => themeIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => t.Name);
 
-            // Total required set bricks per setId
-            var requiredPerSet = await db.Set<SetBrick>().AsNoTracking()
-                .Where(sb => setIds.Contains(sb.SetId))
-                .GroupBy(sb => sb.SetId)
-                .Select(g => new { SetId = g.Key, Total = g.Sum(sb => sb.Count) })
-                .ToDictionaryAsync(x => x.SetId, x => x.Total);
-
-            // Required minifig parts per setId: for each set's minifigs, count × that minifig's part total
-            var minifigRequiredPerSet = await db.Set<SetMinifig>().AsNoTracking()
-                .Where(sm => setIds.Contains(sm.SetId))
-                .Join(db.Set<MinifigBrick>().AsNoTracking(),
-                    sm => sm.MinifigId, mb => mb.MinifigId,
-                    (sm, mb) => new { sm.SetId, Parts = sm.Count * mb.Count })
-                .GroupBy(x => x.SetId)
-                .Select(g => new { SetId = g.Key, Total = g.Sum(x => x.Parts) })
-                .ToDictionaryAsync(x => x.SetId, x => x.Total);
-
-            // Set-brick stock per (setId, setIndex)
-            var stockPerInstance = await db.Set<SetBrickOwned>().AsNoTracking()
-                .Where(sbo => sbo.UserId == userId && setIds.Contains(sbo.SetId))
-                .GroupBy(sbo => new { sbo.SetId, sbo.SetIndex })
-                .Select(g => new { g.Key.SetId, g.Key.SetIndex, Stock = g.Sum(sbo => sbo.Stock) })
-                .ToListAsync();
-            var stockDict = stockPerInstance.ToDictionary(x => (x.SetId, x.SetIndex), x => x.Stock);
-
-            // Minifig-part stock per (setId, setIndex), from the figs tied to each owned set copy
-            var minifigStockPerInstance = await db.Set<MinifigOwned>().AsNoTracking()
-                .Where(mo => mo.UserId == userId && mo.SetId != null && mo.SetIndex != null && setIds.Contains(mo.SetId))
-                .Join(db.Set<MinifigBrickOwned>().AsNoTracking(),
-                    mo => new { mo.UserId, mo.MinifigId, mo.MinifigIndex },
-                    mbo => new { mbo.UserId, mbo.MinifigId, mbo.MinifigIndex },
-                    (mo, mbo) => new { mo.SetId, mo.SetIndex, mbo.Stock })
-                .GroupBy(x => new { x.SetId, x.SetIndex })
-                .Select(g => new { g.Key.SetId, g.Key.SetIndex, Stock = g.Sum(x => x.Stock) })
-                .ToListAsync();
-            var minifigStockDict = minifigStockPerInstance
-                .ToDictionary(x => (x.SetId!, x.SetIndex!.Value), x => x.Stock);
+            // Per-part completeness for every owned copy (bricks + minifig parts, vs the loose pool).
+            var completeness = await SetCompleteness.ComputeAsync(db, userId,
+                ownedList.Select(so => (so.SetId, so.SetIndex)).ToList());
 
             var result = ownedList
                 .GroupBy(so => so.SetId)
@@ -150,13 +116,12 @@ public static class SetsEndpoints
                 .Select(g =>
                 {
                     var set = sets[g.Key];
-                    var required = requiredPerSet.GetValueOrDefault(g.Key, 0)
-                                 + minifigRequiredPerSet.GetValueOrDefault(g.Key, 0);
                     var instances = g.OrderBy(so => so.SetIndex).Select(so =>
                     {
-                        var stock = stockDict.GetValueOrDefault((so.SetId, so.SetIndex), 0)
-                                  + minifigStockDict.GetValueOrDefault((so.SetId, so.SetIndex), 0);
-                        return new OwnedInstanceDto(so.SetIndex, Math.Max(0, required - stock), stock);
+                        var comp = completeness.GetValueOrDefault((so.SetId, so.SetIndex))
+                                   ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0);
+                        return new OwnedInstanceDto(so.SetIndex, comp.Missing, comp.Have,
+                            comp.Percent, comp.Status.ToString().ToLowerInvariant());
                     }).ToList();
                     var themeName = set.ThemeId is int tid ? themeNames.GetValueOrDefault(tid) : null;
                     return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,
@@ -273,7 +238,7 @@ public static class SetsEndpoints
     public record ImportSetRequest(string SetId);
     public record AddOwnedSetRequest(string SetId, bool ApplyBricks);
 
-    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount);
+    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
     public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);

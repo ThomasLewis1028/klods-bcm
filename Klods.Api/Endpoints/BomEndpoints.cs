@@ -90,10 +90,25 @@ public static class BomEndpoints
                         minifigOwnedCounts.GetValueOrDefault(sm.MinifigId, 0));
                 }).ToList();
 
+            var comp = (await SetCompleteness.ComputeAsync(db, userId, new[] { (setId, setIndex) }))
+                .GetValueOrDefault((setId, setIndex)) ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0);
+
             return Results.Ok(new BomResponse(
                 setId, setIndex, set.Name, set.ManualUrl,
                 ownedInstances, ownedSetIds,
-                brickItems, minifigItems));
+                brickItems, minifigItems,
+                comp.Percent, comp.Status.ToString().ToLowerInvariant()));
+        });
+
+        // Just the completeness for a copy — cheap enough to re-poll after each edit for a live bar.
+        group.MapGet("/{setId}/{setIndex:int}/completeness", async (
+            string setId, int setIndex, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            var comp = (await SetCompleteness.ComputeAsync(db, userId, new[] { (setId, setIndex) }))
+                .GetValueOrDefault((setId, setIndex)) ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0);
+            return Results.Ok(new CompletenessDto(comp.Percent, comp.Status.ToString().ToLowerInvariant()));
         });
 
         // Inline bricks for a minifig within the BOM context (SetBrickOwned + BrickOwned context).
@@ -185,6 +200,7 @@ public static class BomEndpoints
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
-    public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs);
+    public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status);
     public record UpdateStockRequest(int Stock);
+    public record CompletenessDto(int Percent, string Status);
 }
