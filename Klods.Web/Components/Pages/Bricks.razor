@@ -99,16 +99,12 @@
             }
             else
             {
-            <MudDataGrid T="BrickInfo" Items="_rows" SortMode="SortMode.None" ReadOnly="true">
+            <MudDataGrid T="BrickInfo" Items="_rows" SortMode="SortMode.None" ReadOnly="true"
+                         Hover="true" RowClass="cursor-pointer" RowClick="@(args => OpenBrickDialog(args.Item))">
                 <Columns>
-                    <HierarchyColumn T="BrickInfo" ButtonDisabledFunc="@(info => info.Brick.SetCount == 0)"/>
                     <TemplateColumn Title="Image" Editable="false">
                         <CellTemplate>
-                            <MudStack Row>
-                                <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)"
-                                          Height="50"
-                                          @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg))"/>
-                            </MudStack>
+                            <MudImage class="rounded-3" Elevation="2" Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)" Height="50"/>
                         </CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
@@ -124,8 +120,7 @@
                         <CellTemplate>
                             @if (context.Item.Brick.HexColor != null)
                             {
-                                <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
-                                         class="mud-elevation-2" Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
+                                <MudChip class="mud-elevation-2" Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
                                     @context.Item.Brick.ColorName
                                 </MudChip>
                             }
@@ -141,57 +136,6 @@
                         <CellTemplate>@context.Item.Brick.SetCount</CellTemplate>
                     </TemplateColumn>
                 </Columns>
-
-                <ChildRowContent Context="brickContext">
-                    @{ var info = brickContext.Item; }
-                    <div class="child-row-content">
-                    @if (!info.IsLoaded)
-                    {
-                        <MudStack AlignItems="AlignItems.Center" Class="pa-4"><MudProgressCircular Indeterminate="true" Size="Size.Small"/></MudStack>
-                        { _ = LoadSetsForBrickAsync(info); }
-                    }
-                    else
-                    {
-                        <MudCard Class="pa-3">
-                            <MudTextField T="string" Value="info.SetQuery" ValueChanged="@(v => OnSetSearch(info, v))"
-                                          Immediate="true" DebounceInterval="350" Placeholder="Search sets by id or name…"
-                                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                                          Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="mb-2"/>
-                            @if (info.SetLoading)
-                            {
-                                <MudStack AlignItems="AlignItems.Center" Class="pa-4"><MudProgressCircular Indeterminate="true" Size="Size.Small"/></MudStack>
-                            }
-                            else if (info.SetItems.Count == 0)
-                            {
-                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-2">No sets match your search.</MudText>
-                            }
-                            else
-                            {
-                                <MudDataGrid T="ApiClient.SetForBrickDto" Items="info.SetItems" SortMode="SortMode.None" ReadOnly="true">
-                                    <Columns>
-                                        <TemplateColumn Title="Set">
-                                            <CellTemplate>
-                                                <MudImage class="rounded-2" Elevation="1" Src="@ImageStorage.ResolveUrl(context.Item.SetImg)"
-                                                          Height="40" Style="object-fit:contain;"/>
-                                            </CellTemplate>
-                                        </TemplateColumn>
-                                        <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
-                                        <PropertyColumn Title="Name" Property="x => x.Name"/>
-                                        <PropertyColumn Title="Needed per Copy" Property="x => x.Count"/>
-                                    </Columns>
-                                </MudDataGrid>
-                                @if (info.SetTotalPages > 1)
-                                {
-                                    <MudStack Row Justify="Justify.Center" Class="mt-2">
-                                        <MudPagination Color="Color.Primary" Count="info.SetTotalPages" Selected="info.SetPage"
-                                                       SelectedChanged="@(p => OnSetPageChanged(info, p))" Size="Size.Small"/>
-                                    </MudStack>
-                                }
-                            }
-                        </MudCard>
-                    }
-                    </div>
-                </ChildRowContent>
             </MudDataGrid>
             }
 
@@ -332,60 +276,8 @@
 
     private string Arrow(string field) => field == _sort ? (_dir == "asc" ? " ▲" : " ▼") : "";
 
-    private const int SetPageSize = 10;
-
-    private async Task LoadSetsForBrickAsync(BrickInfo info)
-    {
-        if (info.IsLoaded || info.SetLoading) return;
-        await FetchSetsForBrickAsync(info);
-        info.IsLoaded = true;
-    }
-
-    private async Task FetchSetsForBrickAsync(BrickInfo info)
-    {
-        info.SetLoading = true;
-        StateHasChanged();
-        var page = await Api.GetSetsForBrickPageAsync(
-            info.Brick.PartNum, info.Brick.ColorId ?? "", info.SetQuery.Trim(), info.SetPage - 1, SetPageSize);
-        info.SetItems = page?.Items ?? [];
-        info.SetTotal = page?.Total ?? 0;
-        info.SetTotalPages = Math.Max(1, (int)Math.Ceiling(info.SetTotal / (double)SetPageSize));
-        info.SetLoading = false;
-        StateHasChanged();
-    }
-
-    private Task OnSetSearch(BrickInfo info, string? value)
-    {
-        info.SetQuery = value ?? "";
-        info.SetPage = 1;
-        return FetchSetsForBrickAsync(info);
-    }
-
-    private Task OnSetPageChanged(BrickInfo info, int page)
-    {
-        info.SetPage = page;
-        return FetchSetsForBrickAsync(info);
-    }
-
-    private Task OpenImagePopup(string id, string name, string? imgUrl) =>
-        DialogService.ShowAsync<ImagePopup>("Image Popup",
-            new DialogParameters<ImagePopup> { { x => x._id, id }, { x => x._name, name }, { x => x._imgUrl, imgUrl } },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
-
-    private Task OpenColorPopup(string hex, string name) =>
-        DialogService.ShowAsync<ColorPopup>("Color Popup",
-            new DialogParameters<ColorPopup> { { x => x._hexColor, hex }, { x => x._name, name } },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
-
     private class BrickInfo
     {
         public ApiClient.BrickCatalogViewDto Brick { get; set; } = null!;
-        public bool IsLoaded { get; set; }
-        public bool SetLoading { get; set; }
-        public string SetQuery { get; set; } = "";
-        public int SetPage { get; set; } = 1;
-        public int SetTotal { get; set; }
-        public int SetTotalPages { get; set; } = 1;
-        public List<ApiClient.SetForBrickDto> SetItems { get; set; } = [];
     }
 }

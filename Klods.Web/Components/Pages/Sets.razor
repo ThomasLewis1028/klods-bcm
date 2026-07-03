@@ -1,6 +1,5 @@
 @page "/sets"
 @inject IDialogService DialogService
-@inject IJSRuntime JsRuntime
 @inject NavigationManager Nav
 @inject AuthService AuthService
 @inject ApiClient Api
@@ -129,13 +128,13 @@
             }
             else
             {
-            <MudDataGrid T="SetCatalogRow" Items="_rows" SortMode="SortMode.None" ReadOnly="true">
+            <MudDataGrid T="SetCatalogRow" Items="_rows" SortMode="SortMode.None" ReadOnly="true"
+                         Hover="true" RowClass="cursor-pointer" RowClick="@(args => OpenSetDialog(args.Item))">
                 <Columns>
                     <TemplateColumn Title="Image" Editable="false">
                         <CellTemplate>
-                            <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                      Src="@ImageStorage.ResolveUrl(context.Item.Set.SetImg)" Height="50"
-                                      @onclick="() => OpenImagePopup(context.Item.Set.SetId, context.Item.Set.Name, ImageStorage.ResolveUrl(context.Item.Set.SetImg))"/>
+                            <MudImage class="rounded-3" Elevation="2"
+                                      Src="@ImageStorage.ResolveUrl(context.Item.Set.SetImg)" Height="50"/>
                         </CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
@@ -159,24 +158,7 @@
                         <CellTemplate>@context.Item.Set.NumBricks</CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Title="Owned" Editable="false">
-                        <CellTemplate>
-                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                                <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
-                                               Disabled="@(context.Item.UserOwnedCount == 0 || AuthService.CurrentUser == null)"
-                                               OnClick="() => DecrementOwned(context.Item)"/>
-                                <MudText Style="min-width: 20px; text-align: center;">@context.Item.UserOwnedCount</MudText>
-                                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
-                                               Disabled="@(AuthService.CurrentUser == null)"
-                                               OnClick="() => IncrementOwned(context.Item)"/>
-                            </MudStack>
-                        </CellTemplate>
-                    </TemplateColumn>
-                    <TemplateColumn Title="Manual" Editable="false">
-                        <CellTemplate>
-                            <MudImage @onclick="() => OpenBuildingInstructions(context.Item.Set.ManualUrl)"
-                                      class="cursor-pointer rounded-2" Elevation="2" Height="30"
-                                      Src="https://logodownload.org/wp-content/uploads/2017/04/lego-logo.png"/>
-                        </CellTemplate>
+                        <CellTemplate>@context.Item.UserOwnedCount</CellTemplate>
                     </TemplateColumn>
                 </Columns>
             </MudDataGrid>
@@ -390,25 +372,6 @@
         if (!(await dialog.Result).Canceled)
             await LoadAsync();
     }
-
-    private async Task IncrementOwned(SetCatalogRow row)
-    {
-        if (AuthService.CurrentUser == null) return;
-        if (await Api.AddOwnedSetAsync(row.Set.SetId)) { row.UserOwnedCount++; _totalOwnedInstances++; StateHasChanged(); }
-    }
-
-    private async Task DecrementOwned(SetCatalogRow row)
-    {
-        if (AuthService.CurrentUser == null || row.UserOwnedCount == 0) return;
-        if (await Api.DeleteLastOwnedSetAsync(row.Set.SetId)) { row.UserOwnedCount--; _totalOwnedInstances--; StateHasChanged(); }
-    }
-
-    private Task OpenImagePopup(string setId, string setName, string? setImgUrl) =>
-        DialogService.ShowAsync<ImagePopup>("Image Popup",
-            new DialogParameters<ImagePopup> { { x => x._id, setId }, { x => x._name, setName }, { x => x._imgUrl, setImgUrl } },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
-
-    private void OpenBuildingInstructions(string url) => JsRuntime.InvokeVoidAsync("open", url, "_blank");
 
     private class SetCatalogRow
     {
