@@ -245,6 +245,17 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public async Task<bool>       UpdateMyMinifigLooseBrickStockAsync(string minifigId, string partNum, string colorId, int stock)
         => (await PatchAsync($"/api/myminifigs/{Uri.EscapeDataString(minifigId)}/loose-bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
 
+    public Task<MinifigInstanceDto[]?> GetMinifigInstancesAsync(string id)   => GetAsync<MinifigInstanceDto[]>($"/api/myminifigs/{Uri.EscapeDataString(id)}/instances");
+    public Task<AssignableCopyDto[]?>  GetAssignableCopiesAsync(string id)   => GetAsync<AssignableCopyDto[]>($"/api/myminifigs/{Uri.EscapeDataString(id)}/assignable-copies");
+    public async Task<bool> SetMinifigInstancePartStockAsync(string id, int index, string partNum, string colorId, int stock)
+        => (await PatchAsync($"/api/myminifigs/{Uri.EscapeDataString(id)}/instances/{index}/parts/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
+    public async Task<bool> AssignMinifigInstanceAsync(string id, int index, string? setId, int? setIndex)
+        => (await PatchAsync($"/api/myminifigs/{Uri.EscapeDataString(id)}/instances/{index}/assign", new { SetId = setId, SetIndex = setIndex })).Ok;
+    public async Task<bool> AddLooseMinifigInstanceAsync(string id)
+        => (await PostAsync($"/api/myminifigs/{Uri.EscapeDataString(id)}/instances")).Ok;
+    public async Task<bool> RemoveMinifigInstanceAsync(string id, int index)
+        => (await DeleteAsync($"/api/myminifigs/{Uri.EscapeDataString(id)}/instances/{index}")).Ok;
+
     // ── BOM ──────────────────────────────────────────────────────────────────
 
     public Task<BomResponseDto?> GetBomAsync(string setId, int setIndex)
@@ -408,6 +419,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record MinifigCandidateDto(string MinifigId, string Name, int NumParts, string? ImageUrl);
     public record ResolveMinifigResponse(List<MinifigCandidateDto> Results, bool Resolved, bool HasMore);
     public record MyMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock, int InUseStock, int UserNeeded, int UserSetCount, int PartCount);
+    public record MinifigInstanceDto(int Index, string? SetId, int? SetIndex, string? SetName, string? SetImg, List<MinifigInstancePartDto> Parts);
+    public record MinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
+    public record AssignableCopyDto(string SetId, string SetName, string? SetImg, int SetIndex);
     public record MyMinifigBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);

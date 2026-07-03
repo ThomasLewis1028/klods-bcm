@@ -340,6 +340,70 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         await context.SaveChangesAsync();
     }
 
+    /// <summary>Sets the owned stock of a single part for a specific fig instance (by index).</summary>
+    public async Task SetMinifigInstancePartStock(
+        int userId, string minifigId, int minifigIndex, string partNum, string colorId, int stock)
+    {
+        if (stock < 0) stock = 0;
+
+        await using var context = contextFactory.CreateDbContext();
+        var brickOwned = context.Set<MinifigBrickOwned>();
+        var existing = await brickOwned.FirstOrDefaultAsync(x =>
+            x.UserId == userId && x.MinifigId == minifigId && x.MinifigIndex == minifigIndex &&
+            x.PartNum == partNum && x.ColorId == colorId);
+
+        if (existing == null)
+            brickOwned.Add(new MinifigBrickOwned
+            {
+                UserId = userId, MinifigId = minifigId, MinifigIndex = minifigIndex,
+                PartNum = partNum, ColorId = colorId, Stock = stock,
+            });
+        else
+            existing.Stock = stock;
+
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>Moves a fig instance onto a set copy (setId/setIndex) or back to loose (null/null).</summary>
+    public async Task<bool> ReassignMinifigInstance(
+        int userId, string minifigId, int minifigIndex, string? setId, int? setIndex)
+    {
+        await using var context = contextFactory.CreateDbContext();
+        var instance = await context.Set<MinifigOwned>()
+            .FirstOrDefaultAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.MinifigIndex == minifigIndex);
+        if (instance == null) return false;
+
+        instance.SetId = setId;
+        instance.SetIndex = setIndex;
+        await context.SaveChangesAsync();
+        return true;
+    }
+
+    /// <summary>Adds one loose (unattached) instance of a fig and returns its new index.</summary>
+    public async Task<int> AddLooseMinifigInstance(int userId, string minifigId)
+    {
+        await using var context = contextFactory.CreateDbContext();
+        var owned = context.Set<MinifigOwned>();
+        var index = await NextMinifigIndex(owned, userId, minifigId);
+        owned.Add(new MinifigOwned { UserId = userId, MinifigId = minifigId, MinifigIndex = index });
+        await context.SaveChangesAsync();
+        return index;
+    }
+
+    /// <summary>Removes a single fig instance (its per-part stock cascades).</summary>
+    public async Task<bool> RemoveMinifigInstance(int userId, string minifigId, int minifigIndex)
+    {
+        await using var context = contextFactory.CreateDbContext();
+        var owned = context.Set<MinifigOwned>();
+        var instance = await owned
+            .FirstOrDefaultAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.MinifigIndex == minifigIndex);
+        if (instance == null) return false;
+
+        owned.Remove(instance);
+        await context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> ImportSetInfo(string? setId)
     {
         logger.LogInformation("Importing set info for {SetId}", setId);
