@@ -1,4 +1,9 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject AuthService AuthService
+@inject ApiClient Api
+@inject ThemeService ThemeService
+@inject ProtectedLocalStorage LocalStorage
 
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly">
@@ -12,3 +17,39 @@
         </Found>
     </Router>
 </CascadingAuthenticationState>
+
+@code {
+    // Restore the session once per circuit, above the router. The auth-state provider awaits this
+    // (see AuthService.WaitForSessionRestoreAsync) so protected routes are never evaluated as
+    // anonymous before the JWT is rehydrated from browser storage.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            var storedJwt = await LocalStorage.GetAsync<string>("jwt");
+            if (storedJwt.Success && !string.IsNullOrEmpty(storedJwt.Value))
+            {
+                // Bootstrap token so ApiClient can call the API.
+                AuthService.SetSession(new UserInfo(0, "", "User", null, null, false), storedJwt.Value);
+                var profile = await Api.GetMyProfileAsync();
+                if (profile is not null)
+                {
+                    var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
+                        profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword);
+                    AuthService.SetSession(user, storedJwt.Value);
+                    ThemeService.SetPrimaryColor(profile.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
+                }
+                else
+                {
+                    // Token invalid or API unreachable — clear it.
+                    AuthService.Logout();
+                    await LocalStorage.DeleteAsync("jwt");
+                }
+            }
+        }
+        catch { /* storage unavailable or tampered */ }
+        finally { AuthService.MarkSessionRestored(); }
+    }
+}
