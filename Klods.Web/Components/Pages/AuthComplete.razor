@@ -27,7 +27,7 @@
             if (profile is not null)
             {
                 var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
-                    profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword, profile.FontScale);
+                    profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword, profile.FontScale, profile.HasSeenTour);
                 AuthService.SetSession(user, jwt);
                 try { await LocalStorage.SetAsync("jwt", jwt); } catch { }
 

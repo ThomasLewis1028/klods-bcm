@@ -62,6 +62,15 @@ public static class AuthProfileEndpoints
             return Results.Ok();
         });
 
+        group.MapPatch("/tour-seen", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            await db.Users.Where(u => u.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.HasSeenTour, true));
+            return Results.Ok();
+        });
+
         group.MapPatch("/picture", async (ChangePictureRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
@@ -104,10 +113,10 @@ public static class AuthProfileEndpoints
         });
     }
 
-    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword, double FontScale)
+    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword, double FontScale, bool HasSeenTour)
     {
         public static UserProfileDto From(User u) =>
-            new(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl, u.PrimaryColor, !string.IsNullOrEmpty(u.PasswordHash), u.FontScale);
+            new(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl, u.PrimaryColor, !string.IsNullOrEmpty(u.PasswordHash), u.FontScale, u.HasSeenTour);
     }
 
     public record ChangeUsernameRequest(string NewUsername);
