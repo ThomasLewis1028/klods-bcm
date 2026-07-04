@@ -39,32 +39,23 @@
         ThemeService.OnChange -= ApplyFontScale;
     }
 
+    private bool _tourChecked;
+    private bool _pendingTour;
+
     private void OnAuthChanged()
     {
         ThemeService.SetFontScale(AuthService.CurrentUser?.FontScale ?? ThemeService.DefaultFontScale);
-        _ = MaybeShowTourAsync();
-    }
 
-    private bool _tourChecked;
-
-    // Show the welcome tour once, the first time a real (non-placeholder) user with HasSeenTour==false appears.
-    private async Task MaybeShowTourAsync()
-    {
+        // Queue the welcome tour once, for the first real (non-placeholder) unseen user. We don't show it
+        // straight from this auth event — that can fire mid-restore, before the dialog provider is fully
+        // interactive (dead buttons). Instead we flag it and open it from a settled OnAfterRenderAsync pass.
         var user = AuthService.CurrentUser;
-        if (_tourChecked || user is null || user.UserId == 0 || user.HasSeenTour) return;
-        _tourChecked = true;
-
-        await InvokeAsync(async () =>
+        if (!_tourChecked && user is not null && user.UserId != 0 && !user.HasSeenTour)
         {
-            var dialog = await DialogService.ShowAsync<TourDialog>(null, new DialogOptions
-            {
-                MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true, BackdropClick = false
-            });
-            await dialog.Result;
-            await Api.MarkTourSeenAsync();
-            if (AuthService.CurrentUser is not null)
-                AuthService.UpdateCurrentUser(AuthService.CurrentUser with { HasSeenTour = true });
-        });
+            _tourChecked = true;
+            _pendingTour = true;
+            InvokeAsync(StateHasChanged);
+        }
     }
 
     private async void ApplyFontScale()
@@ -82,32 +73,48 @@
     // anonymous before the JWT is rehydrated from browser storage.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
-
-        try
+        if (firstRender)
         {
-            var storedJwt = await LocalStorage.GetAsync<string>("jwt");
-            if (storedJwt.Success && !string.IsNullOrEmpty(storedJwt.Value))
+            try
             {
-                // Bootstrap token so ApiClient can call the API.
-                AuthService.SetSession(new UserInfo(0, "", "User", null, null, false), storedJwt.Value);
-                var profile = await Api.GetMyProfileAsync();
-                if (profile is not null)
+                var storedJwt = await LocalStorage.GetAsync<string>("jwt");
+                if (storedJwt.Success && !string.IsNullOrEmpty(storedJwt.Value))
                 {
-                    var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
-                        profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword, profile.FontScale, profile.HasSeenTour);
-                    AuthService.SetSession(user, storedJwt.Value);
-                    ThemeService.SetPrimaryColor(profile.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
-                }
-                else
-                {
-                    // Token invalid or API unreachable — clear it.
-                    AuthService.Logout();
-                    await LocalStorage.DeleteAsync("jwt");
+                    // Bootstrap token so ApiClient can call the API.
+                    AuthService.SetSession(new UserInfo(0, "", "User", null, null, false), storedJwt.Value);
+                    var profile = await Api.GetMyProfileAsync();
+                    if (profile is not null)
+                    {
+                        var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
+                            profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword, profile.FontScale, profile.HasSeenTour);
+                        AuthService.SetSession(user, storedJwt.Value);
+                        ThemeService.SetPrimaryColor(profile.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
+                    }
+                    else
+                    {
+                        // Token invalid or API unreachable — clear it.
+                        AuthService.Logout();
+                        await LocalStorage.DeleteAsync("jwt");
+                    }
                 }
             }
+            catch { /* storage unavailable or tampered */ }
+            finally { AuthService.MarkSessionRestored(); }
         }
-        catch { /* storage unavailable or tampered */ }
-        finally { AuthService.MarkSessionRestored(); }
+
+        // Open the welcome tour on a later, fully-settled render (never during the first-render/restore
+        // pass) so the dialog is created against an interactive provider.
+        if (!firstRender && _pendingTour)
+        {
+            _pendingTour = false;
+            var dialog = await DialogService.ShowAsync<TourDialog>(null, new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true, BackdropClick = false
+            });
+            await dialog.Result;
+            await Api.MarkTourSeenAsync();
+            if (AuthService.CurrentUser is not null)
+                AuthService.UpdateCurrentUser(AuthService.CurrentUser with { HasSeenTour = true });
+        }
     }
 }
