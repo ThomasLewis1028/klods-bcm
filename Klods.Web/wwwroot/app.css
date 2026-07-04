@@ -120,6 +120,22 @@ input[type="password"]::-ms-clear {
 
 @media (prefers-reduced-motion: reduce) { .cbar-fill { transition: none; } }
 
+/* BOM tabs styled as a segmented button group so they read as clickable */
+.bom-tabs .mud-tab-slider { display: none !important; }
+.bom-tabs .mud-tab {
+    text-transform: none;
+    border-radius: 8px;
+    min-height: 36px;
+    margin-right: 6px;
+    border: 1px solid var(--mud-palette-lines-default);
+    opacity: 1;
+}
+.bom-tabs .mud-tab.mud-tab-active {
+    background-color: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+    border-color: var(--mud-palette-primary);
+}
+
 /* BOM "Transfer Pieces" count field — force the input to hug its content so the box
    shrink-wraps and the transfer arrows sit right against it (!important beats MudBlazor's
    own input width rule, which otherwise keeps the input full-width). */
