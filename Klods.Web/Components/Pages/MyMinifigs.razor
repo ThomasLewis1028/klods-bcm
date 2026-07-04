@@ -148,7 +148,11 @@
                         <CellTemplate>@context.Item.Minifig.MinifigName</CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
-                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("loose")'>Loose@(Arrow("loose"))</span></HeaderTemplate>
+                        <HeaderTemplate>
+                            <MudTooltip Text="Owned but not part of a set">
+                                <span class="sort-head" @onclick='() => SetSort("loose")'>Loose@(Arrow("loose"))</span>
+                            </MudTooltip>
+                        </HeaderTemplate>
                         <CellTemplate>
                             <div @onclick:stopPropagation="true">
                                 <MudNumericField T="int" Value="@context.Item.Stock"

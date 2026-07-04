@@ -97,55 +97,53 @@
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="Need (Spare)" Editable="false"
-                                            SortBy="x => x.Brick.Count + x.Brick.SpareCount" Sortable="true">
+                            <TemplateColumn Title="Required" Editable="false"
+                                            SortBy="x => x.Brick.Count" Sortable="true">
                                 <CellTemplate>
-                                    <MudStack Row Spacing="1">
-                                        @{ var stock = context.Item.SetStock; }
-                                        @if (context.Item.Brick.Count <= stock)
-                                        {
-                                            <MudText Color="@Color.Success">@context.Item.Brick.Count</MudText>
-                                        }
-                                        else if (context.Item.Brick.Count - stock <= context.Item.LooseStock)
-                                        {
-                                            <MudText Color="@Color.Warning">@context.Item.Brick.Count</MudText>
-                                        }
-                                        else
-                                        {
-                                            <MudText Color="@Color.Error">@context.Item.Brick.Count</MudText>
-                                        }
-                                        @if (context.Item.Brick.SpareCount > 0)
-                                        {
-                                            <MudText Style="padding: -10px">(@context.Item.Brick.SpareCount)</MudText>
-                                        }
-                                    </MudStack>
+                                    @{ var stock = context.Item.SetStock; }
+                                    @if (context.Item.Brick.Count <= stock)
+                                    {
+                                        <MudText Color="@Color.Success">@context.Item.Brick.Count</MudText>
+                                    }
+                                    else if (context.Item.Brick.Count - stock <= context.Item.LooseStock)
+                                    {
+                                        <MudText Color="@Color.Warning">@context.Item.Brick.Count</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Color="@Color.Error">@context.Item.Brick.Count</MudText>
+                                    }
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="Stock Used" Editable="false" SortBy="x => x.SetStock">
+                            <TemplateColumn Title="Spare" Editable="false" SortBy="x => x.Brick.SpareCount" Sortable="true">
+                                <CellTemplate>@(context.Item.Brick.SpareCount > 0 ? context.Item.Brick.SpareCount.ToString() : "—")</CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="In Set" Editable="false" SortBy="x => x.SetStock">
                                 <CellTemplate>
                                     <MudNumericField T="int" Value="@context.Item.SetStock"
                                                      ValueChanged="@(v => SaveSetBrickOwnedStock(context.Item, v))"
                                                      Min="0" Disabled="@(AuthService.CurrentUser == null)"
-                                                     Variant="Variant.Text"/>
+                                                     Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="Move Stock" Editable="false">
+                            <TemplateColumn Title="Transfer Pieces" Editable="false">
                                 <CellTemplate>
-                                    <MudStack Row Spacing="0">
-                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowLeft"
+                                    <MudStack Row Spacing="0" AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowLeft" Size="Size.Small"
                                                        OnClick="() => MoveBrickStock(Direction.left, context.Item)"/>
-                                        <MudNumericField Variant="Variant.Outlined" Min="0" @bind-Value="context.Item.MoveCount"/>
-                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowRight"
+                                        <MudNumericField Variant="Variant.Text" Min="0" @bind-Value="context.Item.MoveCount"
+                                                         Margin="Margin.Dense" Class="bom-transfer"/>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowRight" Size="Size.Small"
                                                        OnClick="() => MoveBrickStock(Direction.right, context.Item)"/>
                                     </MudStack>
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="My Stock" Editable="false" SortBy="x => x.LooseStock">
+                            <TemplateColumn Title="Loose" Editable="false" SortBy="x => x.LooseStock">
                                 <CellTemplate>
                                     <MudNumericField T="int" Value="@context.Item.LooseStock"
                                                      ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
                                                      Min="0" Disabled="@(AuthService.CurrentUser == null)"
-                                                     Variant="Variant.Text"/>
+                                                     Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
                                 </CellTemplate>
                             </TemplateColumn>
                         </Columns>
@@ -219,7 +217,7 @@
                                         <PropertyColumn Title="Brick Id" Property="x => x.PartNum"/>
                                         <PropertyColumn Title="Name" Property="x => x.Name"/>
                                         <PropertyColumn Title="Color" Property="x => x.ColorName"/>
-                                        <TemplateColumn Title="Need" Editable="false">
+                                        <TemplateColumn Title="Required" Editable="false">
                                             <CellTemplate>
                                                 <MudText Color="@(context.Item.Owned >= context.Item.Need ? Color.Success : Color.Error)">@context.Item.Need</MudText>
                                             </CellTemplate>

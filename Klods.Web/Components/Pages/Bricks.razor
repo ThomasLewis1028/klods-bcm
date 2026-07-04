@@ -130,9 +130,16 @@
                             }
                         </CellTemplate>
                     </TemplateColumn>
-                    <PropertyColumn Property="x => x.Brick.TotalUsed" Title="Total Used" Editable="false"/>
+                    <TemplateColumn Title="Total Needed" Editable="false">
+                        <HeaderTemplate>
+                            <MudTooltip Text="Total of this part across every set — how many you'd need to build one of each.">
+                                <span>Total Needed</span>
+                            </MudTooltip>
+                        </HeaderTemplate>
+                        <CellTemplate>@context.Item.Brick.TotalUsed</CellTemplate>
+                    </TemplateColumn>
                     <TemplateColumn Editable="false">
-                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("sets")'>Sets@(Arrow("sets"))</span></HeaderTemplate>
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("sets")'>Sets Using@(Arrow("sets"))</span></HeaderTemplate>
                         <CellTemplate>@context.Item.Brick.SetCount</CellTemplate>
                     </TemplateColumn>
                 </Columns>
@@ -176,7 +183,7 @@
     private string _sort = "sets";
     private static readonly (string Field, string Label)[] _sortOptions =
     [
-        ("sets", "Sets"), ("name", "Name"), ("id", "Part Number"), ("color", "Color"),
+        ("sets", "Sets Using"), ("name", "Name"), ("id", "Part Number"), ("color", "Color"),
     ];
     private string SortLabel => "Sort: " + (_sortOptions.FirstOrDefault(o => o.Field == _sort).Label ?? "Sets");
     private string _dir = "desc";
