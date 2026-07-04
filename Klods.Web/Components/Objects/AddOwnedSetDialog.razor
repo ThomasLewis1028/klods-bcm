@@ -103,12 +103,21 @@
                     <MudNumericField @bind-Value="_copies" Min="1" Max="20"
                                      Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:90px;"/>
                 </MudStack>
-                <MudTooltip Text="Mark all bricks in this set as already in your inventory">
-                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                        <MudText>Full Stock (all pieces in inventory)</MudText>
-                        <MudSwitch @bind-Value="_applyBricks" Color="Color.Primary"/>
-                    </MudStack>
-                </MudTooltip>
+                <MudDivider/>
+                <MudRadioGroup T="bool" @bind-Value="_applyBricks">
+                    <MudRadio T="bool" Value="@false" Color="Color.Primary" Dense="true" Class="mb-2">
+                        <div>
+                            <MudText Typo="Typo.body2">I don't have the pieces yet</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Starts empty — fill it in as you collect.</MudText>
+                        </div>
+                    </MudRadio>
+                    <MudRadio T="bool" Value="@true" Color="Color.Primary" Dense="true">
+                        <div>
+                            <MudText Typo="Typo.body2">I already have all the pieces</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Marks every part as already in the set — a complete copy.</MudText>
+                        </div>
+                    </MudRadio>
+                </MudRadioGroup>
             }
 
             @* ── Step 3: Adding ────────────────────────────────────────────── *@
