@@ -7,6 +7,7 @@ public class User
     public string PasswordHash { get; set; } = string.Empty;
     public string? ProfilePictureUrl { get; set; }
     public string? PrimaryColor { get; set; }
+    public double FontScale { get; set; } = 1.0;
     public string Role { get; set; } = "User";
     public string Status { get; set; } = "Active";
 }

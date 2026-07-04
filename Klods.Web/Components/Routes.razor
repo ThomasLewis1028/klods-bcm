@@ -4,6 +4,8 @@
 @inject ApiClient Api
 @inject ThemeService ThemeService
 @inject ProtectedLocalStorage LocalStorage
+@inject IJSRuntime JS
+@implements IDisposable
 
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly">
@@ -19,6 +21,35 @@
 </CascadingAuthenticationState>
 
 @code {
+    // Font scale is a per-user preference (like primary color). Applying it means setting the root
+    // html font-size (MudBlazor typography is rem-based), which needs JS — so it's centralized here,
+    // above both layouts, rather than duplicated in each. On any auth change the scale follows the
+    // signed-in user (or resets on sign-out); on any theme change we push it to the DOM.
+    protected override void OnInitialized()
+    {
+        AuthService.OnChange += OnAuthChanged;
+        ThemeService.OnChange += ApplyFontScale;
+    }
+
+    public void Dispose()
+    {
+        AuthService.OnChange -= OnAuthChanged;
+        ThemeService.OnChange -= ApplyFontScale;
+    }
+
+    private void OnAuthChanged()
+        => ThemeService.SetFontScale(AuthService.CurrentUser?.FontScale ?? ThemeService.DefaultFontScale);
+
+    private async void ApplyFontScale()
+    {
+        try
+        {
+            var pct = (int)Math.Round(ThemeService.FontScale * 100);
+            await JS.InvokeVoidAsync("document.documentElement.style.setProperty", "font-size", $"{pct}%");
+        }
+        catch { /* JS not available yet (pre-render) — reapplied on the next change */ }
+    }
+
     // Restore the session once per circuit, above the router. The auth-state provider awaits this
     // (see AuthService.WaitForSessionRestoreAsync) so protected routes are never evaluated as
     // anonymous before the JWT is rehydrated from browser storage.
@@ -37,7 +68,7 @@
                 if (profile is not null)
                 {
                     var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
-                        profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword);
+                        profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword, profile.FontScale);
                     AuthService.SetSession(user, storedJwt.Value);
                     ThemeService.SetPrimaryColor(profile.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
                 }
