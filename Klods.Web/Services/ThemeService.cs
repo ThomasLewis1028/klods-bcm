@@ -5,8 +5,10 @@ namespace Klods.Services;
 public class ThemeService
 {
     public const string DefaultPrimaryColor = "#DA291C";
+    public const double DefaultFontScale = 1.0;
 
     public bool IsDarkMode { get; private set; } = true;
+    public double FontScale { get; private set; } = DefaultFontScale;
 
     public MudTheme Theme { get; } = new MudTheme()
     {
@@ -26,7 +28,9 @@ public class ThemeService
         PaletteLight = new PaletteLight()
         {
             Primary = "#DA291C",
-            Secondary = "#E6B800",
+            // Darker gold/amber than the dark-mode accent — the bright gold is unreadable as text on light.
+            Secondary = "#8A6D00",
+            Warning = "#A15C00",
             AppbarBackground = "#DA291C",
             AppbarText = "rgba(255,255,255,0.87)",
         }
@@ -51,6 +55,13 @@ public class ThemeService
         Theme.PaletteDark.Primary = hex;
         Theme.PaletteLight.Primary = hex;
         Theme.PaletteLight.AppbarBackground = hex;
+        OnChange?.Invoke();
+    }
+
+    public void SetFontScale(double scale)
+    {
+        // Clamp to the supported range; a stray 0 would make everything invisible.
+        FontScale = scale is >= 0.5 and <= 2.0 ? scale : DefaultFontScale;
         OnChange?.Invoke();
     }
 }

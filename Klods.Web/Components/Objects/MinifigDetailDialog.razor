@@ -1,0 +1,342 @@
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject ImageStorageService ImageStorage
+@inject ISnackbar Snackbar
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <DialogContent>
+        <div class="fig-dialog">
+            <div class="fig-hero">
+                <MudImage Src="@ImageStorage.ResolveUrl(Minifig.ImgUrl)" Alt="@Minifig.MinifigName" Class="fig-hero-img rounded-lg"/>
+                <div class="fig-hero-meta">
+                    <MudText Typo="Typo.h6">@Minifig.MinifigName</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@Minifig.MinifigId</MudText>
+                    @if (_ownedMode && !_loading && _instances.Count > 0)
+                    {
+                        <MudText Typo="Typo.caption" Class="fig-hero-summary">@Summary</MudText>
+                    }
+                </div>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fig-loading"><MudProgressCircular Indeterminate="true" Size="Size.Small"/></div>
+            }
+            else if (_ownedMode)
+            {
+                <div class="fig-instances">
+                    @foreach (var inst in _instances)
+                    {
+                        <div class="fig-card @(inst.IsComplete ? "is-complete" : "is-incomplete")">
+                            <div class="fig-card-head" @onclick="() => inst.Expanded = !inst.Expanded">
+                                <div class="fig-card-loc" @onclick:stopPropagation="true">
+                                    <MudMenu Dense="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+                                        <ActivatorContent>
+                                            <span class="fig-loc-chip @(inst.IsLoose ? "loose" : "onset")">
+                                                <MudIcon Icon="@(inst.IsLoose ? Icons.Material.Filled.Inventory2 : Icons.Material.Filled.Widgets)" Size="Size.Small"/>
+                                                <span class="fig-loc-text">@inst.Location</span>
+                                                <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small"/>
+                                            </span>
+                                        </ActivatorContent>
+                                        <ChildContent>
+                                            <MudText Typo="Typo.caption" Class="px-4 py-1" Style="opacity:.6;">Move this copy to…</MudText>
+                                            @if (!inst.IsLoose)
+                                            {
+                                                <MudMenuItem Icon="@Icons.Material.Filled.Inventory2" OnClick="() => Reassign(inst, null, null)">Loose</MudMenuItem>
+                                            }
+                                            @foreach (var c in _assignableCopies)
+                                            {
+                                                <MudMenuItem Icon="@Icons.Material.Filled.Widgets" OnClick="() => Reassign(inst, c.SetId, c.SetIndex)">@c.SetName #@c.SetIndex</MudMenuItem>
+                                            }
+                                            @if (inst.IsLoose && _assignableCopies.Count == 0)
+                                            {
+                                                <MudMenuItem Disabled="true">No set copies need one</MudMenuItem>
+                                            }
+                                            <MudDivider/>
+                                            <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => Remove(inst)">Remove copy</MudMenuItem>
+                                        </ChildContent>
+                                    </MudMenu>
+                                </div>
+
+                                <div class="fig-card-status">
+                                    <span class="fig-pill @(inst.IsComplete ? "ok" : "warn")">@StatusText(inst)</span>
+                                    <MudIcon Icon="@(inst.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small"/>
+                                </div>
+                            </div>
+
+                            <div class="fig-progress"><div class="fig-progress-fill" style="width:@(inst.Percent)%;"></div></div>
+
+                            @if (inst.Expanded)
+                            {
+                                <div class="fig-parts">
+                                    @foreach (var p in inst.Parts)
+                                    {
+                                        <div class="fig-part @(p.Owned < p.Need ? "short" : "")">
+                                            <MudImage Src="@ImageStorage.ResolveUrl(p.PartImg)" Class="fig-part-img rounded"/>
+                                            <div class="fig-part-meta">
+                                                <span class="fig-part-name">@p.Name</span>
+                                                <span class="fig-part-color">@p.ColorName</span>
+                                            </div>
+                                            <div class="fig-part-edit" @onclick:stopPropagation="true">
+                                                <MudNumericField T="int" Value="@p.Owned" ValueChanged="@(v => SavePart(inst, p, v))"
+                                                                 Min="0" Variant="Variant.Text" Margin="Margin.Dense" Style="width:60px;"/>
+                                                <span class="fig-part-need">/ @p.Need</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (_instances.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="fig-empty">No copies yet — add one below.</MudText>
+                }
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddLoose" Class="fig-add">Add a loose copy</MudButton>
+            }
+            else
+            {
+                @if (AuthService.CurrentUser != null)
+                {
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                        <MudText>Loose owned:</MudText>
+                        <MudNumericField T="int" @bind-Value="_count" Min="0" Variant="Variant.Outlined"
+                                         Margin="Margin.Dense" Style="max-width: 110px;"/>
+                        <MudButton OnClick="SaveCount" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+                    </MudStack>
+                }
+                <MudDivider Class="my-2" FlexItem="true"/>
+                <MudText Typo="Typo.subtitle2" Style="align-self:flex-start;">Parts (@_parts.Count)</MudText>
+                <div class="fig-parts-browse">
+                    @foreach (var p in _parts.OrderBy(p => p.BrickId))
+                    {
+                        <div class="fig-part">
+                            <MudImage Src="@ImageStorage.ResolveUrl(p.PartImg)" Class="fig-part-img rounded"/>
+                            <div class="fig-part-meta">
+                                <span class="fig-part-name">@p.Name</span>
+                                <span class="fig-part-color">@p.ColorName</span>
+                            </div>
+                            <span class="fig-part-need">×@p.Quantity</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .fig-dialog { min-width: 340px; max-width: 460px; }
+    .fig-hero { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
+    .fig-hero-img { width: 72px; height: 72px; object-fit: contain; flex-shrink: 0; background: var(--mud-palette-background-grey); }
+    .fig-hero-meta { min-width: 0; }
+    .fig-hero-summary { color: var(--mud-palette-text-secondary); }
+    .fig-loading, .fig-empty { display: flex; justify-content: center; padding: 20px; }
+
+    .fig-instances { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+    .fig-card { position: relative; border: 1px solid var(--mud-palette-lines-default); border-radius: 12px;
+                overflow: hidden; background: var(--mud-palette-surface); }
+    .fig-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+    .fig-card.is-complete::before { background: var(--mud-palette-success); }
+    .fig-card.is-incomplete::before { background: var(--mud-palette-warning); }
+
+    .fig-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+                     padding: 8px 12px 8px 14px; cursor: pointer; }
+    .fig-card-loc { min-width: 0; }
+    .fig-loc-chip { display: inline-flex; align-items: center; gap: 3px; font-size: .8rem; font-weight: 600;
+                    padding: 3px 4px 3px 8px; border-radius: 999px; cursor: pointer; max-width: 100%; }
+    .fig-loc-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fig-loc-chip.loose { background: color-mix(in srgb, var(--mud-palette-text-primary) 8%, transparent);
+                          color: var(--mud-palette-text-secondary); }
+    .fig-loc-chip.onset { background: color-mix(in srgb, var(--mud-palette-primary) 14%, transparent);
+                          color: var(--mud-palette-primary); }
+
+    .fig-card-status { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .fig-pill { font-size: .72rem; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
+                max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+    .fig-pill.ok { color: var(--mud-palette-success); }
+    .fig-pill.warn { color: var(--mud-palette-warning); }
+
+    .fig-progress { height: 3px; background: color-mix(in srgb, var(--mud-palette-text-primary) 8%, transparent); }
+    .fig-progress-fill { height: 100%; transition: width .2s ease; }
+    .fig-card.is-complete .fig-progress-fill { background: var(--mud-palette-success); }
+    .fig-card.is-incomplete .fig-progress-fill { background: var(--mud-palette-warning); }
+
+    .fig-parts { padding: 2px 12px 8px; display: flex; flex-direction: column; }
+    .fig-parts-browse { width: 100%; max-height: 300px; overflow-y: auto; margin-top: 4px; }
+    .fig-part { display: flex; align-items: center; gap: 10px; padding: 5px 0;
+                border-top: 1px solid var(--mud-palette-lines-default); }
+    .fig-part:first-child { border-top: none; }
+    .fig-part-img { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }
+    .fig-part-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+    .fig-part-name { font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fig-part-color { font-size: .72rem; color: var(--mud-palette-text-secondary); }
+    .fig-part-edit { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .fig-part-need { font-size: .78rem; color: var(--mud-palette-text-secondary); min-width: 26px; }
+    .fig-part.short .fig-part-name { color: var(--mud-palette-warning); font-weight: 600; }
+    .fig-add { margin-top: 10px; }
+
+    @@media (prefers-reduced-motion: reduce) { .fig-progress-fill { transition: none; } }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ApiClient.MinifigCatalogViewDto Minifig { get; set; } = null!;
+
+    /// <summary>When true (opened from My Minifigs), show the per-instance workbench instead of the read-only composition.</summary>
+    [Parameter] public bool OwnedContext { get; set; }
+
+    private bool _ownedMode;
+    private bool _loading = true;
+
+    // Browse mode
+    private int _count;
+    private List<ApiClient.MinifigBrickDto> _parts = [];
+
+    // Owned mode
+    private List<InstanceVm> _instances = [];
+    private List<ApiClient.AssignableCopyDto> _assignableCopies = [];
+
+    private string Summary
+    {
+        get
+        {
+            var total = _instances.Count;
+            var onSets = _instances.Count(i => !i.IsLoose);
+            var loose = total - onSets;
+            var incomplete = _instances.Count(i => !i.IsComplete);
+            var parts = new List<string> { $"{total} owned" };
+            if (onSets > 0) parts.Add($"{onSets} on sets");
+            if (loose > 0) parts.Add($"{loose} loose");
+            if (incomplete > 0) parts.Add($"{incomplete} incomplete");
+            return string.Join(" · ", parts);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ownedMode = OwnedContext && AuthService.CurrentUser != null;
+        if (_ownedMode)
+        {
+            await LoadInstancesAsync();
+        }
+        else
+        {
+            _count = (await Api.GetMyMinifigLooseCountAsync(Minifig.MinifigId))?.Count ?? 0;
+            _parts = (await Api.GetMinifigBricksAsync(Minifig.MinifigId))?.ToList() ?? [];
+            _loading = false;
+        }
+    }
+
+    private async Task LoadInstancesAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var expanded = _instances.Where(i => i.Expanded).Select(i => i.Index).ToHashSet();
+        var insts = await Api.GetMinifigInstancesAsync(Minifig.MinifigId) ?? [];
+        _instances = insts.Select(i => new InstanceVm
+        {
+            Index = i.Index, SetId = i.SetId, SetIndex = i.SetIndex, SetName = i.SetName, SetImg = i.SetImg,
+            Expanded = expanded.Contains(i.Index),
+            Parts = i.Parts.Select(p => new PartVm
+            {
+                PartNum = p.PartNum, ColorId = p.ColorId, Name = p.Name, PartImg = p.PartImg,
+                ColorName = p.ColorName, HexColor = p.HexColor, Need = p.Need, Owned = p.Owned
+            }).ToList()
+        }).ToList();
+        _assignableCopies = (await Api.GetAssignableCopiesAsync(Minifig.MinifigId) ?? []).ToList();
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task SavePart(InstanceVm inst, PartVm p, int v)
+    {
+        if (v < 0) v = 0;
+        p.Owned = v;
+        StateHasChanged();
+        if (!await Api.SetMinifigInstancePartStockAsync(Minifig.MinifigId, inst.Index, p.PartNum, p.ColorId, v))
+            Snackbar.Add("Couldn't save that part.", Severity.Error);
+    }
+
+    private async Task Reassign(InstanceVm inst, string? setId, int? setIndex)
+    {
+        if (await Api.AssignMinifigInstanceAsync(Minifig.MinifigId, inst.Index, setId, setIndex))
+            await LoadInstancesAsync();
+        else
+            Snackbar.Add("Couldn't move that copy.", Severity.Warning);
+    }
+
+    private async Task AddLoose()
+    {
+        if (await Api.AddLooseMinifigInstanceAsync(Minifig.MinifigId))
+            await LoadInstancesAsync();
+    }
+
+    private async Task Remove(InstanceVm inst)
+    {
+        if (await Api.RemoveMinifigInstanceAsync(Minifig.MinifigId, inst.Index))
+            await LoadInstancesAsync();
+    }
+
+    private async Task SaveCount()
+    {
+        if (AuthService.CurrentUser == null) return;
+        if (await Api.UpsertMinifigStockAsync(Minifig.MinifigId, _count))
+            Snackbar.Add("Loose count updated.", Severity.Success);
+        else
+            Snackbar.Add("Couldn't update the count.", Severity.Error);
+    }
+
+    private static string StatusText(InstanceVm inst)
+    {
+        if (inst.IsComplete) return "Complete";
+        var missing = inst.Parts.Where(p => p.Owned < p.Need).ToList();
+        return missing.Count == 1 ? $"Missing · {missing[0].Name}" : $"Missing {missing.Count} parts";
+    }
+
+    private class InstanceVm
+    {
+        public int Index;
+        public string? SetId;
+        public int? SetIndex;
+        public string? SetName;
+        public string? SetImg;
+        public bool Expanded;
+        public List<PartVm> Parts = [];
+
+        public bool IsLoose => SetId == null;
+        public string Location => SetId == null ? "Loose" : $"{SetName} #{SetIndex}";
+        public bool IsComplete => Parts.All(p => p.Owned >= p.Need);
+
+        public int Percent
+        {
+            get
+            {
+                var need = Parts.Sum(p => p.Need);
+                if (need == 0) return 100;
+                return (int)Math.Round(100.0 * Parts.Sum(p => Math.Min(p.Owned, p.Need)) / need);
+            }
+        }
+    }
+
+    private class PartVm
+    {
+        public string PartNum = "";
+        public string ColorId = "";
+        public string Name = "";
+        public string? PartImg;
+        public string? ColorName;
+        public string? HexColor;
+        public int Need;
+        public int Owned;
+    }
+}

@@ -1,6 +1,20 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace Klods;
+
+/// <summary>A recently-added set from Rebrickable's public sets RSS feed.</summary>
+public record RssSetItem(string SetNum, string Name, DateTime PubDate);
+
+/// <summary>
+/// Thrown when the Rebrickable API returns a non-success status. Carries the HTTP status code so
+/// callers can distinguish a permanent 404 from a transient 429/5xx (worth retrying).
+/// </summary>
+public class RebrickableApiException(int statusCode, string message) : Exception(message)
+{
+    public int StatusCode { get; } = statusCode;
+}
 
 public class RebrickableApi
 {
@@ -80,6 +94,12 @@ public class RebrickableApi
         return await GetAllPagesAsync($"{BaseUrl}colors/?page_size={PageSize}&");
     }
 
+    public async Task<JsonArray?> GetPartCategories()
+    {
+        _logger.LogInformation("Getting all part categories");
+        return await GetAllPagesAsync($"{BaseUrl}part_categories/?page_size={PageSize}&");
+    }
+
     // ── Search endpoint (single page — caller controls pagination) ───────────
 
     /// <summary>
@@ -92,12 +112,54 @@ public class RebrickableApi
         return await SendQuery($"{BaseUrl}sets/?search={Uri.EscapeDataString(query)}&page={page}&page_size=25&");
     }
 
+    // ── Public RSS feed (no API key; newest sets first) ──────────────────────
+
+    /// <summary>Fetches Rebrickable's public "newest sets" RSS feed and parses out the set numbers + dates.</summary>
+    public async Task<List<RssSetItem>> GetRecentSetsFromRssAsync(CancellationToken ct = default)
+    {
+        _logger.LogInformation("Fetching Rebrickable sets RSS feed");
+        var xml = await _httpClient.GetStringAsync("https://rebrickable.com/sets/rss/", ct);
+        var doc = XDocument.Parse(xml);
+
+        var items = new List<RssSetItem>();
+        var skippedNonSets = 0;
+        foreach (var item in doc.Descendants("item"))
+        {
+            // title is "<set_num> <name>", e.g. "75192-1 Millennium Falcon"
+            var title = item.Element("title")?.Value?.Trim() ?? "";
+            var split = title.Split(' ', 2);
+            var setNum = split[0];
+            if (setNum.Length == 0) continue;
+
+            // The feed also carries minifigs (fig-*) and alternate-build/subset variants
+            // ("31313-1-b11", "60509-1-s1") that don't exist on the sets API — skip them so we
+            // don't spend rate-limited calls 404ing on entries that were never sets.
+            if (!IsSetNumber(setNum)) { skippedNonSets++; continue; }
+
+            var name = split.Length > 1 ? split[1] : setNum;
+            if (!DateTimeOffset.TryParse(item.Element("pubDate")?.Value, out var pub)) continue;
+
+            items.Add(new RssSetItem(setNum, name, pub.UtcDateTime));
+        }
+
+        _logger.LogInformation("RSS feed: {SetCount} sets, {NonSetCount} non-set entries skipped",
+            items.Count, skippedNonSets);
+        return items;
+    }
+
+    // A real catalog set number is "<base>-<variant>" with a numeric variant: "42238-1", "POSTER-3".
+    // Minifigs ("fig-017933") and alternate builds/subsets ("31313-1-b11", "60509-1-s1") don't match.
+    private static readonly Regex SetNumberPattern = new(@"^\w+-\d+$", RegexOptions.Compiled);
+
+    private static bool IsSetNumber(string setNum) =>
+        !setNum.StartsWith("fig-", StringComparison.OrdinalIgnoreCase) && SetNumberPattern.IsMatch(setNum);
+
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private async Task<JsonArray> GetAllPagesAsync(string baseUrl)
     {
         var allResults = new JsonArray();
-        string? apiKey = Environment.GetEnvironmentVariable("LEGO_API_KEY");
+        string? apiKey = Environment.GetEnvironmentVariable("REBRICKABLE_API_KEY");
 
         // First page: our convention is that baseUrl ends with & or ?
         Uri nextUri = new Uri($"{baseUrl}key={apiKey}");
@@ -126,7 +188,7 @@ public class RebrickableApi
     private async Task<JsonObject?> SendQuery(string url)
     {
         _logger.LogInformation("API Call {Url}", url);
-        string? apiKey = Environment.GetEnvironmentVariable("LEGO_API_KEY");
+        string? apiKey = Environment.GetEnvironmentVariable("REBRICKABLE_API_KEY");
         return await FetchAsync(new Uri($"{url}key={apiKey}"));
     }
 
@@ -148,7 +210,8 @@ public class RebrickableApi
                 return JsonNode.Parse(body)?.AsObject();
 
             var safeUri = uri.GetLeftPart(UriPartial.Path);
-            throw new Exception($"Rebrickable API {(int)response.StatusCode} at {safeUri} — {body}");
+            throw new RebrickableApiException((int)response.StatusCode,
+                $"Rebrickable API {(int)response.StatusCode} at {safeUri} — {body}");
         }
         catch (Exception e)
         {

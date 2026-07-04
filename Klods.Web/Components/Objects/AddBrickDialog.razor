@@ -1,0 +1,342 @@
+@inject ApiClient Api
+@inject ImageStorageService ImageStorage
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(_step switch {
+                Step.Search  => "Add Bricks",
+                Step.Confirm => "Confirm Brick",
+                Step.Colors  => "Choose Colors",
+                _            => "Adding..."
+            })
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            @* ── Step 1: Search local catalog ──────────────────────────────── *@
+            @if (_step == Step.Search)
+            {
+                <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged"
+                              Immediate="true" DebounceInterval="350"
+                              Placeholder="Search by part number, name or color…"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined" Clearable="true"/>
+
+                @if (_isSearching)
+                {
+                    <MudStack AlignItems="AlignItems.Center">
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+                    </MudStack>
+                }
+                else if (_searchResults.Count > 0)
+                {
+                    <MudStack Spacing="1">
+                        @foreach (var r in _searchResults)
+                        {
+                            var result = r;
+                            <MudPaper Elevation="1" Class="pa-2 search-result" @onclick="() => SelectCatalogResult(result)">
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudImage Src="@ImageStorage.ResolveUrl(result.PartImg)" Height="50" Width="50"
+                                              Style="object-fit:contain; flex-shrink:0;"/>
+                                    <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@result.Name</MudText>
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@result.PartNum</MudText>
+                                            @if (result.HexColor != null)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" class="mud-elevation-1" Style="@ColorHelper.ColorChipStyle(result.HexColor)">@result.ColorName</MudChip>
+                                            }
+                                        </MudStack>
+                                    </MudStack>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">In stock: @result.TotalStock</MudText>
+                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary"/>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                        @if (_totalResults > PageSize)
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small"
+                                               Disabled="@(_page == 0)" OnClick="PrevPage"/>
+                                <MudText Typo="Typo.caption">
+                                    Page @(_page + 1) of @((_totalResults + PageSize - 1) / PageSize)
+                                </MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small"
+                                               Disabled="@((_page + 1) * PageSize >= _totalResults)" OnClick="NextPage"/>
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+                else if (_search.Length >= 2 && !_isSearching)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">No bricks found in catalog.</MudAlert>
+                }
+
+                @* Rebrickable fallback *@
+                @if (!_showRebrickable)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Not finding it?
+                        <MudLink OnClick="@(() => _showRebrickable = true)" Style="cursor:pointer;">Import from Rebrickable</MudLink>
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        <MudTextField @bind-Value="_rebrickablePart" Label="Part Number" Variant="Variant.Outlined"
+                                      Immediate="true" HelperText="e.g. 3001 or 6558"/>
+                        @if (_resolveError)
+                        {
+                            <MudAlert Severity="Severity.Error" Dense="true">
+                                Part "@_rebrickablePart" could not be found on Rebrickable.
+                            </MudAlert>
+                        }
+                    </MudStack>
+                }
+            }
+
+            @* ── Step 2: Confirm a local brick + quantity ──────────────────── *@
+            else if (_step == Step.Confirm && _selected != null)
+            {
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudImage Src="@ImageStorage.ResolveUrl(_selected.PartImg)" Height="140" Width="140"
+                              Style="object-fit:contain;"/>
+                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6" Align="Align.Center">@_selected.Name</MudText>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Justify="Justify.Center">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@_selected.PartNum</MudText>
+                            @if (_selected.HexColor != null)
+                            {
+                                <MudChip T="string" Size="Size.Small" class="mud-elevation-1" Style="@ColorHelper.ColorChipStyle(_selected.HexColor)">@_selected.ColorName</MudChip>
+                            }
+                        </MudStack>
+                    </MudStack>
+                </MudStack>
+                <MudDivider/>
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText>Quantity to add</MudText>
+                    <MudNumericField @bind-Value="_quantity" Min="1"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:90px;"/>
+                </MudStack>
+            }
+
+            @* ── Step 2 (import): select colors + quantities ───────────────── *@
+            else if (_step == Step.Colors)
+            {
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@_partName</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Enter 0 to skip a color. Only colors with count > 0 will be added.
+                </MudText>
+
+                @foreach (var entry in _colorEntries)
+                {
+                    <MudPaper Elevation="1" Class="pa-2">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                            @if (entry.Color.PartImgUrl != null)
+                            {
+                                <img src="@entry.Color.PartImgUrl"
+                                     style="width:50px;height:50px;object-fit:contain;" alt=""/>
+                            }
+                            else
+                            {
+                                <div style="width:50px;height:50px;background:var(--mud-palette-background-grey);border-radius:4px;"/>
+                            }
+                            <MudText Style="flex:1">@entry.Color.ColorName</MudText>
+                            <MudNumericField @bind-Value="entry.Quantity" Label="Count"
+                                             Min="0" Style="max-width:90px;" Variant="Variant.Outlined"/>
+                        </MudStack>
+                    </MudPaper>
+                }
+
+                @if (!_colorEntries.Any())
+                {
+                    <MudAlert Severity="Severity.Info">No color variants found for this part.</MudAlert>
+                }
+            }
+
+            @* ── Step 3: Adding ────────────────────────────────────────────── *@
+            else if (_step == Step.Adding)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
+                <MudText Typo="Typo.caption" Align="Align.Center">@_statusMessage</MudText>
+            }
+
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        @if (_step == Step.Search)
+        {
+            <MudButton OnClick="Cancel" Variant="Variant.Filled">Cancel</MudButton>
+            <MudSpacer/>
+            @if (_showRebrickable)
+            {
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ResolveRebrickable"
+                           Disabled="@(string.IsNullOrWhiteSpace(_rebrickablePart) || _isResolving)">
+                    @if (_isResolving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                    }
+                    Look Up
+                </MudButton>
+            }
+        }
+        else if (_step == Step.Confirm)
+        {
+            <MudButton Variant="Variant.Filled" OnClick="BackToSearch">Back</MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddLocalBrick"
+                       Disabled="@(_quantity < 1)">
+                Add to Inventory
+            </MudButton>
+        }
+        else if (_step == Step.Colors)
+        {
+            <MudButton Variant="Variant.Filled" OnClick="BackToSearch">Back</MudButton>
+            <MudSpacer/>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="StartImport"
+                       Disabled="@(!_colorEntries.Any(e => e.Quantity > 0))">
+                Add to Inventory
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .search-result { cursor: pointer; transition: background .1s ease; }
+    .search-result:hover { background: var(--mud-palette-action-hover); }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private enum Step { Search, Confirm, Colors, Adding }
+
+    private Step _step = Step.Search;
+
+    private const int PageSize = 10;
+    private string _search = "";
+    private List<ApiClient.BrickCatalogViewDto> _searchResults = [];
+    private int _totalResults;
+    private int _page;
+    private bool _isSearching;
+
+    private bool _showRebrickable;
+    private string _rebrickablePart = "";
+    private bool _isResolving;
+    private bool _resolveError;
+
+    // Local pick
+    private ApiClient.BrickCatalogViewDto? _selected;
+    private int _quantity = 1;
+
+    // Import pick
+    private string? _partName;
+    private List<ColorEntry> _colorEntries = [];
+
+    private string _statusMessage = "";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void BackToSearch()
+    {
+        _selected = null;
+        _quantity = 1;
+        _step = Step.Search;
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _search = value ?? "";
+        _searchResults = [];
+        _totalResults = 0;
+        _page = 0;
+        if (_search.Length < 2) return;
+        await FetchSearchPage();
+    }
+
+    private async Task PrevPage() { _page--; await FetchSearchPage(); }
+    private async Task NextPage() { _page++; await FetchSearchPage(); }
+
+    private async Task FetchSearchPage()
+    {
+        _isSearching = true;
+        StateHasChanged();
+        var result = await Api.GetBricksCatalogPageAsync(_search, "sets", "desc", _page, PageSize);
+        _searchResults = result?.Items ?? [];
+        _totalResults = result?.Total ?? 0;
+        _isSearching = false;
+        StateHasChanged();
+    }
+
+    private void SelectCatalogResult(ApiClient.BrickCatalogViewDto result)
+    {
+        _selected = result;
+        _quantity = 1;
+        _step = Step.Confirm;
+    }
+
+    private async Task ResolveRebrickable()
+    {
+        _isResolving = true;
+        _resolveError = false;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Api.ResolvePartColorsPostAsync(_rebrickablePart.Trim());
+            if (response == null || response.PartName == null)
+            {
+                _resolveError = true;
+                return;
+            }
+
+            _partName = response.PartName;
+            _colorEntries = response.Colors.Select(c => new ColorEntry { Color = c, Quantity = 0 }).ToList();
+            _step = Step.Colors;
+        }
+        catch { _resolveError = true; }
+        finally
+        {
+            _isResolving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddLocalBrick()
+    {
+        if (_selected == null) return;
+        _step = Step.Adding;
+        _statusMessage = $"Adding {_selected.Name}…";
+        StateHasChanged();
+
+        var colorInfo = new ApiClient.PartColorInfoDto(_selected.ColorId ?? "", _selected.ColorName ?? "", _selected.PartImg);
+        await Api.AddLooseBrickAsync(_selected.PartNum, _selected.Name, colorInfo, _quantity);
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private async Task StartImport()
+    {
+        _step = Step.Adding;
+        StateHasChanged();
+
+        foreach (var entry in _colorEntries.Where(e => e.Quantity > 0))
+        {
+            _statusMessage = $"Adding {entry.Color.ColorName}…";
+            StateHasChanged();
+            await Api.AddLooseBrickAsync(_rebrickablePart.Trim(), _partName!, entry.Color, entry.Quantity);
+        }
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private class ColorEntry
+    {
+        public required ApiClient.PartColorInfoDto Color { get; init; }
+        public int Quantity { get; set; }
+    }
+}

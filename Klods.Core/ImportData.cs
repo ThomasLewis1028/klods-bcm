@@ -8,12 +8,11 @@ namespace Klods;
 
 public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILogger<ImportData> logger, ImageStorageService imageStorage, RebrickableApi rebrickable)
 {
-    private readonly Dictionary<int, string> _themeCache = new();
     /// <summary>
     /// Imports set catalog info, bricks, and BOM data from Rebrickable.
     /// Does NOT create an owned set — call AddOwnedSet separately.
     /// </summary>
-    public async Task<bool> ImportAll(List<string> setIds)
+    public async Task<bool> ImportAll(List<string> setIds, bool throwOnError = false)
     {
         foreach (string setId in setIds)
         {
@@ -22,8 +21,10 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 logger.LogInformation("Importing all data for set {SetId}", setId);
 
                 await ImportSetInfo(setId);
-                await ImportBricks(setId);
-                await ImportSetBOM(setId);
+                // Fetch the set's parts once and reuse for both the catalog and BOM steps.
+                var setParts = await rebrickable.GetSetParts(setId);
+                await ImportBricks(setId, setParts);
+                await ImportSetBOM(setId, setParts);
                 await ImportSetMinifigBOM(setId);
 
                 logger.LogInformation("Finished importing all data for set {SetId}", setId);
@@ -31,6 +32,9 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to import all data for set {SetId}", setId);
+                // Callers that need to distinguish failure kinds (e.g. the RSS poller telling a
+                // permanent 404 from a transient error) opt into the raw exception.
+                if (throwOnError) throw;
                 return false;
             }
         }
@@ -70,7 +74,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
             await CreateSetBrickOwned(userId.Value, setId, index, applyBricks);
             await EnsureBrickOwnedForSet(userId.Value, setId);
-            await EnsureMinifigOwnedForSet(userId.Value, setId);
+            await EnsureMinifigOwnedForSet(userId.Value, setId, index, applyBricks);
 
             logger.LogInformation("Finished adding owned set {SetId} for user {UserId}", setId, userId);
             return true;
@@ -162,38 +166,237 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     }
 
     /// <summary>
-    /// Ensures a MinifigOwned(Stock=0) row exists for every minifig in a set's BOM for the given user.
-    /// Called when a user adds a set so the BOM minifig tab is immediately editable.
+    /// Creates MinifigOwned instances for an owned set copy: one per fig per SetMinifig.Count,
+    /// each linked to (setId, setIndex). Also seeds MinifigBrickOwned rows for each new instance.
+    /// Tops up to the required count if some already exist, so it's safe to call repeatedly.
     /// </summary>
-    public async Task EnsureMinifigOwnedForSet(int userId, string setId)
+    public async Task EnsureMinifigOwnedForSet(int userId, string setId, int setIndex, bool applyBricks = false)
     {
         await using var context = contextFactory.CreateDbContext();
+        var ownedContext = context.Set<MinifigOwned>();
+        var brickOwnedContext = context.Set<MinifigBrickOwned>();
 
-        var bomMinifigIds = await context.Set<SetMinifig>()
+        var bom = await context.Set<SetMinifig>()
             .Where(sm => sm.SetId == setId)
-            .Select(sm => sm.MinifigId)
+            .Select(sm => new { sm.MinifigId, sm.Count })
             .ToListAsync();
 
-        var existingIds = (await context.Set<MinifigOwned>()
-            .Where(mo => mo.UserId == userId && bomMinifigIds.Contains(mo.MinifigId))
-            .Select(mo => mo.MinifigId)
-            .ToListAsync())
-            .ToHashSet();
-
-        foreach (var minifigId in bomMinifigIds)
+        foreach (var fig in bom)
         {
-            if (!existingIds.Contains(minifigId))
+            var figBricks = await context.Set<MinifigBrick>()
+                .Where(mb => mb.MinifigId == fig.MinifigId)
+                .ToListAsync();
+
+            var alreadyOnCopy = await ownedContext.CountAsync(mo =>
+                mo.UserId == userId && mo.MinifigId == fig.MinifigId &&
+                mo.SetId == setId && mo.SetIndex == setIndex);
+
+            var nextIndex = await NextMinifigIndex(ownedContext, userId, fig.MinifigId);
+
+            for (var i = alreadyOnCopy; i < fig.Count; i++)
             {
-                context.Set<MinifigOwned>().Add(new MinifigOwned
+                var minifigIndex = nextIndex++;
+                ownedContext.Add(new MinifigOwned
                 {
                     UserId = userId,
-                    MinifigId = minifigId,
-                    Stock = 0
+                    MinifigId = fig.MinifigId,
+                    MinifigIndex = minifigIndex,
+                    SetId = setId,
+                    SetIndex = setIndex,
                 });
+
+                foreach (var brick in figBricks)
+                {
+                    brickOwnedContext.Add(new MinifigBrickOwned
+                    {
+                        UserId = userId,
+                        MinifigId = fig.MinifigId,
+                        MinifigIndex = minifigIndex,
+                        PartNum = brick.PartNum,
+                        ColorId = brick.ColorId,
+                        Stock = applyBricks ? brick.Count : 0,
+                    });
+                }
             }
         }
 
         await context.SaveChangesAsync();
+    }
+
+    /// <summary>Next free per-(user, fig) instance index. MAX(index)+1 — never reused, gaps are fine.</summary>
+    private static async Task<int> NextMinifigIndex(DbSet<MinifigOwned> ownedContext, int userId, string minifigId)
+    {
+        var max = await ownedContext
+            .Where(mo => mo.UserId == userId && mo.MinifigId == minifigId)
+            .Select(mo => (int?)mo.MinifigIndex)
+            .MaxAsync();
+        return (max ?? -1) + 1;
+    }
+
+    /// <summary>
+    /// Ensures the user owns exactly <paramref name="target"/> loose (unattached) instances of a fig,
+    /// adding new loose instances or removing the highest-indexed loose ones. Leaves set-attached instances alone.
+    /// </summary>
+    public async Task SetLooseMinifigCount(int userId, string minifigId, int target) =>
+        await SetMinifigInstanceCount(userId, minifigId, setId: null, setIndex: null, target);
+
+    private async Task SetMinifigInstanceCount(int userId, string minifigId, string? setId, int? setIndex, int target)
+    {
+        if (target < 0) target = 0;
+
+        await using var context = contextFactory.CreateDbContext();
+        var owned = context.Set<MinifigOwned>();
+
+        var matching = await owned
+            .Where(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == setId && mo.SetIndex == setIndex)
+            .OrderBy(mo => mo.MinifigIndex)
+            .ToListAsync();
+
+        if (matching.Count < target)
+        {
+            var next = await NextMinifigIndex(owned, userId, minifigId);
+            for (var i = matching.Count; i < target; i++)
+                owned.Add(new MinifigOwned
+                {
+                    UserId = userId,
+                    MinifigId = minifigId,
+                    MinifigIndex = next++,
+                    SetId = setId,
+                    SetIndex = setIndex,
+                });
+        }
+        else if (matching.Count > target)
+        {
+            // Remove the highest-indexed instances; MinifigBrickOwned children cascade at the DB.
+            owned.RemoveRange(matching.Skip(target));
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Sets the owned stock of a single part for a <em>loose</em> (unattached) fig, tracked against the
+    /// user's lowest-indexed loose instance of the fig (creating one if none exists). Powers loose-fig part tracking.
+    /// </summary>
+    public Task SetLooseMinifigBrickOwnedStock(
+        int userId, string minifigId, string partNum, string colorId, int stock)
+        => SetMinifigBrickOwnedStockCore(userId, null, null, minifigId, partNum, colorId, stock);
+
+    // Per-instance equivalent of SetBrickOwned stock; multi-instance distribution is a future refinement.
+    private async Task SetMinifigBrickOwnedStockCore(
+        int userId, string? setId, int? setIndex, string minifigId, string partNum, string colorId, int stock)
+    {
+        if (stock < 0) stock = 0;
+
+        await using var context = contextFactory.CreateDbContext();
+        var owned = context.Set<MinifigOwned>();
+
+        var instanceIndex = await owned
+            .Where(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == setId && mo.SetIndex == setIndex)
+            .OrderBy(mo => mo.MinifigIndex)
+            .Select(mo => (int?)mo.MinifigIndex)
+            .FirstOrDefaultAsync();
+
+        if (instanceIndex == null)
+        {
+            instanceIndex = await NextMinifigIndex(owned, userId, minifigId);
+            owned.Add(new MinifigOwned
+            {
+                UserId = userId, MinifigId = minifigId, MinifigIndex = instanceIndex.Value,
+                SetId = setId, SetIndex = setIndex,
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var brickOwned = context.Set<MinifigBrickOwned>();
+        var existing = await brickOwned.FirstOrDefaultAsync(x =>
+            x.UserId == userId && x.MinifigId == minifigId && x.MinifigIndex == instanceIndex.Value &&
+            x.PartNum == partNum && x.ColorId == colorId);
+
+        if (existing == null)
+            brickOwned.Add(new MinifigBrickOwned
+            {
+                UserId = userId, MinifigId = minifigId, MinifigIndex = instanceIndex.Value,
+                PartNum = partNum, ColorId = colorId, Stock = stock,
+            });
+        else
+            existing.Stock = stock;
+
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>Sets the owned stock of a single part for a specific fig instance (by index).</summary>
+    public async Task SetMinifigInstancePartStock(
+        int userId, string minifigId, int minifigIndex, string partNum, string colorId, int stock)
+    {
+        if (stock < 0) stock = 0;
+
+        await using var context = contextFactory.CreateDbContext();
+        var brickOwned = context.Set<MinifigBrickOwned>();
+        var existing = await brickOwned.FirstOrDefaultAsync(x =>
+            x.UserId == userId && x.MinifigId == minifigId && x.MinifigIndex == minifigIndex &&
+            x.PartNum == partNum && x.ColorId == colorId);
+
+        if (existing == null)
+            brickOwned.Add(new MinifigBrickOwned
+            {
+                UserId = userId, MinifigId = minifigId, MinifigIndex = minifigIndex,
+                PartNum = partNum, ColorId = colorId, Stock = stock,
+            });
+        else
+            existing.Stock = stock;
+
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>Moves a fig instance onto a set copy (setId/setIndex) or back to loose (null/null).</summary>
+    public async Task<bool> ReassignMinifigInstance(
+        int userId, string minifigId, int minifigIndex, string? setId, int? setIndex)
+    {
+        await using var context = contextFactory.CreateDbContext();
+        var instance = await context.Set<MinifigOwned>()
+            .FirstOrDefaultAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.MinifigIndex == minifigIndex);
+        if (instance == null) return false;
+
+        instance.SetId = setId;
+        instance.SetIndex = setIndex;
+        await context.SaveChangesAsync();
+        return true;
+    }
+
+    /// <summary>Adds one loose (unattached) instance of a fig and returns its new index.</summary>
+    public Task<int> AddLooseMinifigInstance(int userId, string minifigId)
+        => AddMinifigInstance(userId, minifigId, setId: null, setIndex: null);
+
+    /// <summary>
+    /// Adds one instance of a fig — tied to a set copy when <paramref name="setId"/>/<paramref name="setIndex"/>
+    /// are given, otherwise loose — and returns its new index.
+    /// </summary>
+    public async Task<int> AddMinifigInstance(int userId, string minifigId, string? setId, int? setIndex)
+    {
+        await using var context = contextFactory.CreateDbContext();
+        var owned = context.Set<MinifigOwned>();
+        var index = await NextMinifigIndex(owned, userId, minifigId);
+        owned.Add(new MinifigOwned
+        {
+            UserId = userId, MinifigId = minifigId, MinifigIndex = index, SetId = setId, SetIndex = setIndex,
+        });
+        await context.SaveChangesAsync();
+        return index;
+    }
+
+    /// <summary>Removes a single fig instance (its per-part stock cascades).</summary>
+    public async Task<bool> RemoveMinifigInstance(int userId, string minifigId, int minifigIndex)
+    {
+        await using var context = contextFactory.CreateDbContext();
+        var owned = context.Set<MinifigOwned>();
+        var instance = await owned
+            .FirstOrDefaultAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.MinifigIndex == minifigIndex);
+        if (instance == null) return false;
+
+        owned.Remove(instance);
+        await context.SaveChangesAsync();
+        return true;
     }
 
     public async Task<bool> ImportSetInfo(string? setId)
@@ -206,12 +409,12 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         await using var context = contextFactory.CreateDbContext();
         var setContext = context.Set<Set>();
 
-        var setImg = await imageStorage.StoreImageAsync(
-            setInfo!["set_img_url"]?.ToString(),
-            $"sets/{setId}.jpg");
+        // Lazy images: keep the source URL; it's materialized into MinIO on first view via /img.
+        var setImg = setInfo!["set_img_url"]?.ToString();
 
         int? themeId = setInfo!["theme_id"] != null ? (int)setInfo["theme_id"]! : null;
-        var themeName = themeId.HasValue ? await ResolveThemeNameAsync(api, themeId.Value) : null;
+        if (themeId.HasValue)
+            await EnsureThemeAsync(context, api, themeId.Value);
 
         var existingSet = await setContext.FirstOrDefaultAsync(s => s.SetId == setId);
         if (existingSet != null)
@@ -227,7 +430,6 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 existingSet.ReleaseYear = int.Parse(setInfo!["year"]!.ToString());
                 existingSet.ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId!.Split('-').First()}";
                 existingSet.ThemeId = themeId;
-                existingSet.ThemeName = themeName;
             }
         }
         else
@@ -243,7 +445,6 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
                 ReleaseYear = int.Parse(setInfo!["year"]!.ToString()),
                 ManualUrl = $"https://www.lego.com/en-us/service/buildinginstructions/{setId!.Split('-').First()}",
                 ThemeId = themeId,
-                ThemeName = themeName,
             });
         }
 
@@ -254,12 +455,11 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     /// <summary>
     /// Creates/updates SetBrick BOM entries for a set (no SetIndex — BOM is per-set).
     /// </summary>
-    public async Task<bool> ImportSetBOM(string setId)
+    public async Task<bool> ImportSetBOM(string setId, JsonArray? setParts = null)
     {
         logger.LogInformation("Importing SetBrick BOM for {SetId}", setId);
-        var api = rebrickable;
 
-        var setParts = await api.GetSetParts(setId);
+        setParts ??= await rebrickable.GetSetParts(setId);
 
         await using var context = contextFactory.CreateDbContext();
 
@@ -333,36 +533,55 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<bool> ImportMinifig(string minifigId)
     {
         logger.LogInformation("Importing minifig {MinifigId}", minifigId);
-        var api = rebrickable;
 
         await using var context = contextFactory.CreateDbContext();
         var minifigContext = context.Set<Minifig>();
 
-        if (await minifigContext.AnyAsync(m => m.MinifigId == minifigId))
+        var info = await rebrickable.GetMinifigInfo(minifigId);
+        if (info == null)
             return false;
 
-        var minifigJsonObject = await api.GetMinifigInfo(minifigId);
+        var apiDate = info["last_modified_dt"] != null
+            ? DateTime.Parse(info["last_modified_dt"]!.ToString()).ToUniversalTime()
+            : DateTime.UnixEpoch;
 
-        var minifigImg = await imageStorage.StoreImageAsync(
-            minifigJsonObject!["set_img_url"]?.ToString(),
-            $"minifigs/{minifigId}.jpg");
+        var existing = await minifigContext.FirstOrDefaultAsync(m => m.MinifigId == minifigId);
+        if (existing != null && existing.DateModified >= apiDate)
+            return false;
 
-        var minifig = new Minifig
+        var minifigImg = info["set_img_url"]?.ToString();
+
+        var numParts = info["num_parts"] != null ? int.Parse(info["num_parts"]!.ToString()) : 0;
+
+        if (existing != null)
         {
-            MinifigId = minifigId,
-            MinifigName = minifigJsonObject!["name"]?.ToString(),
-            MinifigImgUrl = minifigImg,
-            MinifigUrl = minifigJsonObject["set_url"]?.ToString(),
-        };
+            existing.Name = info["name"]!.ToString();
+            existing.ImgUrl = minifigImg;
+            existing.Url = info["set_url"]?.ToString();
+            existing.NumParts = numParts;
+            existing.DateModified = apiDate;
+        }
+        else
+        {
+            minifigContext.Add(new Minifig
+            {
+                MinifigId = minifigId,
+                Name = info["name"]!.ToString(),
+                ImgUrl = minifigImg,
+                Url = info["set_url"]?.ToString(),
+                NumParts = numParts,
+                DateModified = apiDate,
+            });
+        }
 
-        minifigContext.Add(minifig);
-        logger.LogInformation("Imported minifig ({MinifigId}) {MinifigName}", minifigId, minifig.MinifigName);
-
+        logger.LogInformation("Imported minifig {MinifigId}", minifigId);
         return await context.SaveChangesAsync() > 0;
     }
 
     /// <summary>
-    /// Creates/updates a SetMinifig BOM entry and merges minifig bricks into SetBrick BOM.
+    /// Creates/updates the SetMinifig BOM entry (set → minifig + count).
+    /// Minifig parts are NOT merged into the set's SetBrick BOM — they live on the minifig
+    /// (MinifigBrick) and are composed into a set's full part list at read time.
     /// </summary>
     public async Task<bool> LinkMinifigToSetBOM(string minifigId, string setId, int quantity)
     {
@@ -370,49 +589,12 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
         await using var context = contextFactory.CreateDbContext();
         var setMinifigContext = context.Set<SetMinifig>();
-        var setBrickContext = context.Set<SetBrick>();
-        var minifigBrickContext = context.Set<MinifigBrick>();
 
         var existing = await setMinifigContext.FirstOrDefaultAsync(sm => sm.MinifigId == minifigId && sm.SetId == setId);
         if (existing == null)
-        {
-            setMinifigContext.Add(new SetMinifig
-            {
-                MinifigId = minifigId,
-                SetId = setId,
-                Count = quantity,
-            });
-        }
+            setMinifigContext.Add(new SetMinifig { MinifigId = minifigId, SetId = setId, Count = quantity });
         else
-        {
             existing.Count = quantity;
-        }
-
-        var minifigBricks = await minifigBrickContext.Where(mb => mb.MinifigID == minifigId).ToListAsync();
-
-        foreach (var minifigBrick in minifigBricks)
-        {
-            var existingBrick = await setBrickContext.FirstOrDefaultAsync(sb =>
-                sb.PartNum == minifigBrick.BrickID &&
-                sb.ColorId == minifigBrick.ColorId &&
-                sb.SetId == setId);
-
-            if (existingBrick != null)
-            {
-                existingBrick.Count += quantity * minifigBrick.Quantity;
-            }
-            else
-            {
-                setBrickContext.Add(new SetBrick
-                {
-                    SetId = setId,
-                    PartNum = minifigBrick.BrickID,
-                    ColorId = minifigBrick.ColorId,
-                    Count = quantity * minifigBrick.Quantity,
-                    SpareCount = 0,
-                });
-            }
-        }
 
         return await context.SaveChangesAsync() > 0;
     }
@@ -420,61 +602,66 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task<bool> LinkMinifigBricks(string minifigId)
     {
         logger.LogInformation("Linking minifig bricks for {MinifigId}", minifigId);
-        var api = rebrickable;
 
         await using var context = contextFactory.CreateDbContext();
         var minifigBrickContext = context.Set<MinifigBrick>();
         var brickContext = context.Set<Brick>();
 
-        var parts = await api.GetMinifigParts(minifigId);
+        var parts = await rebrickable.GetMinifigParts(minifigId);
 
-        foreach (var brick in parts!)
+        // Aggregate API rows by (part, color): Rebrickable can return the same part twice
+        // (regular + spare), which would otherwise collide on the (MinifigId, PartNum, ColorId) key.
+        var aggregated = new Dictionary<(string PartNum, string ColorId), (int Count, int SpareCount)>();
+
+        foreach (var part in parts!)
         {
-            var brickId = brick["part"]!["part_num"]?.ToString();
-            var colorId = brick["color"]!["id"]?.ToString();
-            var quantity = (int)brick["quantity"]!;
+            var partNum = part["part"]!["part_num"]!.ToString();
+            var colorId = part["color"]!["id"]!.ToString();
+            var quantity = (int)part["quantity"]!;
+            var isSpare = part["is_spare"]!.ToString().Equals("true", StringComparison.OrdinalIgnoreCase);
 
-            if (await minifigBrickContext.AnyAsync(mb => mb.MinifigID == minifigId && mb.BrickID == brickId && mb.ColorId == colorId))
-                continue;
+            if (!await brickContext.AnyAsync(b => b.PartNum == partNum && b.ColorId == colorId))
+                await ImportBrickAsync(part);
 
-            MinifigBrick minifigBrick;
+            aggregated.TryGetValue((partNum, colorId), out var acc);
+            aggregated[(partNum, colorId)] = isSpare
+                ? (acc.Count, acc.SpareCount + quantity)
+                : (acc.Count + quantity, acc.SpareCount);
+        }
 
-            if (await brickContext.AnyAsync(b => b.PartNum == brickId && b.ColorId == colorId))
+        foreach (var ((partNum, colorId), (count, spareCount)) in aggregated)
+        {
+            var existing = await minifigBrickContext.FirstOrDefaultAsync(mb =>
+                mb.MinifigId == minifigId && mb.PartNum == partNum && mb.ColorId == colorId);
+
+            if (existing == null)
             {
-                minifigBrick = new MinifigBrick
+                minifigBrickContext.Add(new MinifigBrick
                 {
-                    MinifigID = minifigId,
-                    BrickID = brickId,
+                    MinifigId = minifigId,
+                    PartNum = partNum,
                     ColorId = colorId,
-                    Quantity = quantity,
-                };
+                    Count = count,
+                    SpareCount = spareCount,
+                });
             }
             else
             {
-                var newBrick = await ImportBrickAsync(brick);
-                minifigBrick = new MinifigBrick
-                {
-                    MinifigID = minifigId,
-                    BrickID = newBrick.PartNum,
-                    ColorId = newBrick.ColorId,
-                    Quantity = quantity,
-                };
+                existing.Count = count;
+                existing.SpareCount = spareCount;
             }
-
-            minifigBrickContext.Add(minifigBrick);
         }
 
         return await context.SaveChangesAsync() > 0;
     }
 
-    public async Task<bool> ImportBricks(string setId)
+    public async Task<bool> ImportBricks(string setId, JsonArray? setParts = null)
     {
         logger.LogInformation("Importing bricks for {SetId}", setId);
 
         try
         {
-            var api = rebrickable;
-            var setParts = await api.GetSetParts(setId);
+            setParts ??= await rebrickable.GetSetParts(setId);
 
             await using var context = contextFactory.CreateDbContext();
             var brickContext = context.Set<Brick>();
@@ -513,11 +700,11 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         if (existing != null)
             return existing;
 
-        var partImg = await imageStorage.StoreImageAsync(
-            part["part"]?["part_img_url"]?.ToString(),
-            $"bricks/{partNum}-{colorId}.jpg");
+        var partImg = part["part"]?["part_img_url"]?.ToString();
 
         var bricklinkIds = part["part"]?["external_ids"]?["BrickLink"]?.AsArray();
+        var brickOwlIds = part["part"]?["external_ids"]?["BrickOwl"]?.AsArray();
+        var partCatId = part["part"]?["part_cat_id"];
 
         var brick = new Brick
         {
@@ -529,7 +716,10 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             ColorName = part["color"]?["name"]?.ToString(),
             IsTrans = part!["color"]!["is_trans"]!.ToString().Equals("true"),
             HexColor = part["color"]?["rgb"]?.ToString(),
-            BricklinkId = bricklinkIds?.Count > 0 ? bricklinkIds[0]?.ToString() : null
+            BricklinkId = bricklinkIds?.Count > 0 ? bricklinkIds[0]?.ToString() : null,
+            BrickOwlId = brickOwlIds?.Count > 0 ? brickOwlIds[0]?.ToString() : null,
+            ElementId = part["element_id"]?.ToString(),
+            PartCatId = partCatId != null ? (int)partCatId : null,
         };
 
         brickContext.Add(brick);
@@ -592,22 +782,27 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         node["set_img_url"]?.ToString()
     );
 
-    private async Task<string?> ResolveThemeNameAsync(RebrickableApi api, int themeId)
+    /// <summary>
+    /// Ensures a <see cref="Theme"/> row exists for <paramref name="themeId"/> so <see cref="Set.ThemeId"/>
+    /// always resolves to a name. Only calls the API for themes we don't already have (the bulk import
+    /// loads the full tree, including parents). Added to the caller's context; saved with the set.
+    /// </summary>
+    private async Task EnsureThemeAsync(InventoryContext context, RebrickableApi api, int themeId)
     {
-        if (_themeCache.TryGetValue(themeId, out var cached))
-            return cached;
-        try
+        var themeContext = context.Set<Theme>();
+        if (await themeContext.AnyAsync(t => t.Id == themeId))
+            return;
+
+        JsonObject? info = null;
+        try { info = await api.GetTheme(themeId); }
+        catch (Exception ex) { logger.LogWarning(ex, "Failed to fetch theme {ThemeId}; storing id only", themeId); }
+
+        themeContext.Add(new Theme
         {
-            var theme = await api.GetTheme(themeId);
-            var name = theme?["name"]?.ToString();
-            if (name != null)
-                _themeCache[themeId] = name;
-            return name;
-        }
-        catch
-        {
-            return null;
-        }
+            Id = themeId,
+            Name = info?["name"]?.ToString() ?? themeId.ToString(),
+            ParentId = info?["parent_id"] != null ? (int)info["parent_id"]! : null,
+        });
     }
 
     /// <summary>
@@ -649,6 +844,35 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
         var saved = await context.SaveChangesAsync();
         logger.LogInformation("Imported {Count} colors", colors.Count);
+        return saved > 0;
+    }
+
+    /// <summary>
+    /// Syncs the PartCategories reference table from Rebrickable. Safe to call repeatedly — upserts.
+    /// </summary>
+    public async Task<bool> ImportPartCategories()
+    {
+        logger.LogInformation("Importing part categories from Rebrickable");
+        var categories = await rebrickable.GetPartCategories();
+        if (categories == null)
+            return false;
+
+        await using var context = contextFactory.CreateDbContext();
+        var catContext = context.Set<PartCategory>();
+
+        foreach (var cat in categories)
+        {
+            if (cat == null) continue;
+            var id = (int)cat["id"]!;
+            var existing = await catContext.FirstOrDefaultAsync(c => c.Id == id);
+            if (existing == null)
+                catContext.Add(new PartCategory { Id = id, Name = cat["name"]!.ToString() });
+            else
+                existing.Name = cat["name"]!.ToString();
+        }
+
+        var saved = await context.SaveChangesAsync();
+        logger.LogInformation("Imported {Count} part categories", categories.Count);
         return saved > 0;
     }
 
@@ -697,10 +921,10 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     );
 
     /// <summary>
-    /// Imports a minifig from Rebrickable (if not already present) and creates/increments
-    /// a MinifigOwned row for the user. Also ensures BrickOwned rows exist for all parts.
+    /// Imports a minifig from Rebrickable (if needed) and creates <paramref name="count"/> loose
+    /// MinifigOwned instances (no set link) for the user — each a distinct, indexed physical copy.
     /// </summary>
-    public async Task<bool> AddOwnedMinifig(string minifigId, int? userId, int count = 1)
+    public async Task<bool> AddOwnedMinifig(string minifigId, int? userId, int count = 1, bool applyParts = false)
     {
         if (userId == null)
         {
@@ -708,62 +932,51 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             return false;
         }
 
-        logger.LogInformation("Adding owned minifig {MinifigId} for user {UserId}", minifigId, userId);
+        logger.LogInformation("Adding {Count} loose minifig(s) {MinifigId} for user {UserId}", count, minifigId, userId);
 
         await ImportMinifig(minifigId);
         await LinkMinifigBricks(minifigId);
 
         await using var context = contextFactory.CreateDbContext();
-        var minifigOwnedContext = context.Set<MinifigOwned>();
+        var ownedContext = context.Set<MinifigOwned>();
 
-        var existing = await minifigOwnedContext
-            .FirstOrDefaultAsync(m => m.UserId == userId.Value && m.MinifigId == minifigId);
-
-        if (existing == null)
-            minifigOwnedContext.Add(new MinifigOwned { UserId = userId.Value, MinifigId = minifigId, Stock = count });
-        else
-            existing.Stock += count;
-
-        await context.SaveChangesAsync();
-        await EnsureMinifigBricksOwned(userId.Value, minifigId);
-
-        logger.LogInformation("Finished adding owned minifig {MinifigId} for user {UserId}", minifigId, userId);
-        return true;
-    }
-
-    private async Task EnsureMinifigBricksOwned(int userId, string minifigId)
-    {
-        await using var context = contextFactory.CreateDbContext();
-
-        var brickKeys = await context.Set<MinifigBrick>()
-            .Where(mb => mb.MinifigID == minifigId)
-            .Select(mb => new { mb.BrickID, mb.ColorId })
-            .ToListAsync();
-
-        var partNums = brickKeys.Select(k => k.BrickID).ToList();
-
-        var existingKeys = (await context.Set<BrickOwned>()
-            .Where(bo => bo.UserId == userId && partNums.Contains(bo.PartNum))
-            .Select(bo => new { bo.PartNum, bo.ColorId })
-            .ToListAsync())
-            .Select(k => (k.PartNum, k.ColorId))
-            .ToHashSet();
-
-        foreach (var key in brickKeys)
+        var nextIndex = await NextMinifigIndex(ownedContext, userId.Value, minifigId);
+        var firstIndex = nextIndex;
+        for (var i = 0; i < count; i++)
         {
-            if (!existingKeys.Contains((key.BrickID, key.ColorId)))
+            ownedContext.Add(new MinifigOwned
             {
-                context.Set<BrickOwned>().Add(new BrickOwned
+                UserId = userId.Value,
+                MinifigId = minifigId,
+                MinifigIndex = nextIndex++,
+                SetId = null,
+                SetIndex = null,
+            });
+        }
+
+        if (applyParts)
+        {
+            var minifigBricks = await context.Set<MinifigBrick>()
+                .Where(mb => mb.MinifigId == minifigId).ToListAsync();
+            var brickOwnedCtx = context.Set<MinifigBrickOwned>();
+            foreach (var mb in minifigBricks)
+            {
+                brickOwnedCtx.Add(new MinifigBrickOwned
                 {
-                    UserId = userId,
-                    PartNum = key.BrickID,
-                    ColorId = key.ColorId,
-                    Stock = 0,
+                    UserId = userId.Value,
+                    MinifigId = minifigId,
+                    MinifigIndex = firstIndex,
+                    PartNum = mb.PartNum,
+                    ColorId = mb.ColorId,
+                    Stock = mb.Count,
                 });
             }
         }
 
         await context.SaveChangesAsync();
+
+        logger.LogInformation("Finished adding owned minifig {MinifigId} for user {UserId}", minifigId, userId);
+        return true;
     }
 
     /// <summary>
@@ -813,7 +1026,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         if (!await brickContext.AnyAsync(b => b.PartNum == partNum && b.ColorId == colorInfo.ColorId))
         {
             var colorRow = await context.Set<Color>().FirstOrDefaultAsync(c => c.Id == colorInfo.ColorId);
-            var partImg = await imageStorage.StoreImageAsync(colorInfo.PartImgUrl, $"bricks/{partNum}-{colorInfo.ColorId}.jpg");
+            var partImg = colorInfo.PartImgUrl;
 
             brickContext.Add(new Brick
             {
@@ -838,52 +1051,5 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             existing.Stock += quantity;
 
         await context.SaveChangesAsync();
-    }
-
-    public async Task BackfillImagesAsync(IProgress<(int done, int total)>? progress = null, CancellationToken ct = default)
-    {
-        await using var context = contextFactory.CreateDbContext();
-
-        var sets     = await context.Set<Set>()    .Where(s => s.SetImg        != null && s.SetImg.StartsWith("http"))       .ToListAsync(ct);
-        var minifigs = await context.Set<Minifig>().Where(m => m.MinifigImgUrl != null && m.MinifigImgUrl.StartsWith("http")).ToListAsync(ct);
-        var bricks   = await context.Set<Brick>()  .Where(b => b.PartImg       != null && b.PartImg.StartsWith("http"))      .ToListAsync(ct);
-
-        var total = sets.Count + minifigs.Count + bricks.Count;
-        var done = 0;
-
-        var setWork     = sets    .Select((s, i) => (i, src: s.SetImg!,        key: $"sets/{s.SetId}.jpg")).ToArray();
-        var minifigWork = minifigs.Select((m, i) => (i, src: m.MinifigImgUrl!, key: $"minifigs/{m.MinifigId}.jpg")).ToArray();
-        var brickWork   = bricks  .Select((b, i) => (i, src: b.PartImg!,       key: $"bricks/{b.PartNum}-{b.ColorId}.jpg")).ToArray();
-
-        var setUrls     = new string?[sets.Count];
-        var minifigUrls = new string?[minifigs.Count];
-        var brickUrls   = new string?[bricks.Count];
-
-        var sem = new SemaphoreSlim(5, 5);
-
-        async Task ProcessAsync(string src, string key, string?[] results, int index)
-        {
-            await sem.WaitAsync(ct);
-            try   { results[index] = await imageStorage.StoreImageAsync(src, key); }
-            finally
-            {
-                sem.Release();
-                Interlocked.Increment(ref done);
-                progress?.Report((done, total));
-            }
-        }
-
-        var tasks = setWork    .Select(w => ProcessAsync(w.src, w.key, setUrls,     w.i))
-            .Concat(minifigWork.Select(w => ProcessAsync(w.src, w.key, minifigUrls, w.i)))
-            .Concat(brickWork  .Select(w => ProcessAsync(w.src, w.key, brickUrls,   w.i)));
-
-        try   { await Task.WhenAll(tasks); }
-        catch (OperationCanceledException) { }
-
-        for (int i = 0; i < sets.Count;     i++) if (setUrls[i]     != null) sets[i].SetImg        = setUrls[i];
-        for (int i = 0; i < minifigs.Count; i++) if (minifigUrls[i] != null) minifigs[i].MinifigImgUrl = minifigUrls[i];
-        for (int i = 0; i < bricks.Count;   i++) if (brickUrls[i]   != null) bricks[i].PartImg      = brickUrls[i];
-
-        await context.SaveChangesAsync(CancellationToken.None);
     }
 }

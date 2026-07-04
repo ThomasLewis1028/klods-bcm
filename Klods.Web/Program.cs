@@ -38,7 +38,14 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+// Auth here is entirely client-side (JWT in browser storage, checked via CustomAuthStateProvider) —
+// there's no HTTP-level authentication scheme. AddRazorComponents() registers just enough
+// authorization plumbing that ASP.NET Core auto-adds the HTTP AuthorizationMiddleware, which would
+// otherwise enforce [Authorize] page attributes as endpoint metadata on a hard refresh (before any
+// circuit exists) and crash calling ChallengeAsync with no IAuthenticationService registered.
+// AllowAnonymous() disables that HTTP-level check; Blazor's own AuthorizeRouteView (plus each
+// protected page's redirect-to-/not-authorized on session restore) still enforces access client-side.
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode().AllowAnonymous();
 
 var minioEndpoint = builder.Configuration["MINIO_ENDPOINT"] ?? "http://minio:9000";
 app.MapGet("/media/{**path}", async (string path, IHttpClientFactory factory, CancellationToken ct) =>
@@ -54,6 +61,16 @@ app.MapGet("/media/{**path}", async (string path, IHttpClientFactory factory, Ca
     }
     catch (OperationCanceledException) { return Results.StatusCode(499); }
     catch { return Results.StatusCode(502); }
+});
+
+// Read-through image cache: fetches a Rebrickable CDN image, stores it in MinIO on first access,
+// then serves from MinIO. Lets imports keep just the remote URL and materialize lazily on demand.
+app.MapGet("/img", async (string u, ImageStorageService img, HttpContext ctx, CancellationToken ct) =>
+{
+    var result = await img.GetThroughCacheAsync(u, ct);
+    if (result is null) return Results.NotFound();
+    ctx.Response.Headers.CacheControl = "public, max-age=2592000, immutable";
+    return Results.File(result.Value.Bytes, result.Value.ContentType);
 });
 
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<Program>();

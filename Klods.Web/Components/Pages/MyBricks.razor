@@ -1,13 +1,12 @@
 @page "/my/bricks"
-@inject ILoggerFactory LoggerFactory
 @inject IDialogService DialogService
 @inject AuthService AuthService
 @inject NavigationManager Nav
 @inject ApiClient Api
 @inject ImageStorageService ImageStorage
-@using System.Drawing
 @using Klods.Components.Objects
 @using Klods.Services
+@using Microsoft.AspNetCore.Components.Routing
 @using Color = MudBlazor.Color
 @using Size = MudBlazor.Size
 @rendermode InteractiveServer
@@ -27,153 +26,316 @@
 }
 
 <MudGrid>
+    @* Stats *@
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@TotalBricks.ToString("N0")</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Unique Bricks</MudText>
+        </MudStack></MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@TotalStock.ToString("N0")</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">In Stock</MudText>
+        </MudStack></MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="2"><MudStack AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Style="font-weight: 700;">@TotalNeeded.ToString("N0")</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Still Needed</MudText>
+        </MudStack></MudPaper>
+    </MudItem>
+
+    @* Search *@
     <MudItem xs="12">
-        <MudDataGrid T="MyBrickInfo" Items="@_brickInfos.OrderBy(b => b.Brick.PartNum)"
-                     SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
-                     QuickFilter="BrickFilterFunc"
-                     ReadOnly="false">
-            <ToolBarContent>
-                <MudText Typo="Typo.h6">My Bricks: @_brickInfos.Count</MudText>
-                <MudSpacer/>
-                <MudText Typo="Typo.h6">In Stock: @_brickInfos.Sum(b => b.Stock)</MudText>
-                <MudSpacer/>
-                <MudText Typo="Typo.h6">Needed: @_brickInfos.Sum(b => b.Brick.UserNeeded)</MudText>
-                <MudSpacer/>
-                <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start"
-                              Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
-                              IconSize="Size.Medium" Class="mt-0"/>
-                <MudTooltip Text="@(AuthService.CurrentUser == null ? "Sign in to import" : "Add loose bricks by part number")">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
-                               StartIcon="@(AuthService.CurrentUser == null ? Icons.Material.Filled.Lock : Icons.Material.Filled.Add)"
-                               Disabled="@(AuthService.CurrentUser == null)"
-                               OnClick="OpenImportBrickDialog">
-                        Add Bricks
+        <MudTextField T="string" Value="_query" ValueChanged="OnSearch" Immediate="true" DebounceInterval="350"
+                      Placeholder="Search by part number, name, or color…"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined" Clearable="true"/>
+    </MudItem>
+
+    <MudItem xs="12">
+        @* Toolbar: Add Bricks + view toggle *@
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddBrickDialog">
+                Add Bricks
+            </MudButton>
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                @if (_view == "grid")
+                {
+                    <MudMenu Label="@SortLabel" StartIcon="@Icons.Material.Filled.Sort"
+                             EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined" Size="Size.Small">
+                        @foreach (var (field, label) in _sortOptions)
+                        {
+                            <MudMenuItem OnClick="@(() => SetSort(field))">@label@(Arrow(field))</MudMenuItem>
+                        }
+                    </MudMenu>
+                }
+                <MudToggleGroup T="string" Value="_view" ValueChanged="OnViewChanged" Size="Size.Small"
+                                Color="Color.Primary" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Dense="true">
+                    <MudToggleItem Value="@("list")"><MudIcon Icon="@Icons.Material.Filled.ViewList" Size="Size.Small"/></MudToggleItem>
+                    <MudToggleItem Value="@("grid")"><MudIcon Icon="@Icons.Material.Filled.GridView" Size="Size.Small"/></MudToggleItem>
+                </MudToggleGroup>
+            </MudStack>
+        </MudStack>
+
+        @if (_brickInfos.Count == 0)
+        {
+            <MudPaper Class="pa-8" Elevation="0">
+                <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                    <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Large" Color="Color.Secondary"/>
+                    <MudText Typo="Typo.h6">No bricks in your inventory yet</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
+                        Add a set to your collection or add loose bricks directly.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddBrickDialog">
+                        Add Loose Bricks
                     </MudButton>
-                </MudTooltip>
-            </ToolBarContent>
-            <Columns>
-                <HierarchyColumn T="MyBrickInfo" ButtonDisabledFunc="@(info => info.Brick.UserSetCount == 0)"/>
-                <TemplateColumn Title="Image" Editable="false">
-                    <CellTemplate>
-                        <MudImage class="cursor-pointer rounded-3" Elevation="2" Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)"
-                                  Height="50"
-                                  @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg))"/>
-                    </CellTemplate>
-                </TemplateColumn>
-                <PropertyColumn Property="x => x.Brick.PartNum" Title="Id" Editable="false"/>
-                <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
-                <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
-                    <CellTemplate>
-                        @if (context.Item.Brick.HexColor != null)
-                        {
-                            <MudChip OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
-                                     class="mud-elevation-2"
-                                     Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
-                                @context.Item.Brick.ColorName
-                            </MudChip>
-                        }
-                        else
-                        {
-                            <MudChip Color="default">N/A</MudChip>
-                        }
-                    </CellTemplate>
-                </TemplateColumn>
-                <TemplateColumn Title="My Stock" Editable="false" Sortable="true" SortBy="x => x.Stock">
-                    <CellTemplate>
-                        <MudNumericField T="int"
-                                         Value="@context.Item.Stock"
-                                         ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
-                                         Min="0"
-                                         Variant="Variant.Text"/>
-                    </CellTemplate>
-                </TemplateColumn>
-                <PropertyColumn Property="x => x.Brick.UserNeeded" Title="Needed" Editable="false"/>
-                <PropertyColumn Property="x => x.Brick.UserSetCount" Title="Sets" Editable="false"/>
-            </Columns>
-
-            <ChildRowContent Context="brickContext">
-                <div class="child-row-content">
-                @if (!brickContext.Item.IsLoaded)
+                </MudStack>
+            </MudPaper>
+        }
+        else if (TotalFiltered == 0)
+        {
+            <MudPaper Class="pa-8" Elevation="0">
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary"/>
+                    <MudText Typo="Typo.h6">No bricks match your search</MudText>
+                    <MudButton Variant="Variant.Text" OnClick="@(() => { _query = ""; _page = 1; Navigate(); })">Clear search</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+        else if (_view == "grid")
+        {
+            <div class="card-grid">
+                @foreach (var info in PagedItems)
                 {
-                    <MudText>Loading sets...</MudText>
-                    { _ = LoadSetBricksAsync(brickContext.Item); }
+                    var r = info;
+                    <MudPaper Class="catalog-card" Elevation="2" @onclick="() => OpenBrickDialog(r)">
+                        <div class="card-img">
+                            <MudImage Src="@ImageStorage.ResolveUrl(r.Brick.PartImg)"
+                                      Style="max-width:100%; max-height:100%; object-fit:contain;"/>
+                        </div>
+                        <div class="card-label">
+                            <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@r.Brick.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @r.Brick.PartNum@(r.Brick.ColorName != null ? $" · {r.Brick.ColorName}" : "") · ×@r.Stock
+                            </MudText>
+                        </div>
+                    </MudPaper>
                 }
-                else if (brickContext.Item.SetDetails.Any())
-                {
-                    <MudCard>
-                        <MudDataGrid T="ApiClient.MyBrickSetDetailDto" Items="brickContext.Item.SetDetails.OrderBy(s => s.SetId)">
-                            <Columns>
-                                <TemplateColumn Title="Image">
-                                    <CellTemplate>
-                                        <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                  Src="@ImageStorage.ResolveUrl(context.Item.SetImg)" Height="50"
-                                                  @onclick="() => OpenImagePopup(context.Item.SetId, context.Item.SetName, ImageStorage.ResolveUrl(context.Item.SetImg))"/>
-                                    </CellTemplate>
-                                </TemplateColumn>
-                                <PropertyColumn Title="Set Id" Property="x => x.SetId"/>
-                                <PropertyColumn Title="Name" Property="x => x.SetName"/>
-                                <TemplateColumn Title="Needed">
-                                    <CellTemplate>
-                                        <MudText>@context.Item.BrickCount × @context.Item.CopiesOwned = @(context.Item.BrickCount * context.Item.CopiesOwned)</MudText>
-                                    </CellTemplate>
-                                </TemplateColumn>
-                                <TemplateColumn Title="BoM">
-                                    <CellTemplate>
-                                        <MudIconButton href="@($"/bom/{context.Item.SetId}")"
-                                                       Icon="@Icons.Material.Filled.List"
-                                                       Variant="Variant.Filled" Color="Color.Primary"
-                                                       Size="Size.Small"/>
-                                    </CellTemplate>
-                                </TemplateColumn>
-                            </Columns>
-                        </MudDataGrid>
-                    </MudCard>
-                }
-                </div>
-            </ChildRowContent>
+            </div>
+        }
+        else
+        {
+            <MudDataGrid T="MyBrickInfo" Items="@PagedItems.ToList()" SortMode="SortMode.None" ReadOnly="false"
+                         Hover="true" RowClass="cursor-pointer" RowClick="@(args => OpenBrickDialog(args.Item))">
+                <Columns>
+                    <TemplateColumn Title="Image" Editable="false">
+                        <CellTemplate>
+                            <MudImage class="rounded-3" Elevation="2"
+                                      Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)" Height="50"/>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("id")'>Id@(Arrow("id"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Brick.PartNum</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("name")'>Name@(Arrow("name"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Brick.Name</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("color")'>Color@(Arrow("color"))</span></HeaderTemplate>
+                        <CellTemplate>
+                            @if (context.Item.Brick.HexColor != null)
+                            {
+                                <MudChip class="mud-elevation-2" Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">
+                                    @context.Item.Brick.ColorName
+                                </MudChip>
+                            }
+                            else { <MudChip Color="default">N/A</MudChip> }
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate>
+                            <MudTooltip Text="Owned but not part of a set">
+                                <span class="sort-head" @onclick='() => SetSort("stock")'>Loose@(Arrow("stock"))</span>
+                            </MudTooltip>
+                        </HeaderTemplate>
+                        <CellTemplate>
+                            <div @onclick:stopPropagation="true">
+                                <MudNumericField T="int" Value="@context.Item.Stock"
+                                                 ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                                 Min="0" Variant="Variant.Text"/>
+                            </div>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("needed")'>Needed@(Arrow("needed"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Brick.UserNeeded</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("sets")'>Sets@(Arrow("sets"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Brick.UserSetCount</CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+            </MudDataGrid>
+        }
 
-            <PagerContent>
-                <MudDataGridPager T="MyBrickInfo"/>
-            </PagerContent>
-        </MudDataGrid>
+        @if (_brickInfos.Count > 0 && TotalFiltered > 0)
+        {
+            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mt-4">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Rows per page:</MudText>
+                    <MudSelect T="int" Value="_pageSize" ValueChanged="OnPageSizeChanged" Dense="true"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 88px;">
+                        <MudSelectItem Value="25">25</MudSelectItem>
+                        <MudSelectItem Value="50">50</MudSelectItem>
+                        <MudSelectItem Value="100">100</MudSelectItem>
+                    </MudSelect>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@RangeText</MudText>
+                </MudStack>
+                @if (TotalPages > 1)
+                {
+                    <MudPagination Color="Color.Primary" Count="TotalPages" Selected="_page" SelectedChanged="OnPageChanged"/>
+                }
+            </MudStack>
+        }
     </MudItem>
 </MudGrid>
 
+<style>
+    .sort-head { cursor: pointer; user-select: none; font-weight: 600; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+    .catalog-card { border-radius: 16px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;
+                    transition: transform .12s ease, box-shadow .12s ease; }
+    .catalog-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
+    .card-img { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; padding: 14px;
+                background: var(--mud-palette-surface); }
+    .card-label { padding: 8px 12px; }
+</style>
+
 @code {
     private List<MyBrickInfo> _brickInfos = [];
-    private string _search = "";
     private bool _isLoading = true;
 
+    private string _query = "";
+    private string _sort = "name";
+    private string _dir = "asc";
+    private int _page = 1;
+    private int _pageSize = 25;
+    private string _view = "grid";
+
+    private static readonly (string Field, string Label)[] _sortOptions =
+    [
+        ("name", "Name"), ("id", "Part Number"), ("color", "Color"),
+        ("stock", "Loose"), ("needed", "Needed"), ("sets", "Sets"),
+    ];
+    private string SortLabel => "Sort: " + (_sortOptions.FirstOrDefault(o => o.Field == _sort).Label ?? "Name");
+
+    // ── Stats ──────────────────────────────────────────────────────────────────
+    private int TotalBricks => _brickInfos.Count;
+    private int TotalStock => _brickInfos.Sum(b => b.Stock);
+    private int TotalNeeded => _brickInfos.Sum(b => b.Brick.UserNeeded);
+
+    // ── Filter / sort / page pipeline ─────────────────────────────────────────
+    private IEnumerable<MyBrickInfo> FilteredItems => _brickInfos.Where(b =>
+        string.IsNullOrWhiteSpace(_query) ||
+        b.Brick.PartNum.Contains(_query, StringComparison.OrdinalIgnoreCase) ||
+        b.Brick.Name.Contains(_query, StringComparison.OrdinalIgnoreCase) ||
+        b.Brick.ColorName?.Contains(_query, StringComparison.OrdinalIgnoreCase) == true);
+
+    private IEnumerable<MyBrickInfo> SortedItems
+    {
+        get
+        {
+            var asc = _dir == "asc";
+            return _sort switch
+            {
+                "id"     => asc ? FilteredItems.OrderBy(b => b.Brick.PartNum)        : FilteredItems.OrderByDescending(b => b.Brick.PartNum),
+                "color"  => asc ? FilteredItems.OrderBy(b => b.Brick.ColorName)      : FilteredItems.OrderByDescending(b => b.Brick.ColorName),
+                "stock"  => asc ? FilteredItems.OrderBy(b => b.Stock)                : FilteredItems.OrderByDescending(b => b.Stock),
+                "needed" => asc ? FilteredItems.OrderBy(b => b.Brick.UserNeeded)     : FilteredItems.OrderByDescending(b => b.Brick.UserNeeded),
+                "sets"   => asc ? FilteredItems.OrderBy(b => b.Brick.UserSetCount)   : FilteredItems.OrderByDescending(b => b.Brick.UserSetCount),
+                _        => asc ? FilteredItems.OrderBy(b => b.Brick.Name)           : FilteredItems.OrderByDescending(b => b.Brick.Name),
+            };
+        }
+    }
+
+    private IEnumerable<MyBrickInfo> PagedItems => SortedItems.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalFiltered => FilteredItems.Count();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalFiltered / (double)_pageSize));
+
+    private string RangeText
+    {
+        get
+        {
+            if (TotalFiltered == 0) return "0 of 0";
+            var from = (_page - 1) * _pageSize + 1;
+            var to = Math.Min(_page * _pageSize, TotalFiltered);
+            return $"{from:N0}–{to:N0} of {TotalFiltered:N0}";
+        }
+    }
+
+    // ── Lifecycle ──────────────────────────────────────────────────────────────
     protected override void OnInitialized()
     {
+        Nav.LocationChanged += OnLocationChanged;
         AuthService.SessionRestored += OnSessionRestored;
-        if (AuthService.IsSessionRestored) InvokeAsync(LoadDataAsync);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ParseUrl();
+        await LoadDataAsync();
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        AuthService.SessionRestored -= OnSessionRestored;
     }
 
     private void OnSessionRestored() => InvokeAsync(async () =>
     {
-        if (AuthService.CurrentUser == null)
-            Nav.NavigateTo("/not-authorized");
-        else
-        {
-            await LoadDataAsync();
-            StateHasChanged();
-        }
+        if (AuthService.CurrentUser == null) { Nav.NavigateTo("/not-authorized"); return; }
+        ParseUrl();
+        await LoadDataAsync();
+        StateHasChanged();
     });
 
-    public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+        => InvokeAsync(() => { ParseUrl(); StateHasChanged(); });
 
-    protected override async Task OnInitializedAsync() => await LoadDataAsync();
-
-    private async Task OpenImportBrickDialog()
+    // ── URL state ─────────────────────────────────────────────────────────────
+    private void ParseUrl()
     {
-        var dialog = await DialogService.ShowAsync<ImportBrickDialog>("Add Loose Bricks",
-            new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
-        var result = await dialog.Result;
-        if (!result.Canceled)
-            await OnInitializedAsync();
+        var qs = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        _query = qs["q"] ?? "";
+        _sort = qs["sort"] ?? "name";
+        _dir = qs["dir"] ?? "asc";
+        _page = int.TryParse(qs["page"], out var p) && p > 0 ? p : 1;
+        _pageSize = int.TryParse(qs["size"], out var sz) && sz is 25 or 50 or 100 ? sz : 25;
+        _view = qs["view"] == "list" ? "list" : "grid";
     }
 
+    private void Navigate()
+    {
+        var parts = new List<string>();
+        var q = _query.Trim();
+        if (q.Length > 0) parts.Add($"q={Uri.EscapeDataString(q)}");
+        if (_sort != "name") parts.Add($"sort={_sort}");
+        if (_dir != "asc") parts.Add($"dir={_dir}");
+        if (_pageSize != 25) parts.Add($"size={_pageSize}");
+        if (_view != "grid") parts.Add($"view={_view}");
+        if (_page > 1) parts.Add($"page={_page}");
+        Nav.NavigateTo("/my/bricks" + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
+    }
+
+    // ── Data ──────────────────────────────────────────────────────────────────
     private async Task LoadDataAsync()
     {
         var bricks = await Api.GetMyBricksAsync();
@@ -182,16 +344,28 @@
         StateHasChanged();
     }
 
-    private async Task LoadSetBricksAsync(MyBrickInfo info)
+    // ── Handlers ──────────────────────────────────────────────────────────────
+    private void OnSearch(string value) { _query = value ?? ""; _page = 1; Navigate(); }
+    private void OnViewChanged(string view) { _view = view == "grid" ? "grid" : "list"; Navigate(); }
+    private void OnPageChanged(int page) { _page = page; Navigate(); }
+    private void OnPageSizeChanged(int size) { _pageSize = size; _page = 1; Navigate(); }
+
+    private void SetSort(string field)
     {
-        if (info.IsLoaded) return;
-        var details = await Api.GetUserSetsForBrickAsync(info.Brick.PartNum, info.Brick.ColorId ?? "");
-        info.SetDetails = details?.ToList() ?? [];
-        info.IsLoaded = true;
-        StateHasChanged();
+        if (_sort == field)
+            _dir = _dir == "asc" ? "desc" : "asc";
+        else
+        {
+            _sort = field;
+            _dir = field is "stock" or "needed" or "sets" ? "desc" : "asc";
+        }
+        _page = 1;
+        Navigate();
     }
 
-    private async void SaveBrickOwnedStock(MyBrickInfo info, int newValue)
+    private string Arrow(string field) => field == _sort ? (_dir == "asc" ? " ▲" : " ▼") : "";
+
+    private async Task SaveBrickOwnedStock(MyBrickInfo info, int newValue)
     {
         if (newValue < 0) return;
         info.Stock = newValue;
@@ -199,36 +373,35 @@
         StateHasChanged();
     }
 
-    private bool BrickFilterFunc(MyBrickInfo b)
+    private async Task OpenAddBrickDialog()
     {
-        if (string.IsNullOrWhiteSpace(_search)) return true;
-        if (b.Brick.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)) return true;
-        if (b.Brick.PartNum.Contains(_search, StringComparison.OrdinalIgnoreCase)) return true;
-        if (b.Brick.ColorName?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true) return true;
-        return false;
+        var dialog = await DialogService.ShowAsync<AddBrickDialog>("Add Bricks",
+            new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadDataAsync();
     }
 
-    private Task OpenImagePopup(string id, string name, string? imgUrl) =>
-        DialogService.ShowAsync<ImagePopup>("Image Popup",
-            new DialogParameters<ImagePopup>
-            {
-                { x => x._id, id }, { x => x._name, name }, { x => x._imgUrl, imgUrl }
-            },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
-
-    private Task OpenColorPopup(string hex, string name) =>
-        DialogService.ShowAsync<ColorPopup>("Color Popup",
-            new DialogParameters<ColorPopup>
-            {
-                { x => x._hexColor, hex }, { x => x._name, name }
-            },
-            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+    private async Task OpenBrickDialog(MyBrickInfo info)
+    {
+        var dto = new ApiClient.BrickCatalogViewDto(
+            info.Brick.PartNum, info.Brick.Name, info.Brick.PartImg,
+            info.Brick.ColorId, info.Brick.ColorName, info.Brick.HexColor,
+            info.Brick.IsTrans, info.Brick.BricklinkId,
+            info.Stock, 0, info.Brick.UserSetCount);
+        var parameters = new DialogParameters<BrickDetailDialog>
+        {
+            { x => x.Brick, dto },
+            { x => x.OwnedContext, true }
+        };
+        await DialogService.ShowAsync<BrickDetailDialog>(info.Brick.Name, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        await LoadDataAsync();
+    }
 
     private class MyBrickInfo
     {
         public ApiClient.MyBrickDto Brick { get; set; } = null!;
         public int Stock { get; set; }
-        public bool IsLoaded { get; set; }
-        public List<ApiClient.MyBrickSetDetailDto> SetDetails { get; set; } = [];
     }
 }
