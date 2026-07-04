@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Klods.Tests;
@@ -16,19 +15,14 @@ public class ApiTests
     [ClassInitialize]
     public static void Init(TestContext _)
     {
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureAppConfiguration((_, config) =>
-                {
-                    config.AddInMemoryCollection(new Dictionary<string, string?>
-                    {
-                        // Provide a test secret so the API starts without environment config.
-                        ["JWT_SECRET"] = "test-secret-key-for-unit-tests-must-be-long-enough"
-                    });
-                });
-            });
+        // Program.cs reads JWT_SECRET from configuration at startup — before WebApplicationFactory's
+        // in-memory config would apply. Injecting it via ConfigureAppConfiguration would only reach
+        // request-time reads (the token signer), not the startup validation key, so the two would use
+        // different secrets and authenticated requests would 401. Set it as a real env var, which
+        // both the startup read and request-time reads see, before the host builds.
+        Environment.SetEnvironmentVariable("JWT_SECRET", "test-secret-key-for-unit-tests-must-be-long-enough");
 
+        _factory = new WebApplicationFactory<Program>();
         _client = _factory.CreateClient();
     }
 

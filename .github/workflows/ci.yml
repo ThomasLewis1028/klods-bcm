@@ -24,8 +24,6 @@ jobs:
       MINIO_ENDPOINT: http://localhost:9000
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-      # Read via IConfiguration at startup (Program.cs); the test's in-memory value lands too late.
-      JWT_SECRET: test-secret-key-for-ci-must-be-long-enough
 
     services:
       postgres:
