@@ -120,6 +120,12 @@ input[type="password"]::-ms-clear {
 
 @media (prefers-reduced-motion: reduce) { .cbar-fill { transition: none; } }
 
+/* BOM "Transfer Pieces" count field — force the input to hug its content so the box
+   shrink-wraps and the transfer arrows sit right against it (!important beats MudBlazor's
+   own input width rule, which otherwise keeps the input full-width). */
+.bom-transfer { width: fit-content !important; min-width: 0 !important; }
+.bom-transfer input { width: 3ch !important; min-width: 0 !important; text-align: center; }
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }

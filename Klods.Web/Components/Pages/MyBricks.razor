@@ -160,7 +160,11 @@
                         </CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
-                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("stock")'>My Stock@(Arrow("stock"))</span></HeaderTemplate>
+                        <HeaderTemplate>
+                            <MudTooltip Text="Owned but not part of a set">
+                                <span class="sort-head" @onclick='() => SetSort("stock")'>Loose@(Arrow("stock"))</span>
+                            </MudTooltip>
+                        </HeaderTemplate>
                         <CellTemplate>
                             <div @onclick:stopPropagation="true">
                                 <MudNumericField T="int" Value="@context.Item.Stock"
@@ -228,7 +232,7 @@
     private static readonly (string Field, string Label)[] _sortOptions =
     [
         ("name", "Name"), ("id", "Part Number"), ("color", "Color"),
-        ("stock", "My Stock"), ("needed", "Needed"), ("sets", "Sets"),
+        ("stock", "Loose"), ("needed", "Needed"), ("sets", "Sets"),
     ];
     private string SortLabel => "Sort: " + (_sortOptions.FirstOrDefault(o => o.Field == _sort).Label ?? "Name");
 

@@ -154,7 +154,7 @@
                         <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("id")'>Id@(Arrow("id"))</span></HeaderTemplate>
                         <CellTemplate>@context.Item.Set.SetId</CellTemplate>
                     </TemplateColumn>
-                    <TemplateColumn Title="Index" Editable="false">
+                    <TemplateColumn Title="Copy" Editable="false">
                         <CellTemplate>@context.Item.Instance.SetIndex</CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Editable="false">
@@ -169,15 +169,20 @@
                         <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("year")'>Year@(Arrow("year"))</span></HeaderTemplate>
                         <CellTemplate>@context.Item.Set.ReleaseYear</CellTemplate>
                     </TemplateColumn>
-                    <TemplateColumn Title="Stock" Editable="false">
+                    <TemplateColumn Editable="false">
+                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("pieces")'># Pieces@(Arrow("pieces"))</span></HeaderTemplate>
+                        <CellTemplate>@context.Item.Set.NumBricks</CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="In Set" Editable="false">
+                        <HeaderTemplate>
+                            <MudTooltip Text="Pieces you have assigned to this copy">
+                                <span>In Set</span>
+                            </MudTooltip>
+                        </HeaderTemplate>
                         <CellTemplate>@context.Item.Instance.StockCount</CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Title="Missing" Editable="false">
                         <CellTemplate>@context.Item.Instance.MissingPieceCount</CellTemplate>
-                    </TemplateColumn>
-                    <TemplateColumn Editable="false">
-                        <HeaderTemplate><span class="sort-head" @onclick='() => SetSort("pieces")'>Pieces@(Arrow("pieces"))</span></HeaderTemplate>
-                        <CellTemplate>@context.Item.Set.NumBricks</CellTemplate>
                     </TemplateColumn>
                     <TemplateColumn Title="Manual" Editable="false">
                         <CellTemplate>
@@ -188,7 +193,7 @@
                             </div>
                         </CellTemplate>
                     </TemplateColumn>
-                    <TemplateColumn Title="BoM" Editable="false">
+                    <TemplateColumn Title="Parts" Editable="false">
                         <CellTemplate>
                             <div @onclick:stopPropagation="true">
                                 <MudIconButton
@@ -265,7 +270,7 @@
     private static readonly (string Field, string Label)[] _sortOptions =
     [
         ("name", "Name"), ("id", "Set Number"), ("theme", "Theme"),
-        ("year", "Year"), ("pieces", "Pieces"),
+        ("year", "Year"), ("pieces", "# Pieces"),
     ];
     private string SortLabel => "Sort: " + (_sortOptions.FirstOrDefault(o => o.Field == _sort).Label ?? "Name");
 
