@@ -2,19 +2,27 @@
 
 Welcome to Klods. It's a tool to track your LEGO sets, the bricks you need, the bricks you have, move inventory between sets, link to the official instructions, and inform you what pieces you needed to buy.
 
-It's open source, so if you want to fix my late-night, alcohol-fueled, sleep-deprived, "what if I did this" code, please do. I'll check PRs if there are any.
+It's open source under the MIT license, so if you want to fix my late-night, alcohol-fueled, sleep-deprived, "what if I did this" code, please do. I'll check PRs if there are any.
 
 ### Features
 
 - Fully self-hosted. As much as I'd love to make money on a side project, I care a lot more about providing my talents to the open source community when possible.
 - Relatively easy to build and deploy with Docker Compose (thanks dad).
-- Pulls data from Rebrickable on-demand and stores it locally so that you only use an API call as needed.
 - Stores data in a postgres database, which makes it easy to look at the data and fix things if needed.
+- Pulls data from Rebrickable on-demand and stores it locally so that you only use an API call as needed.
+- Ability to upload bulk data sets from Rebrickable to avoid the need to use an API key for every set.
+- RSS feed to keep track of new sets and updates from Rebrickable and automatically import them.
+- User authentication via Discord, Microsoft, Google, and plain ol' email/password.
+- Admin panel to manage system settings.
+- Admins can require new registrations to be approved before they get access, or leave auto-approve on.
+- Multiple users can have their own inventories and track their own stock.
 - Track a personal inventory of loose bricks.
-- Tracks the bill of materials for each set and allows you to denote what pieces you have for each set. If you need eight technic axles, but you only have seven, it will mark how many pieces you're missing.
-- Allow the user to move stock from the loose inventory to the set stock.
 - Allow a user to have more than one of the same set, each with their own inventories.
+- Allow the user to move stock from the loose inventory to the set stock.
+- Tracks the bill of materials for each set and allows you to denote what pieces you have for each set. If you need eight technic axles, but you only have seven, it will mark how many pieces you're missing.
 - When looking at a brick, you can see how many you need, how many you have, and which sets need that brick and how many it needs.
+- Track minifigs the same way as bricks, owned and needed, and see which sets need them.
+- Search, sort, and filter the brick, minifig, and set catalogs.
 - Link directly to the instruction on LEGO's official instructions.
 - It's neat (I am not biased).
 
@@ -36,17 +44,25 @@ So, my dad and I, having a bunch of free time while off work for the end of the 
 
 ### How to build
 
-Download the app and run the Docker Compose. Eventually I'll make it even easier.
+1. Copy `.env.example` to `.env` and fill it in — the required values (Rebrickable API key, Postgres password, MinIO password, JWT secret) are marked in the file.
+2. Run `docker compose up -d`.
+3. On first startup an admin account is created — username from `ADMIN_USERNAME` (defaults to `admin`). If you left `ADMIN_DEFAULT_PASSWORD` blank, a random password is generated and printed **once** to the logs. Grab it with:
+   ```
+   docker compose logs klods_api | grep "generated password"
+   ```
+   Sign in, then change the password in-app. (Setting `ADMIN_DEFAULT_PASSWORD` *after* the first boot won't change an existing admin — rotate it in the app instead.)
+
+Eventually I'll make it even easier.
 
 ### Future goals
 
 - Upload the Docker image somewhere
-- Add user authentication 
+- ~~Add user authentication~~ 
 - Allow users to upload and manage their own API key (and encrypt it)
-- Allow users to have and manage their own inventories 
+- ~~Allow users to have and manage their own inventories~~ 
 - Allow users to transfer stock between their inventories
-- Make a mobile app to connect to your instance 
+- Make a mobile app to connect to your instance (In Progress for Android but I switched to iOS so who knoooooows)
 - Maybe offer a subscription for me to host it for you (maybe, maybe not, we'll see)
-- Make the UI more pretty and less stock MudBlazor-y
-- Change the name maybe
+- Make the UI more pretty and less stock MudBlazor-y (Mostly done)
+- ~~Change the name maybe~~ It's Klods now
 - Allow substitution parts so if you want to build the Millennium Falcon with random colors, you could track that

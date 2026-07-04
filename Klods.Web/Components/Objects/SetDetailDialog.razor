@@ -1,0 +1,159 @@
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject ImageStorageService ImageStorage
+@inject IJSRuntime JsRuntime
+@inject IDialogService DialogService
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <DialogContent>
+        <MudStack AlignItems="AlignItems.Center" Spacing="2" Style="min-width: 300px;">
+            <MudImage Src="@ImageStorage.ResolveUrl(Set.SetImg)" Alt="@Set.Name"
+                      Style="max-width: 100%; max-height: 240px; width: auto; height: auto; object-fit: contain;" Class="rounded-lg"/>
+            <MudText Typo="Typo.h6" Align="Align.Center">@Set.Name</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @Set.SetId &middot; @Set.ReleaseYear &middot; @Set.NumBricks.ToString("N0") pcs
+            </MudText>
+            @if (!string.IsNullOrEmpty(Set.ThemeName))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Default">@Set.ThemeName</MudChip>
+            }
+
+            @if (MyCopy)
+            {
+                <div style="width:100%;" class="mt-2">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
+                        <MudText Typo="Typo.subtitle2">Copy #@BomInstanceIndex</MudText>
+                        <span class="cstatus cstatus-@_status" style="font-size:.78rem;">@_percent% · @StatusWord(_status)</span>
+                    </MudStack>
+                    <CompletenessBar Percent="@_percent" Status="@_status" Label="@($"{_percent}% assembled")"/>
+                </div>
+            }
+            else
+            {
+                <MudStack Row AlignItems="AlignItems.Baseline" Spacing="2" Class="mt-2">
+                    <MudText>You own</MudText>
+                    <MudText Typo="Typo.h6">@_owned</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@(_owned == 1 ? "copy" : "copies")</MudText>
+                </MudStack>
+                @if (AuthService.CurrentUser != null)
+                {
+                    <MudButton StartIcon="@Icons.Material.Filled.AddCircle" Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="AddCopies">Add to my collection</MudButton>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Remove copies from your My Sets page.</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Sign in to add this to your collection.</MudText>
+                }
+            }
+
+            <MudStack Row Spacing="1" Justify="Justify.Center" Class="mt-1">
+                <MudButton StartIcon="@Icons.Material.Filled.MenuBook" Variant="Variant.Text" OnClick="OpenManual">
+                    Building instructions
+                </MudButton>
+                @if (MyCopy)
+                {
+                    <MudButton StartIcon="@Icons.Material.Filled.FormatListBulleted" Variant="Variant.Text"
+                               Color="Color.Primary" OnClick="OpenBom">
+                        Bill of Materials
+                    </MudButton>
+                }
+            </MudStack>
+
+            @if (MyCopy && AuthService.CurrentUser != null)
+            {
+                <MudButton StartIcon="@Icons.Material.Filled.Delete" Variant="Variant.Text" Color="Color.Error"
+                           OnClick="DeleteThisCopy">Delete this copy</MudButton>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ApiClient.SetCatalogSearchDto Set { get; set; } = null!;
+    [Parameter] public int Owned { get; set; }
+    [Parameter] public int? BomInstanceIndex { get; set; }
+
+    /// <summary>True when opened from My Sets for one specific owned copy (delete + completeness, no add).</summary>
+    [Parameter] public bool MyCopy { get; set; }
+    [Parameter] public int Percent { get; set; }
+    [Parameter] public string Status { get; set; } = "short";
+
+    private int _owned;
+    private int _percent;
+    private string _status = "short";
+
+    protected override void OnInitialized()
+    {
+        _owned = Owned;
+        _percent = Percent;
+        _status = Status;
+    }
+
+    private async Task AddCopies()
+    {
+        var parameters = new DialogParameters<AddOwnedSetDialog> { { x => x.PreselectedSet, Set } };
+        var dialog = await DialogService.ShowAsync<AddOwnedSetDialog>("Add Set", parameters,
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: int added })
+        {
+            _owned += added;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteThisCopy()
+    {
+        if (BomInstanceIndex is not int idx) return;
+        var parameters = new DialogParameters<DeleteIndexPopup>
+        {
+            { x => x._id, Set.SetId }, { x => x._setIndex, idx },
+            { x => x._name, Set.Name }, { x => x._imgUrl, Set.SetImg }
+        };
+        var dialog = await DialogService.ShowAsync<DeleteIndexPopup>("Delete Copy", parameters,
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+        if (await dialog.Result is { Canceled: false })
+            MudDialog.Close(DialogResult.Ok(_owned)); // copy gone — close so the page refreshes
+    }
+
+    private void OpenManual() => JsRuntime.InvokeVoidAsync("open", Set.ManualUrl, "_blank");
+
+    private Task OpenBom()
+    {
+        var parameters = new DialogParameters<BomDialog>
+        {
+            { x => x.SetId, Set.SetId },
+            { x => x.SetImg, Set.SetImg },
+            { x => x.SetIndex, BomInstanceIndex ?? 0 }
+        };
+        return OpenBomAndRefresh(parameters);
+    }
+
+    private async Task OpenBomAndRefresh(DialogParameters<BomDialog> parameters)
+    {
+        var dialog = await DialogService.ShowAsync<BomDialog>("Bill of Materials", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseOnEscapeKey = true });
+        await dialog.Result;
+        // BOM edits may have changed this copy's completeness — refresh the bar.
+        if (MyCopy && BomInstanceIndex is int idx)
+        {
+            var comp = await Api.GetBomCompletenessAsync(Set.SetId, idx);
+            if (comp != null) { _percent = comp.Percent; _status = comp.Status; StateHasChanged(); }
+        }
+    }
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(_owned));
+
+    private static string StatusWord(string status) => status switch
+    {
+        "complete"    => "Complete",
+        "completable" => "Buildable",
+        _             => "Missing parts",
+    };
+}

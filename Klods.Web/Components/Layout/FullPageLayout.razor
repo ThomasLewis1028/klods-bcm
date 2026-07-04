@@ -94,10 +94,22 @@
         StateHasChanged();
     }
 
-    private void OnAuthChanged()
+    private async void OnAuthChanged()
     {
-        var color = AuthService.CurrentUser?.PrimaryColor ?? ThemeService.DefaultPrimaryColor;
-        ThemeService.SetPrimaryColor(color);
+        try
+        {
+            if (AuthService.CurrentUser != null)
+            {
+                ThemeService.SetPrimaryColor(AuthService.CurrentUser.PrimaryColor ?? ThemeService.DefaultPrimaryColor);
+            }
+            else
+            {
+                await LocalStorage.DeleteAsync("jwt");
+                ThemeService.SetPrimaryColor(ThemeService.DefaultPrimaryColor);
+            }
+        }
+        catch { /* storage unavailable */ }
+
         StateHasChanged();
     }
 

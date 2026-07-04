@@ -9,42 +9,102 @@ public static class MinifigsEndpoints
     {
         var group = app.MapGroup("/api/minifigs").RequireAuthorization();
 
-        group.MapGet("/", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        // Server-side catalog search (the full ~17k-fig catalog is too large to ship to the client).
+        // Only returns figs that have an image, since this powers the profile-picture picker.
+        group.MapGet("/catalog-search", async (string q, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
         {
+            var query = (q ?? "").Trim();
+            if (query.Length < 2) return Results.Ok(new MinifigSearchPage([], 0));
+            if (pageSize <= 0) pageSize = 10;
+
             await using var db = dbFactory.CreateDbContext();
-            var minifigs = await db.Set<Minifig>().AsNoTracking().OrderBy(m => m.MinifigName).ToListAsync();
-            return Results.Ok(minifigs.Select(MinifigDto.From));
+            var like = $"%{query}%";
+
+            var baseQuery = db.Set<Minifig>().AsNoTracking()
+                .Where(m => m.ImgUrl != null && m.ImgUrl != ""
+                            && (EF.Functions.ILike(m.MinifigId, like) || EF.Functions.ILike(m.Name, like)))
+                .OrderBy(m => m.Name);
+
+            var total = await baseQuery.CountAsync();
+            var items = await baseQuery
+                .Skip(page * pageSize)
+                .Take(pageSize)
+                .Select(m => new MinifigSearchDto(m.MinifigId, m.Name, m.ImgUrl))
+                .ToListAsync();
+
+            return Results.Ok(new MinifigSearchPage(items, total));
         });
 
-        // Catalog view: all minifigs with part count.
-        group.MapGet("/catalog-view", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        // Current user's loose-owned count for a single fig (for the detail dialog).
+        group.MapGet("/{minifigId}/loose-count", async (
+            string minifigId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
+            var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
-
-            var partCounts = await db.Set<MinifigBrick>().AsNoTracking()
-                .GroupBy(mb => mb.MinifigID)
-                .Select(g => new { MinifigId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.MinifigId, x => x.Count);
-
-            var minifigs = await db.Set<Minifig>().AsNoTracking().OrderBy(m => m.MinifigName).ToListAsync();
-
-            return Results.Ok(minifigs.Select(m => new MinifigCatalogViewDto(
-                m.MinifigId, m.MinifigName, m.MinifigImgUrl, m.MinifigUrl,
-                partCounts.GetValueOrDefault(m.MinifigId, 0))));
+            var count = await db.Set<MinifigOwned>().AsNoTracking()
+                .CountAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == null);
+            return Results.Ok(new LooseCountDto(count));
         });
 
+        // Lightweight stats for the Minifigs page header.
+        group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            await using var db = dbFactory.CreateDbContext();
+            var total = await db.Set<Minifig>().CountAsync();
+            var totalParts = await db.Set<Minifig>().SumAsync(m => (long)m.NumParts);
+            return Results.Ok(new MinifigCatalogStatsDto(total, totalParts));
+        });
+
+        // Server-side, paginated catalog browse/search. Empty query => figs with the most parts first.
+        group.MapGet("/catalog", async (string? q, string? sort, string? dir, int page, int pageSize, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            if (pageSize is <= 0 or > 200) pageSize = 25;
+            if (page < 0) page = 0;
+            var query = (q ?? "").Trim();
+
+            await using var db = dbFactory.CreateDbContext();
+
+            IQueryable<Minifig> baseQ = db.Set<Minifig>().AsNoTracking();
+            if (query.Length >= 2)
+            {
+                var like = $"%{query}%";
+                baseQ = baseQ.Where(m => EF.Functions.ILike(m.MinifigId, like) || EF.Functions.ILike(m.Name, like));
+            }
+
+            baseQ = SortMinifigs(baseQ, sort, dir);
+
+            var total = await baseQ.CountAsync();
+            var pageItems = await baseQ.Skip(page * pageSize).Take(pageSize).ToListAsync();
+
+            var ids = pageItems.Select(m => m.MinifigId).ToList();
+            var partCounts = (await db.Set<MinifigBrick>().AsNoTracking()
+                    .Where(mb => ids.Contains(mb.MinifigId)).ToListAsync())
+                .GroupBy(mb => mb.MinifigId).ToDictionary(g => g.Key, g => g.Count());
+
+            var items = pageItems.Select(m => new MinifigCatalogViewDto(
+                m.MinifigId, m.Name, m.ImgUrl, m.Url ?? "", partCounts.GetValueOrDefault(m.MinifigId, 0))).ToList();
+
+            return Results.Ok(new MinifigCatalogPage(items, total));
+        });
+
+        // Owned (loose + on-set instances), aggregated to a per-fig count.
         group.MapGet("/owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
 
-            var owned = await db.Set<MinifigOwned>()
-                .AsNoTracking()
-                .Where(mo => mo.UserId == userId)
-                .Join(db.Set<Minifig>().AsNoTracking(), mo => mo.MinifigId, m => m.MinifigId, (mo, m) =>
-                    new OwnedMinifigDto(mo.MinifigId, m.MinifigName, m.MinifigImgUrl, mo.Stock))
-                .OrderBy(m => m.MinifigName)
-                .ToListAsync();
+            var counts = (await db.Set<MinifigOwned>().AsNoTracking()
+                    .Where(mo => mo.UserId == userId).ToListAsync())
+                .GroupBy(mo => mo.MinifigId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var figs = await db.Set<Minifig>().AsNoTracking()
+                .Where(m => counts.Keys.Contains(m.MinifigId)).ToListAsync();
+
+            var owned = figs
+                .Select(m => new OwnedMinifigDto(m.MinifigId, m.Name, m.ImgUrl, counts[m.MinifigId]))
+                .OrderBy(o => o.MinifigName)
+                .ToList();
 
             return Results.Ok(owned);
         });
@@ -55,11 +115,11 @@ public static class MinifigsEndpoints
             await using var db = dbFactory.CreateDbContext();
 
             var rows = await db.Set<MinifigBrick>().AsNoTracking()
-                .Where(mb => mb.MinifigID == minifigId)
+                .Where(mb => mb.MinifigId == minifigId)
                 .Join(db.Set<Brick>().AsNoTracking(),
-                    mb => new { PartNum = mb.BrickID, mb.ColorId },
+                    mb => new { mb.PartNum, mb.ColorId },
                     b  => new { b.PartNum, b.ColorId },
-                    (mb, b) => new MinifigBrickDto(mb.BrickID, mb.ColorId, b.Name, b.PartImg, b.ColorName, b.HexColor, mb.Quantity))
+                    (mb, b) => new MinifigBrickDto(mb.PartNum, mb.ColorId, b.Name, b.PartImg, b.ColorName, b.HexColor, mb.Count))
                 .ToListAsync();
 
             return Results.Ok(rows);
@@ -77,35 +137,44 @@ public static class MinifigsEndpoints
         group.MapPost("/owned", async (AddOwnedMinifigRequest req, HttpContext http, ImportData importer) =>
         {
             var userId = http.UserId();
-            var ok = await importer.AddOwnedMinifig(req.MinifigId, userId, req.Count);
+            var ok = await importer.AddOwnedMinifig(req.MinifigId, userId, req.Count, req.ApplyParts);
             return ok ? Results.Ok() : Results.BadRequest("Could not add owned minifig.");
         });
 
+        // Set the user's loose count for a fig (adds/removes loose instances).
         group.MapPatch("/owned/{minifigId}", async (
-            string minifigId, UpdateStockRequest req, HttpContext http,
-            IDbContextFactory<InventoryContext> dbFactory, UpdateData updater) =>
+            string minifigId, UpdateStockRequest req, HttpContext http, ImportData importer) =>
         {
             var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-            var mo = await db.Set<MinifigOwned>()
-                .FirstOrDefaultAsync(m => m.MinifigId == minifigId && m.UserId == userId);
-            if (mo is null) return Results.NotFound();
-            mo.Stock = req.Stock;
-            updater.UpdateMinifigOwned(mo, userId);
+            await importer.SetLooseMinifigCount(userId, minifigId, req.Stock);
             return Results.Ok();
         });
     }
 
-    public record MinifigDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl)
+
+    // Whitelisted server-side sort. Default: most parts first (sorts by NumParts; the Parts column shows distinct part count).
+    private static IQueryable<Minifig> SortMinifigs(IQueryable<Minifig> q, string? sort, string? dir)
     {
-        public static MinifigDto From(Minifig m) => new(m.MinifigId, m.MinifigName, m.MinifigImgUrl, m.MinifigUrl);
+        var desc = dir != "asc";
+        return (sort ?? "parts") switch
+        {
+            "id"   => desc ? q.OrderByDescending(m => m.MinifigId) : q.OrderBy(m => m.MinifigId),
+            "name" => desc ? q.OrderByDescending(m => m.Name) : q.OrderBy(m => m.Name),
+            _      => desc ? q.OrderByDescending(m => m.NumParts).ThenBy(m => m.Name)
+                           : q.OrderBy(m => m.NumParts).ThenBy(m => m.Name),
+        };
     }
 
     public record MinifigCatalogViewDto(string MinifigId, string MinifigName, string? ImgUrl, string MinifigUrl, int PartCount);
+    public record MinifigSearchDto(string MinifigId, string Name, string? ImgUrl);
+    public record MinifigSearchPage(List<MinifigSearchDto> Items, int Total);
+    public record MinifigCatalogStatsDto(int TotalMinifigs, long TotalParts);
+    public record MinifigCatalogPage(List<MinifigCatalogViewDto> Items, int Total);
+    public record LooseCountDto(int Count);
     public record MinifigBrickDto(string BrickId, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Quantity);
     public record OwnedMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock);
     public record ImportMinifigRequest(string Query, int Page = 0);
     public record ResolveMinifigResponse(IEnumerable<MinifigCandidate> Results, bool Resolved, bool HasMore);
-    public record AddOwnedMinifigRequest(string MinifigId, int Count);
+    public record AddOwnedMinifigRequest(string MinifigId, int Count, bool ApplyParts = false);
     public record UpdateStockRequest(int Stock);
 }

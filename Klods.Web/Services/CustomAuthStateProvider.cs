@@ -16,10 +16,15 @@ public class CustomAuthStateProvider : AuthenticationStateProvider, IDisposable
         _authService.OnChange += NotifyChanged;
     }
 
-    public override Task<AuthenticationState> GetAuthenticationStateAsync()
+    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
+        // Don't report "anonymous" until the token has had a chance to rehydrate from browser
+        // storage, otherwise protected routes redirect to not-authorized during the restore window.
+        if (_authService.CurrentUser is null && !_authService.IsSessionRestored)
+            await _authService.WaitForSessionRestoreAsync();
+
         if (_authService.CurrentUser is null)
-            return Task.FromResult(Anonymous);
+            return Anonymous;
 
         var identity = new ClaimsIdentity(
         [
@@ -30,7 +35,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider, IDisposable
         nameType: "name",
         roleType: "role");
 
-        return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity)));
+        return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
     private void NotifyChanged() =>

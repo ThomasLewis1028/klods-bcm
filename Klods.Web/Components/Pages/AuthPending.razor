@@ -1,0 +1,21 @@
+@page "/auth/pending"
+@layout FullPageLayout
+@inject NavigationManager Nav
+@using Klods.Components.Layout
+@rendermode InteractiveServer
+
+<PageTitle>Account Pending</PageTitle>
+
+<div class="landing-page">
+    <MudStack AlignItems="AlignItems.Center" Spacing="4" Style="text-align: center; max-width: 480px;">
+        <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Style="font-size: 4rem; opacity: 0.25;"/>
+        <div>
+            <MudText Typo="Typo.h4" Style="font-weight: 800;">Account pending approval</MudText>
+            <MudText Typo="Typo.body1" Style="opacity: 0.55; margin-top: 0.5rem;">
+                Your account has been created but requires admin approval before you can sign in.
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Home"
+                   OnClick='() => Nav.NavigateTo("/")'>Go Home</MudButton>
+    </MudStack>
+</div>
