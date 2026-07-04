@@ -266,12 +266,14 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
     public async Task<bool> UpdateLooseBrickStockAsync(string setId, int setIndex, string partNum, string colorId, int stock)
         => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/loose-bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
-    public async Task<bool> UpdateBomMinifigStockAsync(string setId, int setIndex, string minifigId, int stock)
-        => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}", new { Stock = stock })).Ok;
-    public Task<BomBrickDto[]?> GetMinifigBricksInBomAsync(string setId, int setIndex, string minifigId)
-        => GetAsync<BomBrickDto[]>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/bricks");
-    public async Task<bool> UpdateBomMinifigBrickStockAsync(string setId, int setIndex, string minifigId, string partNum, string colorId, int stock)
-        => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/bricks/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
+    public Task<BomMinifigInstanceDto[]?> GetBomMinifigInstancesAsync(string setId, int setIndex, string minifigId)
+        => GetAsync<BomMinifigInstanceDto[]>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/instances");
+    public async Task<bool> AddBomMinifigInstanceAsync(string setId, int setIndex, string minifigId)
+        => (await PostAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/instances")).Ok;
+    public async Task<bool> RemoveBomMinifigInstanceAsync(string setId, int setIndex, string minifigId, int index)
+        => (await DeleteAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/instances/{index}")).Ok;
+    public async Task<bool> UpdateBomMinifigInstancePartStockAsync(string setId, int setIndex, string minifigId, int index, string partNum, string colorId, int stock)
+        => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/instances/{index}/parts/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
@@ -428,6 +430,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
+    public record BomMinifigInstanceDto(int Index, List<BomMinifigInstancePartDto> Parts);
+    public record BomMinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
     public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status);
     public record CompletenessDto(int Percent, string Status);
 
