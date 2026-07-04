@@ -53,6 +53,15 @@ public static class AuthProfileEndpoints
             return Results.Ok();
         });
 
+        group.MapPatch("/fontscale", async (ChangeFontScaleRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            await db.Users.Where(u => u.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.FontScale, req.Scale));
+            return Results.Ok();
+        });
+
         group.MapPatch("/picture", async (ChangePictureRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
@@ -95,15 +104,16 @@ public static class AuthProfileEndpoints
         });
     }
 
-    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword)
+    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword, double FontScale)
     {
         public static UserProfileDto From(User u) =>
-            new(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl, u.PrimaryColor, !string.IsNullOrEmpty(u.PasswordHash));
+            new(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl, u.PrimaryColor, !string.IsNullOrEmpty(u.PasswordHash), u.FontScale);
     }
 
     public record ChangeUsernameRequest(string NewUsername);
     public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
     public record ChangeThemeRequest(string? Color);
+    public record ChangeFontScaleRequest(double Scale);
     public record ChangePictureRequest(string? Url);
     public record LinkedLoginDto(string Provider);
 }

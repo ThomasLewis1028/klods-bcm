@@ -6,4 +6,5 @@ public record UserInfo(
     string Role,
     string? ProfilePictureUrl,
     string? PrimaryColor,
-    bool HasPassword);
+    bool HasPassword,
+    double FontScale = 1.0);

@@ -120,7 +120,7 @@
         if (profile is null) { _errorMessage = "Login succeeded but could not load profile."; return; }
 
         var user = new UserInfo(profile.UserId, profile.UserName, profile.Role,
-            profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword);
+            profile.ProfilePictureUrl, profile.PrimaryColor, profile.HasPassword, profile.FontScale);
         AuthService.SetSession(user, jwt);
         try { await LocalStorage.SetAsync("jwt", jwt); } catch { }
 

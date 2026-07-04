@@ -5,8 +5,10 @@ namespace Klods.Services;
 public class ThemeService
 {
     public const string DefaultPrimaryColor = "#DA291C";
+    public const double DefaultFontScale = 1.0;
 
     public bool IsDarkMode { get; private set; } = true;
+    public double FontScale { get; private set; } = DefaultFontScale;
 
     public MudTheme Theme { get; } = new MudTheme()
     {
@@ -53,6 +55,13 @@ public class ThemeService
         Theme.PaletteDark.Primary = hex;
         Theme.PaletteLight.Primary = hex;
         Theme.PaletteLight.AppbarBackground = hex;
+        OnChange?.Invoke();
+    }
+
+    public void SetFontScale(double scale)
+    {
+        // Clamp to the supported range; a stray 0 would make everything invisible.
+        FontScale = scale is >= 0.5 and <= 2.0 ? scale : DefaultFontScale;
         OnChange?.Invoke();
     }
 }

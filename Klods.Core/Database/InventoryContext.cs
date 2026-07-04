@@ -197,6 +197,10 @@ public class InventoryContext : DbContext
             .Property(e => e.Status)
             .HasDefaultValue("Active");
 
+        modelBuilder.Entity<User>()
+            .Property(e => e.FontScale)
+            .HasDefaultValue(1.0);
+
         // USER EXTERNAL LOGIN
         modelBuilder.Entity<UserExternalLogin>().HasKey(e => new { e.Provider, e.ProviderKey });
 
