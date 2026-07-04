@@ -212,7 +212,7 @@
     private string _dir = "desc";
     private int _page = 1;
     private int _pageSize = 25;
-    private string _view = "list";
+    private string _view = "grid";
 
     private int _total;
     private int _totalPages = 1;
@@ -268,7 +268,7 @@
         _dir = qs["dir"] ?? "desc";
         _page = int.TryParse(qs["page"], out var p) && p > 0 ? p : 1;
         _pageSize = int.TryParse(qs["size"], out var sz) && sz is 25 or 50 or 100 ? sz : 25;
-        _view = qs["view"] == "grid" ? "grid" : "list";
+        _view = qs["view"] == "list" ? "list" : "grid";
     }
 
     private async Task LoadAsync()
@@ -294,7 +294,7 @@
         if (_sort != "year") parts.Add($"sort={_sort}");
         if (_dir != "desc") parts.Add($"dir={_dir}");
         if (_pageSize != 25) parts.Add($"size={_pageSize}");
-        if (_view != "list") parts.Add($"view={_view}");
+        if (_view != "grid") parts.Add($"view={_view}");
         if (_page > 1) parts.Add($"page={_page}");
         Nav.NavigateTo("/sets" + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
     }
