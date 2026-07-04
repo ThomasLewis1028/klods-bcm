@@ -1,0 +1,159 @@
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject ImageStorageService ImageStorage
+@inject ISnackbar Snackbar
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <DialogContent>
+        <MudStack AlignItems="AlignItems.Center" Spacing="2" Style="min-width: 300px;">
+            <MudImage Src="@ImageStorage.ResolveUrl(Brick.PartImg)" Alt="@Brick.Name"
+                      Style="width: 200px; height: 200px; object-fit: contain;" Class="rounded-lg"/>
+            <MudText Typo="Typo.h6" Align="Align.Center">@Brick.Name</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@Brick.PartNum</MudText>
+            @if (Brick.HexColor != null)
+            {
+                <MudChip T="string" Style="@ColorHelper.ColorChipStyle(Brick.HexColor)">@Brick.ColorName</MudChip>
+            }
+
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                <MudText>My stock:</MudText>
+                <MudNumericField T="int" @bind-Value="_stock" Min="0" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" Style="max-width: 110px;"
+                                 Disabled="@(AuthService.CurrentUser == null)"/>
+                <MudButton OnClick="SaveStock" Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="@(AuthService.CurrentUser == null)">Save</MudButton>
+            </MudStack>
+
+            <MudDivider Class="my-2" FlexItem="true"/>
+
+            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width:100%;">
+                <MudText Typo="Typo.subtitle2">@(_mySetsOnly ? $"In {_total} of your set(s)" : $"Used in {_total} set(s)")</MudText>
+                @if (AuthService.CurrentUser != null)
+                {
+                    <MudSwitch T="bool" Value="_mySetsOnly" ValueChanged="OnToggleMine" Color="Color.Primary"
+                               Label="Only my sets" Size="Size.Small"/>
+                }
+            </MudStack>
+
+            <MudTextField T="string" Value="_query" ValueChanged="OnSearch" Immediate="true" DebounceInterval="350"
+                          Placeholder="Search sets by id or name…" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Clearable="true" Style="width:100%;"/>
+
+            @if (_loading)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+            }
+            else if (_items.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @(_mySetsOnly ? "None of your sets need this brick." : "No sets match your search.")
+                </MudText>
+            }
+            else
+            {
+                <MudList T="string" Dense="true" Style="width:100%;">
+                    @foreach (var s in _items)
+                    {
+                        <MudListItem T="string">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudImage class="rounded-2" Elevation="1" Src="@ImageStorage.ResolveUrl(s.SetImg)"
+                                          Height="36" Width="36" Style="object-fit:contain; flex-shrink:0;"/>
+                                <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@s.Name</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@s.SetId</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@s.CountText</MudText>
+                            </MudStack>
+                        </MudListItem>
+                    }
+                </MudList>
+                @if (_totalPages > 1)
+                {
+                    <MudStack Row Justify="Justify.Center" Class="mt-1" Style="width:100%;">
+                        <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_page"
+                                       SelectedChanged="OnPageChanged" Size="Size.Small"/>
+                    </MudStack>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ApiClient.BrickCatalogViewDto Brick { get; set; } = null!;
+
+    /// <summary>When true (opened from the user's own bricks), default to showing only their sets.</summary>
+    [Parameter] public bool OwnedContext { get; set; }
+
+    private const int SetPageSize = 6;
+
+    private int _stock;
+    private string _query = "";
+    private int _page = 1;
+    private int _total;
+    private int _totalPages = 1;
+    private bool _mySetsOnly;
+    private List<SetRow> _items = [];
+    private bool _loading = true;
+
+    private record SetRow(string SetId, string Name, string? SetImg, string CountText);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _stock = (await Api.GetMyBrickStockAsync(Brick.PartNum, Brick.ColorId ?? ""))?.Stock ?? 0;
+        _mySetsOnly = OwnedContext && AuthService.CurrentUser != null;
+        await LoadSetsAsync();
+    }
+
+    private async Task LoadSetsAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        if (_mySetsOnly)
+        {
+            var mine = await Api.GetUserSetsForBrickAsync(Brick.PartNum, Brick.ColorId ?? "") ?? [];
+            var q = _query.Trim();
+            if (q.Length > 0)
+                mine = mine.Where(s => s.SetId.Contains(q, StringComparison.OrdinalIgnoreCase)
+                                    || s.SetName.Contains(q, StringComparison.OrdinalIgnoreCase)).ToArray();
+            _total = mine.Length;
+            _page = 1;
+            _totalPages = 1;
+            _items = mine.OrderBy(s => s.SetId)
+                .Select(s => new SetRow(s.SetId, s.SetName, s.SetImg, $"×{s.BrickCount * s.CopiesOwned}"))
+                .ToList();
+        }
+        else
+        {
+            var page = await Api.GetSetsForBrickPageAsync(
+                Brick.PartNum, Brick.ColorId ?? "", _query.Trim(), _page - 1, SetPageSize);
+            _total = page?.Total ?? 0;
+            _totalPages = Math.Max(1, (int)Math.Ceiling(_total / (double)SetPageSize));
+            _items = (page?.Items ?? []).Select(s => new SetRow(s.SetId, s.Name, s.SetImg, $"×{s.Count}")).ToList();
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private Task OnToggleMine(bool value) { _mySetsOnly = value; _page = 1; return LoadSetsAsync(); }
+    private Task OnSearch(string? value) { _query = value ?? ""; _page = 1; return LoadSetsAsync(); }
+    private Task OnPageChanged(int page) { _page = page; return LoadSetsAsync(); }
+
+    private async Task SaveStock()
+    {
+        if (AuthService.CurrentUser == null) return;
+        if (await Api.UpsertBrickStockAsync(Brick.PartNum, Brick.ColorId ?? "", _stock))
+            Snackbar.Add("Stock updated.", Severity.Success);
+        else
+            Snackbar.Add("Failed to update stock.", Severity.Error);
+    }
+}

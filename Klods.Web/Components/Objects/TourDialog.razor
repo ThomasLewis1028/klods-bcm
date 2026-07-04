@@ -1,0 +1,108 @@
+@inject ThemeService ThemeService
+@using Color = MudBlazor.Color
+
+<MudDialog Class="tour-dialog">
+    <DialogContent>
+        <div class="tour">
+            @{ var step = _steps[_index]; }
+
+            <div class="tour-media">
+                @if (step.IsImage)
+                {
+                    @* Theme-aware still. Captured by the Klods.TourCapture harness into wwwroot/tour/. *@
+                    <img src="@ImageSrc(step)" alt="@step.Title"
+                         style="width:100%; height:100%; object-fit:cover;"/>
+                }
+                else if (step.HasClip)
+                {
+                    @* Theme-aware demo clip. Captured by the Klods.TourCapture harness into wwwroot/tour/. *@
+                    <video src="@MediaSrc(step)" autoplay loop muted playsinline
+                           style="width:100%; height:100%; object-fit:cover;"></video>
+                }
+                else
+                {
+                    <div class="tour-media-placeholder">
+                        <MudIcon Icon="@step.Icon" Style="font-size: 3.5rem; opacity: .35;"/>
+                        <MudText Typo="Typo.caption" Style="opacity:.5;">Demo clip coming soon</MudText>
+                    </div>
+                }
+            </div>
+
+            <div class="tour-body">
+                <MudText Typo="Typo.overline" Color="Color.Primary" Style="font-weight:700; letter-spacing:.1em;">
+                    Step @(_index + 1) of @_steps.Count
+                </MudText>
+                <MudText Typo="Typo.h5" Style="font-weight:800; margin:4px 0 8px;">@step.Title</MudText>
+                <MudText Typo="Typo.body1" Style="opacity:.75;">@step.Body</MudText>
+            </div>
+
+            <div class="tour-dots">
+                @for (var i = 0; i < _steps.Count; i++)
+                {
+                    var idx = i;
+                    <span class="tour-dot @(idx == _index ? "active" : "")" @onclick="() => _index = idx"></span>
+                }
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Text">Skip</MudButton>
+        <MudSpacer/>
+        @if (_index > 0)
+        {
+            <MudButton OnClick="Back" Variant="Variant.Text">Back</MudButton>
+        }
+        @if (_index < _steps.Count - 1)
+        {
+            <MudButton OnClick="Next" Variant="Variant.Filled" Color="Color.Primary"
+                       EndIcon="@Icons.Material.Filled.ArrowForward">Next</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="Close" Variant="Variant.Filled" Color="Color.Primary"
+                       EndIcon="@Icons.Material.Filled.Check">Get started</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private int _index;
+
+    private string Theme => ThemeService.IsDarkMode ? "dark" : "light";
+    private string MediaSrc(TourStep step) => $"/tour/{step.Media}.{Theme}.webm";
+    private string ImageSrc(TourStep step) => $"/tour/{step.Media}.{Theme}.png";
+
+    private void Next() { if (_index < _steps.Count - 1) _index++; }
+    private void Back() { if (_index > 0) _index--; }
+    private void Close() => MudDialog.Close();
+
+    private record TourStep(string Title, string Body, string Media, string Icon, bool HasClip = false, bool IsImage = false);
+
+    // Media keys map to wwwroot/tour/{Media}.{light|dark}.webm once the capture harness runs.
+    private readonly List<TourStep> _steps =
+    [
+        new("Welcome to Klods",
+            "Klods keeps track of your LEGO collection — the sets you own, how complete each one is, and the pieces you still need.",
+            "welcome", Icons.Material.Filled.Celebration, IsImage: true),
+        new("Global vs. your collection",
+            "The Global Catalog holds every set, brick, and minifig. The \"My\" pages are your personal collection — the ones you actually own.",
+            "global-vs-personal", Icons.Material.Filled.Public, HasClip: true),
+        new("Adding a set",
+            "Open any set and choose \"Add to my collection.\" Tell it whether you already have all the pieces, or start empty and fill it in as you collect.",
+            "add-set", Icons.Material.Filled.AddCircle, HasClip: true),
+        new("Completeness at a glance",
+            "Every owned copy shows a colored bar: green means complete, yellow means you have the missing parts loose, and red means you're still short.",
+            "completeness", Icons.Material.Filled.DonutLarge, IsImage: true),
+        new("Bill of Materials",
+            "Open a set's Parts to tick off what you have, and transfer pieces between your loose stock and the set as you build it.",
+            "bom", Icons.Material.Filled.ListAlt, HasClip: true),
+        new("Minifigs, copy by copy",
+            "Each minifig is tracked per copy. Mark which parts you have and assign figures to the sets they belong to.",
+            "minifigs", Icons.Material.Filled.Person, HasClip: true),
+        new("Make it yours",
+            "In Profile you can switch dark mode, pick a theme color, and change the text size to whatever's most comfortable.",
+            "personalize", Icons.Material.Filled.Tune, HasClip: true),
+    ];
+}

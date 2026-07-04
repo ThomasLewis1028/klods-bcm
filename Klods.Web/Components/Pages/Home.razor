@@ -26,7 +26,7 @@
         <MudItem xs="12">
             <div class="landing-section-label">
                 <MudIcon Icon="@Icons.Material.Filled.Public" Color="Color.Primary" Size="Size.Small"/>
-                <MudText Typo="Typo.overline" Style="font-weight: 700; letter-spacing: 0.12em;">Catalog</MudText>
+                <MudText Typo="Typo.overline" Style="font-weight: 700; letter-spacing: 0.12em;">Global Catalog</MudText>
             </div>
         </MudItem>
 
@@ -101,7 +101,7 @@
         <MudItem xs="12" style="position: relative;">
             <MudGrid Justify="Justify.Center"
                      Style="@(_locked ? "filter: blur(5px); pointer-events: none; user-select: none;" : "")">
-                <MudItem xs="12" sm="6" lg="3">
+                <MudItem xs="12" sm="6" lg="4">
                     <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/sets")'>
                         <div class="card-image-wrapper" style="position: relative;">
                             <MudCardMedia Image="@_mySetImg" Height="180"/>
@@ -121,7 +121,7 @@
                     </MudCard>
                 </MudItem>
 
-                <MudItem xs="12" sm="6" lg="3">
+                <MudItem xs="12" sm="6" lg="4">
                     <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/bricks")'>
                         <div class="card-image-wrapper" style="position: relative;">
                             <MudCardMedia Image="@_myBrickImg" Height="180"/>
@@ -141,7 +141,7 @@
                     </MudCard>
                 </MudItem>
 
-                <MudItem xs="12" sm="6" lg="3">
+                <MudItem xs="12" sm="6" lg="4">
                     <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/my/minifigs")'>
                         <div class="card-image-wrapper" style="position: relative;">
                             <MudCardMedia Image="@_myMinifigImg" Height="180"/>
@@ -157,26 +157,6 @@
                                 <MudText Typo="Typo.h6" Style="font-weight: 700;">My Minifigs</MudText>
                             </MudStack>
                             <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Your minifig collection</MudText>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-
-                <MudItem xs="12" sm="6" lg="3">
-                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/bom")'>
-                        <div class="card-image-wrapper" style="position: relative;">
-                            <MudCardMedia Image="@_myBomImg" Height="180"/>
-                            @if (_myBomName != null)
-                            {
-                                <div class="card-info-badge">?</div>
-                                <div class="card-name-label">@_myBomName</div>
-                            }
-                        </div>
-                        <MudCardContent>
-                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                <MudIcon Icon="@Icons.Material.Filled.FormatListBulleted" Color="Color.Primary"/>
-                                <MudText Typo="Typo.h6" Style="font-weight: 700;">My Bill of Materials</MudText>
-                            </MudStack>
-                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Missing pieces across your sets</MudText>
                         </MudCardContent>
                     </MudCard>
                 </MudItem>
@@ -196,11 +176,43 @@
             }
         </MudItem>
 
+        @* ── Quick links (signed-in only) ── *@
+        @if (AuthService.CurrentUser != null)
+        {
+            <MudItem xs="12" sm="6" lg="4">
+                <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/users")'>
+                    <MudCardContent>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@Icons.Material.Filled.Group" Color="Color.Primary"/>
+                            <MudText Typo="Typo.h6" Style="font-weight: 700;">Users</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">Browse other collectors</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @if (_isAdmin)
+            {
+                <MudItem xs="12" sm="6" lg="4">
+                    <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/admin")'>
+                        <MudCardContent>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Primary"/>
+                                <MudText Typo="Typo.h6" Style="font-weight: 700;">Admin</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Style="opacity: 0.6; margin-top: 4px;">System administration</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        }
+
     </MudGrid>
 </div>
 
 @code {
     private bool _locked => AuthService.CurrentUser == null;
+    private bool _isAdmin => AuthService.CurrentUser?.Role == "Admin";
 
     // Catalog
     private string? _catalogSetImg;
@@ -217,15 +229,15 @@
     private string? _myBrickName;
     private string? _myMinifigImg;
     private string? _myMinifigName;
-    private string? _myBomImg;
-    private string? _myBomName;
 
     protected override void OnInitialized()
     {
         AuthService.OnChange += OnAuthChanged;
     }
 
-    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+    // Re-pull the preview when auth changes (login/logout, or session restore on load) so the
+    // "My" images switch between the user's own collection and the global fallback.
+    private void OnAuthChanged() => _ = InvokeAsync(LoadPreviewAsync);
 
     public void Dispose() => AuthService.OnChange -= OnAuthChanged;
 
@@ -238,26 +250,27 @@
             FullWidth = true
         });
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => LoadPreviewAsync();
+
+    private async Task LoadPreviewAsync()
     {
         var preview = await Api.GetHomePreviewAsync();
         if (preview == null) return;
 
-        if (preview.Sets.Count >= 1)
-            (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(preview.Sets[0].ImgUrl), preview.Sets[0].Name);
-        if (preview.Sets.Count >= 2)
-            (_mySetImg, _mySetName) = (ImageStorage.ResolveUrl(preview.Sets[1].ImgUrl), preview.Sets[1].Name);
-        if (preview.Sets.Count >= 3)
-            (_myBomImg, _myBomName) = (ImageStorage.ResolveUrl(preview.Sets[2].ImgUrl), preview.Sets[2].Name);
+        if (preview.CatalogSet != null)
+            (_catalogSetImg, _catalogSetName) = (ImageStorage.ResolveUrl(preview.CatalogSet.ImgUrl), preview.CatalogSet.Name);
+        if (preview.CatalogBrick != null)
+            (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(preview.CatalogBrick.ImgUrl), preview.CatalogBrick.Name);
+        if (preview.CatalogMinifig != null)
+            (_catalogMinifigImg, _catalogMinifigName) = (ImageStorage.ResolveUrl(preview.CatalogMinifig.ImgUrl), preview.CatalogMinifig.Name);
 
-        if (preview.Bricks.Count >= 1)
-            (_catalogBrickImg, _catalogBrickName) = (ImageStorage.ResolveUrl(preview.Bricks[0].ImgUrl), preview.Bricks[0].Name);
-        if (preview.Bricks.Count >= 2)
-            (_myBrickImg, _myBrickName) = (ImageStorage.ResolveUrl(preview.Bricks[1].ImgUrl), preview.Bricks[1].Name);
+        if (preview.MySet != null)
+            (_mySetImg, _mySetName) = (ImageStorage.ResolveUrl(preview.MySet.ImgUrl), preview.MySet.Name);
+        if (preview.MyBrick != null)
+            (_myBrickImg, _myBrickName) = (ImageStorage.ResolveUrl(preview.MyBrick.ImgUrl), preview.MyBrick.Name);
+        if (preview.MyMinifig != null)
+            (_myMinifigImg, _myMinifigName) = (ImageStorage.ResolveUrl(preview.MyMinifig.ImgUrl), preview.MyMinifig.Name);
 
-        if (preview.Minifigs.Count >= 1)
-            (_catalogMinifigImg, _catalogMinifigName) = (ImageStorage.ResolveUrl(preview.Minifigs[0].ImgUrl), preview.Minifigs[0].Name);
-        if (preview.Minifigs.Count >= 2)
-            (_myMinifigImg, _myMinifigName) = (ImageStorage.ResolveUrl(preview.Minifigs[1].ImgUrl), preview.Minifigs[1].Name);
+        StateHasChanged();
     }
 }

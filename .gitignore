@@ -3,5 +3,6 @@ obj
 bin
 packages
 .idea
+*.user
 .env
 .DS_Store

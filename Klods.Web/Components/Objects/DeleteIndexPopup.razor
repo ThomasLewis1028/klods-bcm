@@ -1,30 +1,52 @@
 @inject ApiClient Api
+@inject ImageStorageService ImageStorage
 @using Klods.Services
 @using Color = MudBlazor.Color
+
 <MudDialog>
     <TitleContent>
-        Deleting Set @_id - @_setIndex - @_name
+        <MudText Typo="Typo.h6">Delete this copy?</MudText>
     </TitleContent>
     <DialogContent>
-        <MudGrid>
-            <MudItem xs="12">
-                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
-                <MudText>Would you like to return the stock to inventory?</MudText>
+        <MudStack Spacing="4" Style="min-width: 360px;">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                <MudImage Src="@ImageStorage.ResolveUrl(_imgUrl)" Height="52" Width="52"
+                          Style="object-fit:contain; flex-shrink:0;" Class="rounded"/>
+                <MudStack Spacing="0" Style="min-width:0;">
+                    <MudText Typo="Typo.body1" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@_name</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_id · Copy #@_setIndex</MudText>
                 </MudStack>
-            </MudItem>
-            <MudItem xs="12">
-                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
-                    <MudText>No</MudText>
-                    <MudSwitch @bind-Value="MoveStock" Color="Color.Success" UncheckedColor="Color.Error"/>
-                    <MudText>Yes</MudText>
-                </MudStack>
-            </MudItem>
-        </MudGrid>
+            </MudStack>
+
+            <div>
+                <MudText Typo="Typo.body2" Class="mb-2">What should happen to this copy's pieces?</MudText>
+                <MudRadioGroup T="bool" @bind-Value="_returnStock">
+                    <MudRadio T="bool" Value="@true" Color="Color.Primary" Dense="true" Class="mb-2">
+                        <div>
+                            <MudText Typo="Typo.body2">Keep the pieces (return them to my loose stock)</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                The parts assigned to this copy go back to your loose inventory to use on other sets.
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                    <MudRadio T="bool" Value="@false" Color="Color.Error" Dense="true">
+                        <div>
+                            <MudText Typo="Typo.body2">Discard the pieces too</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Remove the copy and its parts — you no longer own any of them.
+                            </MudText>
+                        </div>
+                    </MudRadio>
+                </MudRadioGroup>
+            </div>
+        </MudStack>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Variant="Variant.Filled">Close</MudButton>
-        <MudSpacer></MudSpacer>
-        <MudButton OnClick="() => DeleteSet(_id, _setIndex)" Color="Color.Error" Variant="Variant.Filled">DELETE</MudButton>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudSpacer/>
+        <MudButton OnClick="Delete" Color="Color.Error" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Delete">
+            Delete copy
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -32,20 +54,17 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public string _id { get; set; } = "";
-
     [Parameter] public string _name { get; set; } = "";
-
     [Parameter] public string? _imgUrl { get; set; }
-
     [Parameter] public int _setIndex { get; set; }
 
-    public bool MoveStock { get; set; } = false;
+    private bool _returnStock = true;
 
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task DeleteSet(string id, int setIndex)
+    private async Task Delete()
     {
-        await Api.DeleteOwnedSetAsync(id, setIndex);
-        MudDialog.Close();
+        await Api.DeleteOwnedSetAsync(_id, _setIndex, _returnStock);
+        MudDialog.Close(DialogResult.Ok(true));
     }
 }

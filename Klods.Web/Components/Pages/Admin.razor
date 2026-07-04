@@ -3,6 +3,7 @@
 @inject AuthService AuthService
 @inject ImageStorageService ImageStorage
 @using Klods.Services
+@using Microsoft.AspNetCore.Components.Forms
 @using Color = MudBlazor.Color
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
@@ -48,6 +49,14 @@
                 </TemplateColumn>
                 <PropertyColumn Property="x => x.User.UserId" Title="ID"/>
                 <PropertyColumn Property="x => x.User.UserName" Title="Username"/>
+                <TemplateColumn Title="Status" SortBy="x => x.User.Status">
+                    <CellTemplate>
+                        <MudChip Color="@(context.Item.User.Status == "Active" ? Color.Success : Color.Warning)"
+                                 Size="Size.Small">
+                            @context.Item.User.Status
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
                 <TemplateColumn Title="Role" SortBy="x => x.User.Role">
                     <CellTemplate>
                         <MudChip Color="@(context.Item.User.Role == "Admin" ? Color.Warning : Color.Default)"
@@ -58,7 +67,14 @@
                 </TemplateColumn>
                 <TemplateColumn Title="Actions" Sortable="false">
                     <CellTemplate>
-                        @if (context.Item.User.UserId != AuthService.CurrentUser?.UserId)
+                        @if (context.Item.User.Status == "Pending")
+                        {
+                            <MudButton OnClick="() => ApproveUser(context.Item.User)"
+                                       Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                Approve
+                            </MudButton>
+                        }
+                        else if (context.Item.User.UserId != AuthService.CurrentUser?.UserId)
                         {
                             @if (context.Item.User.Role == "Admin")
                             {
@@ -89,35 +105,210 @@
     </MudPaper>
 
     <MudPaper Elevation="2" Class="pa-4">
-        <MudText Typo="Typo.h6" Class="mb-2">Image Migration</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">Registration</MudText>
         <MudText Typo="Typo.body2" Class="mb-3">
-            Migrate all images from Rebrickable URLs to local MinIO storage.
-            Required for full offline operation after import.
+            When auto-approve is off, new accounts require manual admin approval before the user can sign in.
+        </MudText>
+        <MudSwitch T="bool" Value="_registrationAutoApprove" ValueChanged="ToggleAutoApprove" Color="Color.Primary"
+                   Label="@(_registrationAutoApprove ? "Auto-approve new accounts" : "Manual approval required")"/>
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">RSS Auto-Update</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            When on, the server periodically checks Rebrickable's “newest sets” feed and imports any new
+            sets into the catalog (rate-limited, a few per check).
         </MudText>
 
-        @if (_backfillRunning)
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+            <MudSwitch T="bool" Value="_rssEnabled" ValueChanged="ToggleRss" Color="Color.Primary"
+                       Label="@(_rssEnabled ? "On" : "Off")"/>
+            <MudButton OnClick="CheckNow" Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh" Disabled="_rssChecking">
+                @(_rssChecking ? "Checking..." : "Check now")
+            </MudButton>
+            @if (_rssChecking)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+            }
+        </MudStack>
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="mt-3" Style="flex-wrap: wrap;">
+            <MudTextField T="string" Value="_rssCron" ValueChanged="OnCronChanged" Immediate="true" DebounceInterval="500"
+                          Label="Schedule (cron)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 220px;"
+                          HelperText="0 * * * * = hourly · 0 3 * * * = daily 3am"/>
+            <MudAutocomplete T="string" Value="_rssTimezone" ValueChanged="OnTzChanged"
+                             Label="Timezone" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             SearchFunc="SearchTimezones" MaxItems="50" Clearable="false" Style="max-width: 280px;"/>
+            <MudNumericField T="int" @bind-Value="_rssMax" Label="Max imports / run" Min="1" Max="500"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 160px;"/>
+            <MudButton OnClick="SaveRss" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save" Disabled="!_cronValid">
+                Save schedule
+            </MudButton>
+        </MudStack>
+
+        @if (!_cronValid)
         {
-            <MudStack Spacing="2">
-                <MudProgressLinear Indeterminate="true"
-                                   Rounded="true" Size="Size.Medium" Color="Color.Primary"/>
-                <MudText Typo="Typo.body2">Migrating images...</MudText>
-                <MudButton OnClick="CancelBackfill" Color="Color.Error" Variant="Variant.Outlined" Size="Size.Small">
-                    Cancel
-                </MudButton>
-            </MudStack>
+            <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">Invalid cron expression.</MudText>
+        }
+        else if (_cronNext.Count > 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                <strong>Next runs (@_rssTimezone):</strong>&nbsp; @string.Join("  ·  ", _cronNext)
+            </MudText>
+        }
+
+        @if (_rssSaveError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_rssSaveError</MudAlert>
+        }
+        @if (_rssResult is not null)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">@_rssResult</MudAlert>
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Recent catalog updates</MudText>
+        @if (_catalogImports.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">No updates yet.</MudText>
         }
         else
         {
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
-                <MudButton OnClick="StartBackfill" Disabled="_pendingCount == 0"
-                           Color="Color.Primary" Variant="Variant.Filled">
-                    @(_pendingCount == 0 ? "All images stored locally" : $"Migrate {_pendingCount} images")
-                </MudButton>
-                @if (_pendingCount == 0)
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
+                <thead>
+                    <tr><th>When</th><th>Source</th><th>Status</th><th>Details</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var ci in _catalogImports)
                 {
-                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                    <tr>
+                        <td style="white-space: nowrap;">@ci.ImportedAt.ToLocalTime().ToString("g")</td>
+                        <td>@(ci.Source == "RssPoll" ? "RSS" : "Bulk")</td>
+                        <td>@ci.Status</td>
+                        <td>@ci.Notes</td>
+                    </tr>
                 }
-            </MudStack>
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Catalog Bulk Import</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Upload the Rebrickable bulk files (.csv, .csv.gz, or a .zip of them). All required tables must be
+            present — the load is all-or-nothing, so a missing file rejects the whole batch.
+        </MudText>
+
+        @if (_catalogImports.FirstOrDefault(c => c.Status == "Success") is { } last)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                Last refreshed @last.ImportedAt.ToLocalTime().ToString("g")
+                @(last.SnapshotDate is { } sd ? $"(snapshot {sd.ToLocalTime():d})" : "")
+            </MudAlert>
+        }
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+            <MudFileUpload T="IReadOnlyList<IBrowserFile>" @bind-Files="_bulkFiles"
+                           Accept=".csv,.gz,.zip" MaximumFileCount="20">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.UploadFile">
+                        Select files
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+
+            <MudText Typo="Typo.body2">@(_bulkFiles?.Count ?? 0) file(s) selected</MudText>
+
+            <MudButton OnClick="RunBulkImport" Color="Color.Primary" Variant="Variant.Filled"
+                       Disabled="@(_bulkRunning || _bulkFiles is null || _bulkFiles.Count == 0)">
+                @(_bulkRunning ? "Importing..." : "Run import")
+            </MudButton>
+            @if (_bulkRunning)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+            }
+        </MudStack>
+
+        @if (_bulkResult is not null)
+        {
+            <MudAlert Severity="@(_bulkSucceeded ? Severity.Success : Severity.Error)" Dense="true" Class="mt-3">
+                @_bulkResult
+            </MudAlert>
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Catalog Themes</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Hidden themes are removed from the set catalog browse, search, and theme filter — handy for hiding
+            non-building “gear” (bags, keychains, posters, books…). Check a parent to hide its whole branch, or
+            expand it and hide individual subthemes. Sets stay in the database, so un-hiding brings them back.
+        </MudText>
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="mb-2" Style="flex-wrap: wrap;">
+            <MudTextField @bind-Value="_themeSearch" Placeholder="Filter themes" Immediate="true"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Margin="Margin.Dense" Style="max-width: 260px;"/>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@_hiddenThemeIds.Count hidden</MudText>
+            <MudSpacer/>
+            <MudButton OnClick="SaveThemeVisibility" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save" Disabled="_themesSaving">
+                @(_themesSaving ? "Saving..." : "Save")
+            </MudButton>
+        </MudStack>
+
+        @if (_themesSaved)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">Theme visibility saved.</MudAlert>
+        }
+
+        @if (_themes.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                No themes yet — run a catalog bulk import to populate the theme tree.
+            </MudText>
+        }
+        else
+        {
+            <div style="max-height: 360px; overflow-y: auto;">
+                @if (!string.IsNullOrWhiteSpace(_themeSearch))
+                {
+                    @foreach (var t in _themes
+                        .Where(x => x.Name.Contains(_themeSearch, StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(x => x.Name))
+                    {
+                        <div style="display: flex; align-items: center; padding-left: 30px;">
+                            <MudCheckBox T="bool" Value="_hiddenThemeIds.Contains(t.Id)" Dense="true" Color="Color.Primary"
+                                         ValueChanged="(bool v) => ToggleOne(t.Id, v)"/>
+                            <MudText Typo="Typo.body2">@t.Name <span style="opacity: 0.55;">(@t.SetCount)</span></MudText>
+                        </div>
+                    }
+                }
+                else
+                {
+                    @foreach (var (node, depth) in VisibleRows())
+                    {
+                        <div style="display: flex; align-items: center; padding-left: @(depth * 20)px;">
+                            @if (node.Children.Count > 0)
+                            {
+                                <MudIconButton Size="Size.Small" Style="min-width: 30px;"
+                                               Icon="@(_expanded.Contains(node.Id) ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
+                                               OnClick="() => ToggleExpand(node.Id)"/>
+                            }
+                            else
+                            {
+                                <div style="width: 30px;"></div>
+                            }
+                            <MudCheckBox T="bool?" Value="NodeState(node)" TriState="true" Dense="true" Color="Color.Primary"
+                                         ValueChanged="(bool? _) => ToggleNode(node)"/>
+                            <MudText Typo="Typo.body2">@node.Name <span style="opacity: 0.55;">(@SubtreeCount(node))</span></MudText>
+                        </div>
+                    }
+                }
+            </div>
         }
     </MudPaper>
 
@@ -127,20 +318,252 @@
     private List<UserRow> _rows = [];
     private string _search = string.Empty;
     private bool _isLoading = true;
+    private bool _registrationAutoApprove = true;
 
-    private int _pendingCount;
-    private bool _backfillRunning;
-    private CancellationTokenSource? _cts;
+    private IReadOnlyList<IBrowserFile>? _bulkFiles;
+    private bool _bulkRunning;
+    private bool _bulkSucceeded;
+    private string? _bulkResult;
+    private List<ApiClient.CatalogImportDto> _catalogImports = [];
+
+    private bool _rssEnabled;
+    private string _rssCron = "0 * * * *";
+    private string _rssTimezone = "UTC";
+    private int _rssMax = 25;
+    private bool _rssChecking;
+    private string? _rssResult;
+    private string? _rssSaveError;
+
+    private List<ApiClient.TimezoneDto> _timezones = [];
+    private bool _cronValid = true;
+    private List<string> _cronNext = [];
+
+    private List<ApiClient.ThemeVisibilityDto> _themes = [];
+    private HashSet<int> _hiddenThemeIds = [];
+    private string _themeSearch = string.Empty;
+    private bool _themesSaving;
+    private bool _themesSaved;
 
     protected override async Task OnInitializedAsync()
     {
         var users = await Api.GetAdminUsersAsync();
         _rows = users?.Select(u => new UserRow { User = u }).ToList() ?? [];
 
-        var pending = await Api.GetPendingCountAsync();
-        _pendingCount = pending?.Count ?? 0;
+        _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+        _timezones = (await Api.GetTimezonesAsync())?.ToList() ?? [];
+
+        var rss = await Api.GetRssSettingsAsync();
+        if (rss != null)
+        {
+            _rssEnabled = rss.Enabled;
+            _rssCron = rss.Cron;
+            _rssTimezone = rss.Timezone;
+            _rssMax = rss.MaxImports;
+        }
+        await RefreshPreview();
+
+        var regSettings = await Api.GetRegistrationSettingsAsync();
+        if (regSettings != null)
+            _registrationAutoApprove = regSettings.AutoApprove;
+
+        _themes = (await Api.GetThemeVisibilityAsync())?.ToList() ?? [];
+        _hiddenThemeIds = _themes.Where(t => t.Hidden).Select(t => t.Id).ToHashSet();
+        BuildThemeTree();
 
         _isLoading = false;
+    }
+
+    private sealed class ThemeNode
+    {
+        public int Id;
+        public string Name = "";
+        public int SetCount;
+        public List<ThemeNode> Children = [];
+    }
+
+    private List<ThemeNode> _themeRoots = [];
+    private readonly HashSet<int> _expanded = [];
+
+    private void BuildThemeTree()
+    {
+        var nodes = _themes.ToDictionary(
+            t => t.Id, t => new ThemeNode { Id = t.Id, Name = t.Name, SetCount = t.SetCount });
+        _themeRoots = [];
+        foreach (var t in _themes)
+        {
+            if (t.ParentId is int pid && nodes.TryGetValue(pid, out var parent))
+                parent.Children.Add(nodes[t.Id]);
+            else
+                _themeRoots.Add(nodes[t.Id]);
+        }
+    }
+
+    // Flattens the tree into display order, honouring expand state; indent = depth.
+    private IEnumerable<(ThemeNode Node, int Depth)> VisibleRows()
+    {
+        var rows = new List<(ThemeNode, int)>();
+        void Walk(IEnumerable<ThemeNode> nodes, int depth)
+        {
+            foreach (var n in nodes.OrderBy(x => x.Name))
+            {
+                rows.Add((n, depth));
+                if (n.Children.Count > 0 && _expanded.Contains(n.Id))
+                    Walk(n.Children, depth + 1);
+            }
+        }
+        Walk(_themeRoots, 0);
+        return rows;
+    }
+
+    // Tri-state: all descendants hidden → true, none → false, mixed → null (dash).
+    private bool? NodeState(ThemeNode n)
+    {
+        if (n.Children.Count == 0) return _hiddenThemeIds.Contains(n.Id);
+        bool allHidden = true, noneHidden = true;
+        foreach (var c in n.Children)
+        {
+            var s = NodeState(c);
+            if (s != true) allHidden = false;
+            if (s != false) noneHidden = false;
+        }
+        return allHidden ? true : noneHidden ? false : null;
+    }
+
+    private static IEnumerable<int> Subtree(ThemeNode n)
+    {
+        yield return n.Id;
+        foreach (var c in n.Children)
+            foreach (var id in Subtree(c))
+                yield return id;
+    }
+
+    private int SubtreeCount(ThemeNode n) => n.SetCount + n.Children.Sum(SubtreeCount);
+
+    // Checking a parent writes every theme in its subtree, so the cascade is stored explicitly.
+    private void ToggleNode(ThemeNode n)
+    {
+        var hide = NodeState(n) != true;
+        foreach (var id in Subtree(n))
+        {
+            if (hide) _hiddenThemeIds.Add(id); else _hiddenThemeIds.Remove(id);
+        }
+        _themesSaved = false;
+    }
+
+    private void ToggleOne(int id, bool hidden)
+    {
+        if (hidden) _hiddenThemeIds.Add(id); else _hiddenThemeIds.Remove(id);
+        _themesSaved = false;
+    }
+
+    private void ToggleExpand(int id)
+    {
+        if (!_expanded.Remove(id)) _expanded.Add(id);
+    }
+
+    private async Task SaveThemeVisibility()
+    {
+        _themesSaving = true;
+        _themesSaved = false;
+        StateHasChanged();
+        _themesSaved = await Api.SaveThemeVisibilityAsync(_hiddenThemeIds);
+        _themesSaving = false;
+        StateHasChanged();
+    }
+
+    private Task<IEnumerable<string>> SearchTimezones(string value, CancellationToken token)
+    {
+        var matches = _timezones
+            .Where(t => string.IsNullOrEmpty(value)
+                        || t.Id.Contains(value, StringComparison.OrdinalIgnoreCase)
+                        || t.DisplayName.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Select(t => t.Id)
+            .Take(50);
+        return Task.FromResult<IEnumerable<string>>(matches);
+    }
+
+    private async Task OnCronChanged(string value)
+    {
+        _rssCron = value ?? "";
+        await RefreshPreview();
+    }
+
+    private async Task OnTzChanged(string value)
+    {
+        _rssTimezone = string.IsNullOrWhiteSpace(value) ? "UTC" : value;
+        await RefreshPreview();
+    }
+
+    private async Task RefreshPreview()
+    {
+        var preview = await Api.PreviewCronAsync(_rssCron, _rssTimezone);
+        _cronValid = preview?.Valid ?? false;
+        _cronNext = preview?.Next ?? [];
+        StateHasChanged();
+    }
+
+    private async Task ToggleRss(bool value)
+    {
+        _rssEnabled = value;
+        await SaveRss();
+    }
+
+    private async Task SaveRss()
+    {
+        var (ok, error) = await Api.SaveRssSettingsAsync(_rssEnabled, _rssCron, _rssTimezone, _rssMax);
+        _rssSaveError = ok ? null : error;
+        StateHasChanged();
+    }
+
+    private async Task CheckNow()
+    {
+        _rssChecking = true;
+        _rssResult = null;
+        StateHasChanged();
+
+        var result = await Api.RssPollNowAsync();
+        _rssResult = result is null ? "Check failed." : $"{result.Status}: {result.Notes}";
+        _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+
+        _rssChecking = false;
+        StateHasChanged();
+    }
+
+    private async Task RunBulkImport()
+    {
+        if (_bulkFiles is null || _bulkFiles.Count == 0) return;
+
+        _bulkRunning = true;
+        _bulkResult = null;
+        StateHasChanged();
+
+        // Snapshot date = newest selected file's last-modified (when the dump was pulled).
+        DateTime? snapshot = _bulkFiles.Max(f => (DateTime?)f.LastModified.UtcDateTime);
+        var (ok, msg) = await Api.BulkImportCatalogAsync(_bulkFiles, snapshot);
+
+        _bulkSucceeded = ok;
+        _bulkResult = ok ? "Catalog import succeeded." : $"Import failed: {msg}";
+        _bulkFiles = null;
+        _bulkRunning = false;
+        _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+        StateHasChanged();
+    }
+
+    private async Task ToggleAutoApprove(bool value)
+    {
+        _registrationAutoApprove = value;
+        await Api.SaveRegistrationSettingsAsync(value);
+    }
+
+    private async Task ApproveUser(ApiClient.AdminUserDto user)
+    {
+        if (await Api.SetUserStatusAsync(user.UserId, "Active"))
+        {
+            var idx = _rows.FindIndex(r => r.User.UserId == user.UserId);
+            if (idx >= 0)
+                _rows[idx] = new UserRow { User = user with { Status = "Active" } };
+            StateHasChanged();
+        }
     }
 
     private Task MakeAdmin(ApiClient.AdminUserDto user)   => SetRole(user, "Admin");
@@ -157,27 +580,6 @@
         }
     }
 
-    private async Task StartBackfill()
-    {
-        _cts = new CancellationTokenSource();
-        _backfillRunning = true;
-        StateHasChanged();
-
-        try
-        {
-            await Api.BackfillImagesAsync(_cts.Token);
-        }
-        catch (OperationCanceledException) { }
-        finally
-        {
-            _backfillRunning = false;
-            var pending = await Api.GetPendingCountAsync();
-            _pendingCount = pending?.Count ?? 0;
-            StateHasChanged();
-        }
-    }
-
-    private void CancelBackfill() => _cts?.Cancel();
 
     private bool FilterFunc(UserRow row) =>
         string.IsNullOrWhiteSpace(_search) ||

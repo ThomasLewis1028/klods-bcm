@@ -3,13 +3,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 2rem 1rem;
 }
 
 .landing-hero {
     text-align: center;
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
 }
 
 .landing-card {
@@ -104,6 +104,56 @@ input[type="password"]::-ms-clear {
     background-color: rgba(0, 0, 0, 0.25);
     padding: 12px 16px;
 }
+
+/* Shared completeness (traffic-light) progress bar */
+.cbar { height: 6px; width: 100%; border-radius: 999px; overflow: hidden;
+        background: color-mix(in srgb, var(--mud-palette-text-primary) 12%, transparent); }
+.cbar-fill { height: 100%; border-radius: 999px; transition: width .25s ease; }
+.cbar-complete .cbar-fill { background: var(--mud-palette-success); }
+.cbar-completable .cbar-fill { background: var(--mud-palette-warning); }
+.cbar-short .cbar-fill { background: var(--mud-palette-error); }
+
+.cstatus { font-weight: 600; }
+.cstatus-complete { color: var(--mud-palette-success); }
+.cstatus-completable { color: var(--mud-palette-warning); }
+.cstatus-short { color: var(--mud-palette-error); }
+
+@media (prefers-reduced-motion: reduce) { .cbar-fill { transition: none; } }
+
+/* First-login tour dialog */
+.tour-dialog { width: 75vw !important; max-width: 1200px !important; }
+.tour { min-width: 320px; width: 100%; }
+.tour-media { aspect-ratio: 16 / 10; width: 100%; max-height: 62vh; border-radius: 12px; overflow: hidden;
+              background: var(--mud-palette-background-grey); border: 1px solid var(--mud-palette-lines-default);
+              display: flex; align-items: center; justify-content: center; }
+.tour-media-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tour-body { padding: 16px 4px 4px; }
+.tour-dots { display: flex; gap: 8px; justify-content: center; padding: 12px 0 4px; }
+.tour-dot { width: 8px; height: 8px; border-radius: 50%; cursor: pointer; transition: background .15s;
+            background: color-mix(in srgb, var(--mud-palette-text-primary) 20%, transparent); }
+.tour-dot.active { background: var(--mud-palette-primary); }
+
+/* BOM tabs styled as a segmented button group so they read as clickable */
+.bom-tabs .mud-tab-slider { display: none !important; }
+.bom-tabs .mud-tab {
+    text-transform: none;
+    border-radius: 8px;
+    min-height: 36px;
+    margin-right: 6px;
+    border: 1px solid var(--mud-palette-lines-default);
+    opacity: 1;
+}
+.bom-tabs .mud-tab.mud-tab-active {
+    background-color: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+    border-color: var(--mud-palette-primary);
+}
+
+/* BOM "Transfer Pieces" count field — force the input to hug its content so the box
+   shrink-wraps and the transfer arrows sit right against it (!important beats MudBlazor's
+   own input width rule, which otherwise keeps the input full-width). */
+.bom-transfer { width: fit-content !important; min-width: 0 !important; }
+.bom-transfer input { width: 3ch !important; min-width: 0 !important; text-align: center; }
 
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;

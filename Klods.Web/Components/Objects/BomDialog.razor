@@ -1,0 +1,578 @@
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject ImageStorageService ImageStorage
+@inject IDialogService DialogService
+@inject IJSRuntime JsRuntime
+@inject ISnackbar Snackbar
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="pb-3 mb-2"
+                  Style="border-bottom: 1px solid var(--mud-palette-divider);">
+            <MudImage class="cursor-pointer rounded-2" Elevation="2"
+                      Src="@ImageStorage.ResolveUrl(SetImg)" Height="56" Width="56"
+                      ObjectFit="ObjectFit.Contain"
+                      @onclick="() => OpenImagePopup(SetId, _setName, ImageStorage.ResolveUrl(SetImg))"/>
+            <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                <MudText Typo="Typo.h6" Style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@_setName</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@SetId</MudText>
+                @if (!_isLoading)
+                {
+                    <div style="margin-top:6px; max-width:280px; display:flex; flex-direction:column; gap:3px;">
+                        <CompletenessBar Percent="@_percent" Status="@_status" Label="@($"{_percent}% assembled")"/>
+                        <span class="cstatus cstatus-@_status" style="font-size:.72rem;">@_percent% · @StatusWord(_status)</span>
+                    </div>
+                }
+            </MudStack>
+            @if (_ownedInstances.Count > 1)
+            {
+                <MudSelect T="int" Value="_currentSetIndex" ValueChanged="ChangeIndex"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                           Label="Copy" Style="min-width: 120px; max-width: 140px;">
+                    @foreach (var idx in _ownedInstances)
+                    {
+                        <MudSelectItem Value="@idx">Copy #@idx</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (!string.IsNullOrEmpty(_manualUrl))
+            {
+                <MudButton StartIcon="@Icons.Material.Filled.MenuBook" Variant="Variant.Text"
+                           OnClick="() => OpenBuildingInstructions(_manualUrl)" Style="flex-shrink: 0;">
+                    Instructions
+                </MudButton>
+            }
+        </MudStack>
+        <div style="min-height: 60vh; max-height: 72vh; overflow-y: auto;">
+        @if (_isLoading)
+        {
+            <div style="display: flex; justify-content: center; align-items: center; height: 60vh;">
+                <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+            </div>
+        }
+        else
+        {
+            <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Class="bom-tabs">
+                @* Brick Tab *@
+                <MudTabPanel Text="Bricks">
+                    <MudDataGrid T="SetBrickInfo" Items="@_setBrickInfo.OrderBy(b => b.Brick.PartNum)"
+                                 SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
+                                 QuickFilter="SetBrickFilterFunc" ReadOnly="false" Bordered="false" Dense="true">
+                        <ToolBarContent>
+                            <MudText Typo="Typo.body1">Missing
+                                Pieces: @_setBrickInfo.Sum(sb => Math.Max(0, sb.Brick.Count - sb.SetStock))
+                            </MudText>
+                            <MudSpacer/>
+                            <MudSwitch @bind-Value="_showMissing" UncheckedColor="Color.Default" Color="Color.Error"
+                                       Label="Show Missing" LabelPlacement="Placement.Start"/>
+                            <MudSpacer/>
+                            <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
+                                          Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
+                                          IconSize="Size.Medium" Class="mt-0"/>
+                        </ToolBarContent>
+                        <Columns>
+                            <TemplateColumn Title="Image" Editable="false">
+                                <CellTemplate>
+                                    <MudImage class="cursor-pointer rounded-3" Elevation="2"
+                                              Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)" Height="50"
+                                              @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg))"/>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Property="x => x.Brick.PartNum" Title="Brick Id" Editable="false"/>
+                            <PropertyColumn Property="x => x.Brick.Name" Title="Name" Editable="false"/>
+                            <TemplateColumn Title="Color" SortBy="x => x.Brick.ColorId" Sortable="true" Editable="false">
+                                <CellTemplate>
+                                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                        @if (context.Item.Brick.HexColor != null)
+                                        {
+                                            <MudChip T="string" OnClick="() => OpenColorPopup(context.Item.Brick.HexColor, context.Item.Brick.ColorName)"
+                                                     Style="@ColorHelper.ColorChipStyle(context.Item.Brick.HexColor)">@context.Item.Brick.ColorName</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="string" Color="Color.Default">N/A</MudChip>
+                                        }
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Required" Editable="false"
+                                            SortBy="x => x.Brick.Count" Sortable="true">
+                                <CellTemplate>
+                                    @{ var stock = context.Item.SetStock; }
+                                    @if (context.Item.Brick.Count <= stock)
+                                    {
+                                        <MudText Color="@Color.Success">@context.Item.Brick.Count</MudText>
+                                    }
+                                    else if (context.Item.Brick.Count - stock <= context.Item.LooseStock)
+                                    {
+                                        <MudText Color="@Color.Warning">@context.Item.Brick.Count</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Color="@Color.Error">@context.Item.Brick.Count</MudText>
+                                    }
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Spare" Editable="false" SortBy="x => x.Brick.SpareCount" Sortable="true">
+                                <CellTemplate>@(context.Item.Brick.SpareCount > 0 ? context.Item.Brick.SpareCount.ToString() : "—")</CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="In Set" Editable="false" SortBy="x => x.SetStock">
+                                <CellTemplate>
+                                    <MudNumericField T="int" Value="@context.Item.SetStock"
+                                                     ValueChanged="@(v => SaveSetBrickOwnedStock(context.Item, v))"
+                                                     Min="0" Disabled="@(AuthService.CurrentUser == null)"
+                                                     Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Transfer Pieces" Editable="false">
+                                <HeaderTemplate>
+                                    <MudTooltip Text="Move pieces between your loose stock and this set">
+                                        <span>Transfer Pieces</span>
+                                    </MudTooltip>
+                                </HeaderTemplate>
+                                <CellTemplate>
+                                    <MudStack Row Spacing="0" AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowLeft" Size="Size.Small"
+                                                       OnClick="() => MoveBrickStock(Direction.left, context.Item)"/>
+                                        <MudNumericField Variant="Variant.Text" Min="0" @bind-Value="context.Item.MoveCount"
+                                                         Margin="Margin.Dense" Class="bom-transfer"/>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowRight" Size="Size.Small"
+                                                       OnClick="() => MoveBrickStock(Direction.right, context.Item)"/>
+                                    </MudStack>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Loose" Editable="false" SortBy="x => x.LooseStock">
+                                <CellTemplate>
+                                    <MudNumericField T="int" Value="@context.Item.LooseStock"
+                                                     ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                                     Min="0" Disabled="@(AuthService.CurrentUser == null)"
+                                                     Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
+                                </CellTemplate>
+                            </TemplateColumn>
+                        </Columns>
+                        <PagerContent>
+                            <MudDataGridPager T="SetBrickInfo"/>
+                        </PagerContent>
+                    </MudDataGrid>
+                </MudTabPanel>
+
+                @* Minifigure Tab — one row per physical fig ("slot"); duplicates split into separate rows *@
+                <MudTabPanel Text="Minifigures" Disabled="@(_minifigSlots.Count == 0)">
+                    <MudDataGrid T="MinifigSlot" Items="@_minifigSlots" SortMode="@SortMode.None"
+                                 QuickFilter="MinifigSlotFilterFunc" ReadOnly="true" Dense="true">
+                        <ToolBarContent>
+                            <MudSpacer/>
+                            <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
+                                          Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search"
+                                          IconSize="Size.Medium" Class="mt-0"/>
+                        </ToolBarContent>
+                        <Columns>
+                            <HierarchyColumn ButtonDisabledFunc="@(x => !x.Filled)"/>
+                            <TemplateColumn Title="Image" Editable="false">
+                                <CellTemplate>
+                                    <MudImage class="cursor-pointer rounded-2" Elevation="2"
+                                              Style="@(context.Item.Filled ? "" : "opacity:.4;")"
+                                              Src="@ImageStorage.ResolveUrl(context.Item.Minifig.ImgUrl)" Height="50"
+                                              @onclick="() => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.Name, ImageStorage.ResolveUrl(context.Item.Minifig.ImgUrl))"/>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Minifig Id" Editable="false"/>
+                            <PropertyColumn Property="x => x.Minifig.Name" Title="Name" Editable="false"/>
+                            <TemplateColumn Title="Slot" Editable="false">
+                                <CellTemplate>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@context.Item.SlotNumber of @context.Item.SlotTotal</MudText>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Status" Editable="false">
+                                <CellTemplate>
+                                    @if (context.Item.Filled)
+                                    {
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                            <span class="cstatus cstatus-@SlotStatus(context.Item)" style="font-size:.72rem;">
+                                                @context.Item.Percent% · @StatusWord(SlotStatus(context.Item))
+                                            </span>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                                           Disabled="@(AuthService.CurrentUser == null)"
+                                                           OnClick="() => RemoveSlot(context.Item)"/>
+                                        </MudStack>
+                                    }
+                                    else
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                   StartIcon="@Icons.Material.Filled.Add"
+                                                   Disabled="@(AuthService.CurrentUser == null)"
+                                                   OnClick="() => FillSlot(context.Item)">I have this one</MudButton>
+                                    }
+                                </CellTemplate>
+                            </TemplateColumn>
+                        </Columns>
+                        <ChildRowContent Context="slotContext">
+                            <MudCard>
+                                <MudDataGrid T="SlotPart" Items="@slotContext.Item.Parts" Dense="true">
+                                    <Columns>
+                                        <TemplateColumn Title="Image">
+                                            <CellTemplate>
+                                                <MudImage class="cursor-pointer rounded-3" Elevation="2"
+                                                          Src="@ImageStorage.ResolveUrl(context.Item.PartImg)" Height="50"
+                                                          @onclick="() => OpenImagePopup(context.Item.PartNum, context.Item.Name, ImageStorage.ResolveUrl(context.Item.PartImg))"/>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+                                        <PropertyColumn Title="Brick Id" Property="x => x.PartNum"/>
+                                        <PropertyColumn Title="Name" Property="x => x.Name"/>
+                                        <PropertyColumn Title="Color" Property="x => x.ColorName"/>
+                                        <TemplateColumn Title="Required" Editable="false">
+                                            <CellTemplate>
+                                                <MudText Color="@(context.Item.Owned >= context.Item.Need ? Color.Success : Color.Error)">@context.Item.Need</MudText>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+                                        <TemplateColumn Title="Owned">
+                                            <CellTemplate>
+                                                <MudNumericField T="int" Value="@context.Item.Owned"
+                                                                 ValueChanged="@(v => SaveSlotPart(slotContext.Item, context.Item, v))"
+                                                                 Min="0" Disabled="@(AuthService.CurrentUser == null)"
+                                                                 Variant="Variant.Text"/>
+                                            </CellTemplate>
+                                        </TemplateColumn>
+                                    </Columns>
+                                </MudDataGrid>
+                            </MudCard>
+                        </ChildRowContent>
+                        <PagerContent>
+                            <MudDataGridPager T="MinifigSlot"/>
+                        </PagerContent>
+                    </MudDataGrid>
+                </MudTabPanel>
+            </MudTabs>
+        }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string SetId { get; set; } = null!;
+    [Parameter] public string? SetImg { get; set; }
+    [Parameter] public int? SetIndex { get; set; }
+
+    private List<SetBrickInfo> _setBrickInfo = new();
+    private List<ApiClient.BomMinifigDto> _bomMinifigs = new();
+    private List<MinifigSlot> _minifigSlots = new();
+    private List<int> _ownedInstances = new();
+    private string _setName = "";
+    private string? _manualUrl;
+    private int _percent;
+    private string _status = "short";
+
+    private static string StatusWord(string status) => status switch
+    {
+        "complete"    => "Complete",
+        "completable" => "Buildable",
+        _             => "Missing parts",
+    };
+    private string _searchString = "";
+    private bool _showMissing;
+    private bool _isLoading = true;
+    private int _currentSetIndex;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // A specific copy may be supplied (from My Sets); otherwise open the first owned copy.
+        if (SetIndex.HasValue)
+        {
+            _currentSetIndex = SetIndex.Value;
+        }
+        else
+        {
+            var owned = await Api.GetMyOwnedSetsAsync();
+            var instances = owned?.FirstOrDefault(s => s.SetId == SetId)?.Instances;
+            if (instances is not { Count: > 0 })
+            {
+                Snackbar.Add("You don't own a copy of this set.", Severity.Warning);
+                _isLoading = false;
+                return;
+            }
+            _currentSetIndex = instances.Min(i => i.SetIndex);
+        }
+
+        await LoadBomAsync();
+    }
+
+    private async Task LoadBomAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        _setBrickInfo.Clear();
+        _minifigSlots.Clear();
+
+        var bom = await Api.GetBomAsync(SetId, _currentSetIndex);
+        if (bom == null)
+        {
+            Snackbar.Add("Could not load the bill of materials for this set.", Severity.Error);
+            _isLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        _setName = bom.SetName;
+        _manualUrl = bom.ManualUrl;
+        _ownedInstances = bom.OwnedInstances;
+        _percent = bom.Percent;
+        _status = bom.Status;
+
+        _setBrickInfo = bom.Bricks.Select(b => new SetBrickInfo
+        {
+            Brick = b, SetStock = b.SetStock, LooseStock = b.LooseStock
+        }).ToList();
+
+        _bomMinifigs = bom.Minifigs.OrderBy(m => m.MinifigId).ToList();
+        await ReloadMinifigSlotsAsync();
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    // Rebuild the per-fig slot rows: each owned instance on this copy fills a slot; the rest render empty.
+    private async Task ReloadMinifigSlotsAsync()
+    {
+        var expanded = _minifigSlots
+            .Where(s => s is { Expanded: true, InstanceIndex: not null })
+            .Select(s => (s.Minifig.MinifigId, s.InstanceIndex!.Value))
+            .ToHashSet();
+
+        var slots = new List<MinifigSlot>();
+        foreach (var m in _bomMinifigs)
+        {
+            var instances = await Api.GetBomMinifigInstancesAsync(SetId, _currentSetIndex, m.MinifigId) ?? [];
+
+            var filled = instances.Select(inst => new MinifigSlot
+            {
+                Minifig = m,
+                InstanceIndex = inst.Index,
+                Expanded = expanded.Contains((m.MinifigId, inst.Index)),
+                Parts = inst.Parts.Select(p => new SlotPart
+                {
+                    PartNum = p.PartNum, ColorId = p.ColorId, Name = p.Name, PartImg = p.PartImg,
+                    ColorName = p.ColorName, HexColor = p.HexColor, Need = p.Need, Owned = p.Owned
+                }).ToList()
+            }).ToList();
+
+            // Pad to the needed count with empty slots (never hide surplus instances beyond the count).
+            for (var i = filled.Count; i < m.Count; i++)
+                filled.Add(new MinifigSlot { Minifig = m });
+
+            var total = filled.Count;
+            for (var i = 0; i < filled.Count; i++)
+            {
+                filled[i].SlotNumber = i + 1;
+                filled[i].SlotTotal = total;
+            }
+
+            slots.AddRange(filled);
+        }
+
+        _minifigSlots = slots;
+    }
+
+    private async Task ChangeIndex(int setIndex)
+    {
+        _currentSetIndex = setIndex;
+        await LoadBomAsync();
+    }
+
+    private bool SetBrickFilterFunc(SetBrickInfo info)
+    {
+        if (_showMissing && info.Brick.Count <= info.SetStock)
+            return false;
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+        if (info.Brick.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (info.Brick.PartNum.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (info.Brick.ColorName?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true)
+            return true;
+        return false;
+    }
+
+    private bool MinifigSlotFilterFunc(MinifigSlot slot)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+        if (slot.Minifig.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (slot.Minifig.MinifigId.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
+    // Re-pull just the copy's completeness so the header bar tracks edits live (no grid rebuild).
+    private async Task RefreshCompletenessAsync()
+    {
+        var comp = await Api.GetBomCompletenessAsync(SetId, _currentSetIndex);
+        if (comp != null)
+        {
+            _percent = comp.Percent;
+            _status = comp.Status;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveSetBrickOwnedStock(SetBrickInfo info, int newValue)
+    {
+        if (AuthService.CurrentUser == null) return;
+        info.SetStock = newValue;
+        if (!await Api.UpdateSetBrickStockAsync(SetId, _currentSetIndex, info.Brick.PartNum, info.Brick.ColorId, newValue))
+            Snackbar.Add("Failed to save set stock. The set may not be in your inventory yet.", Severity.Error);
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private async Task SaveBrickOwnedStock(SetBrickInfo info, int newValue)
+    {
+        if (AuthService.CurrentUser == null) return;
+        info.LooseStock = newValue;
+        if (!await Api.UpdateLooseBrickStockAsync(SetId, _currentSetIndex, info.Brick.PartNum, info.Brick.ColorId, newValue))
+            Snackbar.Add("Failed to save loose brick stock.", Severity.Error);
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private async Task SaveSlotPart(MinifigSlot slot, SlotPart part, int newValue)
+    {
+        if (AuthService.CurrentUser == null || slot.InstanceIndex is not int index) return;
+        part.Owned = newValue;
+        if (!await Api.UpdateBomMinifigInstancePartStockAsync(
+                SetId, _currentSetIndex, slot.Minifig.MinifigId, index, part.PartNum, part.ColorId, newValue))
+            Snackbar.Add("Failed to save minifig part stock.", Severity.Error);
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private async Task FillSlot(MinifigSlot slot)
+    {
+        if (AuthService.CurrentUser == null) return;
+        if (!await Api.AddBomMinifigInstanceAsync(SetId, _currentSetIndex, slot.Minifig.MinifigId))
+        {
+            Snackbar.Add("Failed to add minifig.", Severity.Error);
+            return;
+        }
+        await ReloadMinifigSlotsAsync();
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private async Task RemoveSlot(MinifigSlot slot)
+    {
+        if (AuthService.CurrentUser == null || slot.InstanceIndex is not int index) return;
+        if (!await Api.RemoveBomMinifigInstanceAsync(SetId, _currentSetIndex, slot.Minifig.MinifigId, index))
+        {
+            Snackbar.Add("Failed to remove minifig.", Severity.Error);
+            return;
+        }
+        await ReloadMinifigSlotsAsync();
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private static string SlotStatus(MinifigSlot slot) => slot.IsComplete ? "complete" : "short";
+
+    private async Task MoveBrickStock(Direction dir, SetBrickInfo info)
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        if (dir == Direction.left)
+        {
+            if (info.LooseStock < info.MoveCount)
+            {
+                Snackbar.Add("Not enough personal inventory to move to set.", Severity.Warning);
+                return;
+            }
+            info.LooseStock -= info.MoveCount;
+            info.SetStock += info.MoveCount;
+        }
+        else
+        {
+            if (info.SetStock < info.MoveCount)
+            {
+                Snackbar.Add("Not enough set stock to return to personal inventory.", Severity.Warning);
+                return;
+            }
+            info.SetStock -= info.MoveCount;
+            info.LooseStock += info.MoveCount;
+        }
+
+        var setOk = await Api.UpdateSetBrickStockAsync(SetId, _currentSetIndex, info.Brick.PartNum, info.Brick.ColorId, info.SetStock);
+        var looseOk = await Api.UpdateLooseBrickStockAsync(SetId, _currentSetIndex, info.Brick.PartNum, info.Brick.ColorId, info.LooseStock);
+        if (!setOk || !looseOk)
+            Snackbar.Add("Failed to move stock.", Severity.Error);
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private Task OpenImagePopup(string id, string name, string? imgUrl) =>
+        DialogService.ShowAsync<ImagePopup>("Image Popup",
+            new DialogParameters<ImagePopup> { { x => x._id, id }, { x => x._name, name }, { x => x._imgUrl, imgUrl } },
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+
+    private Task OpenColorPopup(string? hex, string? name)
+    {
+        if (hex == null || name == null) return Task.CompletedTask;
+        return DialogService.ShowAsync<ColorPopup>("Color Popup",
+            new DialogParameters<ColorPopup> { { x => x._hexColor, hex }, { x => x._name, name } },
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = true });
+    }
+
+    private void OpenBuildingInstructions(string url) => JsRuntime.InvokeVoidAsync("open", url, "_blank");
+
+    private enum Direction { left, right }
+
+    public class SetBrickInfo
+    {
+        public ApiClient.BomBrickDto Brick { get; set; } = null!;
+        public int SetStock { get; set; }
+        public int LooseStock { get; set; }
+        public int MoveCount { get; set; }
+    }
+
+    public class MinifigSlot
+    {
+        public ApiClient.BomMinifigDto Minifig { get; set; } = null!;
+        public int SlotNumber { get; set; }
+        public int SlotTotal { get; set; }
+        public int? InstanceIndex { get; set; }
+        public bool Expanded { get; set; }
+        public List<SlotPart> Parts { get; set; } = [];
+
+        public bool Filled => InstanceIndex.HasValue;
+        public bool IsComplete => Filled && Parts.All(p => p.Owned >= p.Need);
+
+        public int Percent
+        {
+            get
+            {
+                var need = Parts.Sum(p => p.Need);
+                if (need == 0) return Filled ? 100 : 0;
+                return (int)Math.Round(100.0 * Parts.Sum(p => Math.Min(p.Owned, p.Need)) / need);
+            }
+        }
+    }
+
+    public class SlotPart
+    {
+        public string PartNum { get; set; } = "";
+        public string ColorId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? PartImg { get; set; }
+        public string? ColorName { get; set; }
+        public string? HexColor { get; set; }
+        public int Need { get; set; }
+        public int Owned { get; set; }
+    }
+}

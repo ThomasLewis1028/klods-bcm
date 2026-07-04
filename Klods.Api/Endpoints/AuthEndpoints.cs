@@ -7,6 +7,8 @@ namespace Klods.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    public const string AutoApproveKey = "registration.auto_approve";
+
     public static void MapAuth(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth");
@@ -18,10 +20,13 @@ public static class AuthEndpoints
             if (user is null || !PasswordHasher.Verify(req.Password, user.PasswordHash))
                 return Results.Unauthorized();
 
+            if (user.Status != "Active")
+                return Results.StatusCode(403);
+
             return Results.Ok(new TokenResponse(jwt.Generate(user)));
         });
 
-        group.MapPost("/register", async (RegisterRequest req, IDbContextFactory<InventoryContext> dbFactory, JwtService jwt) =>
+        group.MapPost("/register", async (RegisterRequest req, IDbContextFactory<InventoryContext> dbFactory, JwtService jwt, SettingsService settings) =>
         {
             if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
                 return Results.BadRequest("Username and password are required.");
@@ -30,14 +35,20 @@ public static class AuthEndpoints
             if (await db.Users.AnyAsync(u => u.UserName == req.Username))
                 return Results.Conflict("Username already taken.");
 
+            var autoApprove = await settings.GetBoolAsync(AutoApproveKey, fallback: true);
+
             var user = new User
             {
                 UserName = req.Username,
                 PasswordHash = PasswordHasher.Hash(req.Password),
-                Role = "User"
+                Role = "User",
+                Status = autoApprove ? "Active" : "Pending"
             };
             db.Users.Add(user);
             await db.SaveChangesAsync();
+
+            if (!autoApprove)
+                return Results.Accepted();
 
             return Results.Ok(new TokenResponse(jwt.Generate(user)));
         });

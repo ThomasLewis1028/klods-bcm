@@ -1,5 +1,8 @@
 # Klods - A Brick Collection Manager — Claude Instructions
 
+## Project Tracking
+- Issues and planning articles for this repo are tracked in YouTrack project **KBCM** (youtrack.seventhfleet.net).
+
 ## Secrets & Sensitive Files
 - **Never read `.env` files.** If understanding config is needed, ask the user to describe the relevant variables.
 - Never read or suggest committing `appsettings.Development.json` if it contains secrets.

@@ -30,10 +30,16 @@ namespace Klods.Migrations
                     b.Property<string>("ColorId")
                         .HasColumnType("text");
 
+                    b.Property<string>("BrickOwlId")
+                        .HasColumnType("text");
+
                     b.Property<string>("BricklinkId")
                         .HasColumnType("text");
 
                     b.Property<string>("ColorName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ElementId")
                         .HasColumnType("text");
 
                     b.Property<string>("HexColor")
@@ -46,11 +52,17 @@ namespace Klods.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("PartCatId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("PartImg")
                         .HasColumnType("text");
 
                     b.Property<string>("PartURL")
                         .HasColumnType("text");
+
+                    b.Property<int>("SetCount")
+                        .HasColumnType("integer");
 
                     b.HasKey("PartNum", "ColorId");
 
@@ -76,6 +88,36 @@ namespace Klods.Migrations
                     b.HasIndex("PartNum", "ColorId");
 
                     b.ToTable("BrickOwned");
+                });
+
+            modelBuilder.Entity("Klods.CatalogImport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SnapshotDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CatalogImports");
                 });
 
             modelBuilder.Entity("Klods.Color", b =>
@@ -107,6 +149,14 @@ namespace Klods.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserId"));
 
+                    b.Property<double>("FontScale")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(1.0);
+
+                    b.Property<bool>("HasSeenTour")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -122,6 +172,12 @@ namespace Klods.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("text")
                         .HasDefaultValue("User");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Active");
 
                     b.Property<string>("UserName")
                         .IsRequired()
@@ -158,15 +214,20 @@ namespace Klods.Migrations
                     b.Property<string>("MinifigId")
                         .HasColumnType("text");
 
-                    b.Property<string>("MinifigImgUrl")
+                    b.Property<DateTime>("DateModified")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImgUrl")
                         .HasColumnType("text");
 
-                    b.Property<string>("MinifigName")
+                    b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("MinifigUrl")
-                        .IsRequired()
+                    b.Property<int>("NumParts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Url")
                         .HasColumnType("text");
 
                     b.HasKey("MinifigId");
@@ -176,23 +237,53 @@ namespace Klods.Migrations
 
             modelBuilder.Entity("Klods.MinifigBrick", b =>
                 {
-                    b.Property<string>("MinifigID")
+                    b.Property<string>("MinifigId")
                         .HasColumnType("text");
 
-                    b.Property<string>("BrickID")
+                    b.Property<string>("PartNum")
                         .HasColumnType("text");
 
                     b.Property<string>("ColorId")
                         .HasColumnType("text");
 
-                    b.Property<int>("Quantity")
+                    b.Property<int>("Count")
                         .HasColumnType("integer");
 
-                    b.HasKey("MinifigID", "BrickID", "ColorId");
+                    b.Property<int>("SpareCount")
+                        .HasColumnType("integer");
 
-                    b.HasIndex("BrickID", "ColorId");
+                    b.HasKey("MinifigId", "PartNum", "ColorId");
+
+                    b.HasIndex("PartNum", "ColorId");
 
                     b.ToTable("MinifigBricks");
+                });
+
+            modelBuilder.Entity("Klods.MinifigBrickOwned", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MinifigId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("MinifigIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PartNum")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ColorId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Stock")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId", "MinifigId", "MinifigIndex", "PartNum", "ColorId");
+
+                    b.HasIndex("MinifigId", "PartNum", "ColorId");
+
+                    b.ToTable("MinifigBrickOwned");
                 });
 
             modelBuilder.Entity("Klods.MinifigOwned", b =>
@@ -203,14 +294,36 @@ namespace Klods.Migrations
                     b.Property<string>("MinifigId")
                         .HasColumnType("text");
 
-                    b.Property<int>("Stock")
+                    b.Property<int>("MinifigIndex")
                         .HasColumnType("integer");
 
-                    b.HasKey("UserId", "MinifigId");
+                    b.Property<string>("SetId")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("SetIndex")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId", "MinifigId", "MinifigIndex");
 
                     b.HasIndex("MinifigId");
 
+                    b.HasIndex("UserId", "SetId", "SetIndex");
+
                     b.ToTable("MinifigOwned");
+                });
+
+            modelBuilder.Entity("Klods.PartCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PartCategories");
                 });
 
             modelBuilder.Entity("Klods.Set", b =>
@@ -243,9 +356,6 @@ namespace Klods.Migrations
 
                     b.Property<int?>("ThemeId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("ThemeName")
-                        .HasColumnType("text");
 
                     b.HasKey("SetId");
 
@@ -339,6 +449,37 @@ namespace Klods.Migrations
                     b.ToTable("SetsOwned");
                 });
 
+            modelBuilder.Entity("Klods.Setting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("Settings");
+                });
+
+            modelBuilder.Entity("Klods.Theme", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ParentId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Themes");
+                });
+
             modelBuilder.Entity("Klods.BrickOwned", b =>
                 {
                     b.HasOne("Klods.Database.User", null)
@@ -367,13 +508,28 @@ namespace Klods.Migrations
                 {
                     b.HasOne("Klods.Minifig", null)
                         .WithMany()
-                        .HasForeignKey("MinifigID")
+                        .HasForeignKey("MinifigId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("Klods.Brick", null)
                         .WithMany()
-                        .HasForeignKey("BrickID", "ColorId")
+                        .HasForeignKey("PartNum", "ColorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Klods.MinifigBrickOwned", b =>
+                {
+                    b.HasOne("Klods.MinifigBrick", null)
+                        .WithMany()
+                        .HasForeignKey("MinifigId", "PartNum", "ColorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Klods.MinifigOwned", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "MinifigId", "MinifigIndex")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -391,6 +547,10 @@ namespace Klods.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Klods.SetOwned", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "SetId", "SetIndex");
                 });
 
             modelBuilder.Entity("Klods.SetBrick", b =>
