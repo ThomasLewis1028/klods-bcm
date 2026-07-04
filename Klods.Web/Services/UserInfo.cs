@@ -7,4 +7,5 @@ public record UserInfo(
     string? ProfilePictureUrl,
     string? PrimaryColor,
     bool HasPassword,
-    double FontScale = 1.0);
+    double FontScale = 1.0,
+    bool HasSeenTour = false);
