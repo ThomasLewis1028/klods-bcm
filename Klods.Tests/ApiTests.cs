@@ -77,7 +77,7 @@ public class ApiTests
     [TestMethod]
     public async Task GetSets_Unauthenticated_ReturnsUnauthorized()
     {
-        var resp = await _client.GetAsync("/api/sets/catalog-view");
+        var resp = await _client.GetAsync("/api/sets/");
         Assert.AreEqual(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
@@ -85,7 +85,7 @@ public class ApiTests
     public async Task GetSets_Authenticated_ReturnsOk()
     {
         var token = await GetTokenAsync();
-        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/sets/catalog-view");
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/sets/");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var resp = await _client.SendAsync(req);
         Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
