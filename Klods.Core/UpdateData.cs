@@ -48,16 +48,6 @@ public class UpdateData(IDbContextFactory<InventoryContext> contextFactory)
         return context.SaveChanges() > 0;
     }
 
-    public bool UpdateMinifigOwned(MinifigOwned mo, int callerUserId)
-    {
-        if (mo.UserId != callerUserId) return false;
-        using var context = contextFactory.CreateDbContext();
-        var affected = context.Set<MinifigOwned>()
-            .Where(e => e.UserId == mo.UserId && e.MinifigId == mo.MinifigId)
-            .ExecuteUpdate(s => s.SetProperty(e => e.Stock, mo.Stock));
-        return affected > 0;
-    }
-
     public bool UpdateSetMinifig(SetMinifig setMinifig)
     {
         using var context = contextFactory.CreateDbContext();

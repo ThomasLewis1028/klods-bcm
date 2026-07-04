@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    # The API tests boot the real app (WebApplicationFactory), which migrates the DB and
+    # initialises MinIO on startup — so both must be reachable during `dotnet test`.
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: klods
+      POSTGRES_PASSWORD: klods_test_pw
+      POSTGRES_DB: klods_test
+      MINIO_ENDPOINT: http://localhost:9000
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: klods
+          POSTGRES_PASSWORD: klods_test_pw
+          POSTGRES_DB: klods_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U klods -d klods_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-
+
+      # MinIO's image needs a `server` command, which GitHub service containers can't set,
+      # so run it directly and wait for its health endpoint.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          echo "Waiting for MinIO..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live; then echo "MinIO ready"; exit 0; fi
+            sleep 2
+          done
+          echo "MinIO did not become healthy"; docker logs minio; exit 1
+
+      - name: Restore
+        run: dotnet restore Klods.slnx
+
+      - name: Build
+        run: dotnet build Klods.slnx -c Release --no-restore
+
+      - name: Test
+        # RebrickableApiTests/ImportTests hit the live Rebrickable API (need a real key) and a
+        # migrated DB — they need reworking to mock the API before they can run in CI. Until then,
+        # run the API + DB integration tests (which self-migrate on app startup).
+        run: >-
+          dotnet test Klods.slnx -c Release --no-build --verbosity normal
+          --filter "FullyQualifiedName!~RebrickableApiTests&FullyQualifiedName!~ImportTests"
+
+  # Validates both Dockerfiles build (COPY paths, restore, publish) without pushing.
+  # Runs in parallel with build-test; layer-cached so repeat runs are fast.
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - app: api
+            dockerfile: Klods.Api/Dockerfile
+          - app: web
+            dockerfile: Klods.Web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.app }} image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

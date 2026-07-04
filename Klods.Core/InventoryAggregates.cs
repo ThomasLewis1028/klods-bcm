@@ -34,6 +34,13 @@ public static class InventoryAggregates
                 g => g.Key,
                 g => g.Sum(sb => sb.Count * setCopies.GetValueOrDefault(sb.SetId, 0)));
 
+    // Total quantity of each part used across the whole set catalog (ownership-independent).
+    public static Dictionary<(string PartNum, string ColorId), int> GetBrickUsedDict(
+        IEnumerable<SetBrick> setBricks) =>
+        setBricks
+            .GroupBy(sb => (sb.PartNum, sb.ColorId))
+            .ToDictionary(g => g.Key, g => g.Sum(sb => sb.Count));
+
     public static Dictionary<(string PartNum, string ColorId), int> GetBrickSetCountDict(
         IEnumerable<SetBrick> setBricks) =>
         setBricks

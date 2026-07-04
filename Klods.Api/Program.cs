@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Klods.Api.Auth;
 using Klods.Api.Endpoints;
@@ -14,8 +15,16 @@ builder.Services.AddDbContextFactory<InventoryContext>();
 // ── Business services ──────────────────────────────────────────────────────
 builder.Services.AddScoped<RebrickableApi>();
 builder.Services.AddScoped<ImportData>();
+builder.Services.AddScoped<BulkImportService>();
+builder.Services.AddScoped<SettingsService>();
+builder.Services.AddScoped<RssUpdateService>();
+builder.Services.AddHostedService<Klods.Api.RssBackgroundService>();
 builder.Services.AddScoped<UpdateData>();
 builder.Services.AddScoped<DeleteData>();
+
+// Bulk catalog upload can be large (gzipped CSVs); raise the multipart limit.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+    o.MultipartBodyLengthLimit = 512L * 1024 * 1024);
 builder.Services.AddSingleton<ImageStorageService>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri("https://rebrickable.com/") });
@@ -108,16 +117,34 @@ await using (var scope = app.Services.CreateAsyncScope())
 
     if (!await ctx.Users.AnyAsync(u => u.Role == "Admin"))
     {
-        var defaultPassword = builder.Configuration["ADMIN_DEFAULT_PASSWORD"] ?? "admin";
+        var adminUsername = builder.Configuration["ADMIN_USERNAME"] ?? "admin";
+        var configuredPassword = builder.Configuration["ADMIN_DEFAULT_PASSWORD"];
+
+        // No insecure default: if a password wasn't supplied, generate a strong random one and
+        // surface it once in the logs. Charset excludes easily-confused characters (0/O, 1/l/I).
+        var generated = string.IsNullOrWhiteSpace(configuredPassword);
+        var adminPassword = generated
+            ? RandomNumberGenerator.GetString("abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789", 20)
+            : configuredPassword!;
+
         ctx.Users.Add(new User
         {
-            UserName     = "admin",
-            PasswordHash = PasswordHasher.Hash(defaultPassword),
+            UserName     = adminUsername,
+            PasswordHash = PasswordHasher.Hash(adminPassword),
             Role         = "Admin"
         });
         await ctx.SaveChangesAsync();
+
         var seedLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-        seedLogger.LogWarning("No admin user found — created default admin. Username: admin, Password: {Password}. Change this immediately.", defaultPassword);
+        if (generated)
+            seedLogger.LogWarning(
+                "No admin user found — created admin '{Username}' with a generated password: {Password}\n" +
+                "Save it now and change it after signing in. Set ADMIN_DEFAULT_PASSWORD to choose your own.",
+                adminUsername, adminPassword);
+        else
+            seedLogger.LogWarning(
+                "No admin user found — created admin '{Username}' from ADMIN_DEFAULT_PASSWORD. Change it after signing in.",
+                adminUsername);
     }
 }
 

@@ -16,6 +16,11 @@ public class AuthService
     public event Action? OnChange;
     public event Action? SessionRestored;
 
+    // Completes when the one-time session restore (JWT read from browser storage) has run.
+    // Lets the auth-state provider hold protected routes until the token is rehydrated.
+    private readonly TaskCompletionSource _restored = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task WaitForSessionRestoreAsync() => _restored.Task;
+
     public void SetSession(UserInfo user, string token)
     {
         CurrentUser = user;
@@ -39,6 +44,7 @@ public class AuthService
     public void MarkSessionRestored()
     {
         IsSessionRestored = true;
+        _restored.TrySetResult();
         SessionRestored?.Invoke();
     }
 

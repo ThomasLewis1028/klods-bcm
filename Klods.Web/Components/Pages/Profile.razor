@@ -5,6 +5,8 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject ImageStorageService ImageStorage
+@inject IDialogService DialogService
+@using Klods.Components.Objects
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
 @attribute [Authorize]
@@ -49,6 +51,11 @@
                     <MudText Typo="Typo.h5" Style="font-weight: 700;">@AuthService.CurrentUser.UserName</MudText>
                     <MudText Typo="Typo.body2" Style="opacity: 0.55;">User ID: @AuthService.CurrentUser.UserId</MudText>
                 </MudStack>
+                <MudSpacer/>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Edit" OnClick="OpenPicturePicker">
+                    Change Picture
+                </MudButton>
             </MudStack>
         </MudPaper>
     </MudItem>
@@ -189,46 +196,35 @@
         </MudPaper>
     </MudItem>
 
-    @* ── Profile Picture ── *@
+    @* ── Text Size ── *@
     <MudItem xs="12">
         <MudPaper Class="pa-4" Elevation="2">
-            <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 700;">Profile Picture</MudText>
-            <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.55;">Choose a minifigure from your collection.</MudText>
+            <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 700;">Text Size</MudText>
+            <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.55;">Make text across the whole app larger or smaller.</MudText>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                @foreach (var option in _fontScaleOptions)
+                {
+                    var opt = option;
+                    var isActive = Math.Abs((AuthService.CurrentUser?.FontScale ?? ThemeService.DefaultFontScale) - opt.Scale) < 0.001;
+                    <MudButton Variant="@(isActive ? Variant.Filled : Variant.Outlined)"
+                               Color="@(isActive ? Color.Primary : Color.Default)"
+                               OnClick="() => SelectFontScale(opt.Scale)">@opt.Label</MudButton>
+                }
+            </MudStack>
+        </MudPaper>
+    </MudItem>
 
-            @if (_minifigs.Count == 0)
-            {
-                <MudText Typo="Typo.body2" Style="opacity: 0.5;">No minifigures found. Import some sets to unlock profile pictures.</MudText>
-            }
-            else
-            {
-                <MudTextField T="string" @bind-Value="_minifigSearch" Placeholder="Search minifigures…"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Variant="Variant.Outlined" Immediate="true" Class="mb-4"
-                              Style="max-width: 340px;"/>
-
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 12px; max-height: 420px; overflow-y: auto; padding: 4px;">
-                    @* Clear / no picture option *@
-                    <div @onclick="ClearProfilePicture"
-                         style="cursor: pointer; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px solid @(AuthService.CurrentUser.ProfilePictureUrl == null ? "var(--mud-palette-primary)" : "transparent"); background: @(AuthService.CurrentUser.ProfilePictureUrl == null ? "color-mix(in srgb, var(--mud-palette-primary) 10%, transparent)" : "transparent"); transition: all 0.15s;">
-                        <MudAvatar Style="width: 60px; height: 60px;">
-                            <MudIcon Icon="@Icons.Material.Filled.PersonOff" Style="font-size: 1.8rem;"/>
-                        </MudAvatar>
-                        <MudText Typo="Typo.caption" Style="text-align: center; line-height: 1.2;">None</MudText>
-                    </div>
-
-                    @foreach (var fig in FilteredMinifigs)
-                    {
-                        var fig1 = fig;
-                        var isSelected = AuthService.CurrentUser.ProfilePictureUrl == fig1.ImgUrl;
-                        <div @onclick="() => SelectProfilePicture(fig1.ImgUrl!)"
-                             style="cursor: pointer; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px solid @(isSelected ? "var(--mud-palette-primary)" : "transparent"); background: @(isSelected ? "color-mix(in srgb, var(--mud-palette-primary) 10%, transparent)" : "transparent"); transition: all 0.15s;">
-                            <MudImage Src="@ImageStorage.ResolveUrl(fig1.ImgUrl)" Alt="@fig1.MinifigName"
-                                      Style="width: 60px; height: 60px; object-fit: contain;"/>
-                            <MudText Typo="Typo.caption" Style="text-align: center; line-height: 1.2; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@fig1.MinifigName</MudText>
-                        </div>
-                    }
+    @* ── Guided Tour ── *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
+                <div>
+                    <MudText Typo="Typo.h6" Style="font-weight: 700;">Guided Tour</MudText>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.55;">A quick walkthrough of how Klods works.</MudText>
                 </div>
-            }
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="OpenTour">Take the tour</MudButton>
+            </MudStack>
         </MudPaper>
     </MudItem>
 
@@ -276,20 +272,12 @@
         set => _customColorHex = "#" + value.TrimStart('#');
     }
 
-    // Profile picture
-    private List<ApiClient.MinifigDto> _minifigs = [];
-    private string _minifigSearch = string.Empty;
-
     private bool _isLoading = true;
 
     private bool CanSavePassword =>
         !string.IsNullOrEmpty(_currentPassword) &&
         !string.IsNullOrEmpty(_newPassword) &&
         _newPassword == _confirmPassword;
-
-    private IEnumerable<ApiClient.MinifigDto> FilteredMinifigs => string.IsNullOrWhiteSpace(_minifigSearch)
-        ? _minifigs
-        : _minifigs.Where(m => m.MinifigName.Contains(_minifigSearch, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -306,11 +294,20 @@
         else if (qs["link_error"] == "already_linked")
             Snackbar.Add("That account is already linked to another user.", Severity.Error);
 
-        _minifigs = (await Api.GetMinifigsAsync())
-            ?.Where(m => m.ImgUrl is not null && m.ImgUrl != "")
-            .OrderBy(m => m.MinifigName)
-            .ToList() ?? [];
         _isLoading = false;
+    }
+
+    private async Task OpenPicturePicker()
+    {
+        var dialog = await DialogService.ShowAsync<ProfilePicturePickerDialog>("Choose Profile Picture",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not ProfilePicturePickerDialog.PickResult pick) return;
+
+        var url = pick.Remove ? null : pick.ImgUrl;
+        await Api.ChangePictureAsync(url);
+        AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { ProfilePictureUrl = url });
+        Snackbar.Add(pick.Remove ? "Profile picture removed." : "Profile picture updated.", Severity.Success);
     }
 
     private async Task SaveUsername()
@@ -342,13 +339,6 @@
         {
             Snackbar.Add("Current password is incorrect.", Severity.Error);
         }
-    }
-
-    private async Task SelectProfilePicture(string url)
-    {
-        await Api.ChangePictureAsync(url);
-        AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { ProfilePictureUrl = url });
-        Snackbar.Add("Profile picture updated.", Severity.Success);
     }
 
     private async Task LinkProvider(string provider)
@@ -397,10 +387,22 @@
         Snackbar.Add("Theme color updated.", Severity.Success);
     }
 
-    private async Task ClearProfilePicture()
+    private static readonly (string Label, double Scale)[] _fontScaleOptions =
+    [
+        ("Small", 0.9), ("Normal", 1.0), ("Large", 1.15), ("Largest", 1.3),
+    ];
+
+    private async Task SelectFontScale(double scale)
     {
-        await Api.ChangePictureAsync(null);
-        AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { ProfilePictureUrl = null });
-        Snackbar.Add("Profile picture removed.", Severity.Success);
+        await Api.ChangeFontScaleAsync(scale);
+        AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { FontScale = scale });
+        ThemeService.SetFontScale(scale);
+        Snackbar.Add("Text size updated.", Severity.Success);
     }
+
+    private Task OpenTour() =>
+        DialogService.ShowAsync<TourDialog>(null, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true, BackdropClick = true
+        });
 }
