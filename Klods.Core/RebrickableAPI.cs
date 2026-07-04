@@ -159,7 +159,7 @@ public class RebrickableApi
     private async Task<JsonArray> GetAllPagesAsync(string baseUrl)
     {
         var allResults = new JsonArray();
-        string? apiKey = Environment.GetEnvironmentVariable("LEGO_API_KEY");
+        string? apiKey = Environment.GetEnvironmentVariable("REBRICKABLE_API_KEY");
 
         // First page: our convention is that baseUrl ends with & or ?
         Uri nextUri = new Uri($"{baseUrl}key={apiKey}");
@@ -188,7 +188,7 @@ public class RebrickableApi
     private async Task<JsonObject?> SendQuery(string url)
     {
         _logger.LogInformation("API Call {Url}", url);
-        string? apiKey = Environment.GetEnvironmentVariable("LEGO_API_KEY");
+        string? apiKey = Environment.GetEnvironmentVariable("REBRICKABLE_API_KEY");
         return await FetchAsync(new Uri($"{url}key={apiKey}"));
     }
 
