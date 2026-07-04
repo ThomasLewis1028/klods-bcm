@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Klods.Migrations
 {
     [DbContext(typeof(InventoryContext))]
-    [Migration("20260704180646_AddUserHasSeenTour")]
-    partial class AddUserHasSeenTour
+    [Migration("20260704211148_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

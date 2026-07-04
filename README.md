@@ -44,7 +44,15 @@ So, my dad and I, having a bunch of free time while off work for the end of the 
 
 ### How to build
 
-Download the app and run the Docker Compose. Eventually I'll make it even easier.
+1. Copy `.env.example` to `.env` and fill it in — the required values (Rebrickable API key, Postgres password, MinIO password, JWT secret) are marked in the file.
+2. Run `docker compose up -d`.
+3. On first startup an admin account is created — username from `ADMIN_USERNAME` (defaults to `admin`). If you left `ADMIN_DEFAULT_PASSWORD` blank, a random password is generated and printed **once** to the logs. Grab it with:
+   ```
+   docker compose logs klods_api | grep "generated password"
+   ```
+   Sign in, then change the password in-app. (Setting `ADMIN_DEFAULT_PASSWORD` *after* the first boot won't change an existing admin — rotate it in the app instead.)
+
+Eventually I'll make it even easier.
 
 ### Future goals
 
