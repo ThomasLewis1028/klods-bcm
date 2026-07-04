@@ -240,13 +240,6 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     public async Task SetLooseMinifigCount(int userId, string minifigId, int target) =>
         await SetMinifigInstanceCount(userId, minifigId, setId: null, setIndex: null, target);
 
-    /// <summary>
-    /// Ensures an owned set copy holds exactly <paramref name="target"/> instances of a fig
-    /// (adding/removing instances linked to that copy). Used by the BOM "present on this copy" control.
-    /// </summary>
-    public async Task SetSetCopyMinifigCount(int userId, string setId, int setIndex, string minifigId, int target) =>
-        await SetMinifigInstanceCount(userId, minifigId, setId, setIndex, target);
-
     private async Task SetMinifigInstanceCount(int userId, string minifigId, string? setId, int? setIndex, int target)
     {
         if (target < 0) target = 0;
@@ -280,14 +273,6 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
         await context.SaveChangesAsync();
     }
-
-    /// <summary>
-    /// Sets the owned stock of a single part for a fig on a set copy, tracked against that copy's
-    /// lowest-indexed instance of the fig (creating one if the copy currently has none).
-    /// </summary>
-    public Task SetMinifigBrickOwnedStock(
-        int userId, string setId, int setIndex, string minifigId, string partNum, string colorId, int stock)
-        => SetMinifigBrickOwnedStockCore(userId, setId, setIndex, minifigId, partNum, colorId, stock);
 
     /// <summary>
     /// Sets the owned stock of a single part for a <em>loose</em> (unattached) fig, tracked against the
@@ -380,12 +365,22 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     }
 
     /// <summary>Adds one loose (unattached) instance of a fig and returns its new index.</summary>
-    public async Task<int> AddLooseMinifigInstance(int userId, string minifigId)
+    public Task<int> AddLooseMinifigInstance(int userId, string minifigId)
+        => AddMinifigInstance(userId, minifigId, setId: null, setIndex: null);
+
+    /// <summary>
+    /// Adds one instance of a fig — tied to a set copy when <paramref name="setId"/>/<paramref name="setIndex"/>
+    /// are given, otherwise loose — and returns its new index.
+    /// </summary>
+    public async Task<int> AddMinifigInstance(int userId, string minifigId, string? setId, int? setIndex)
     {
         await using var context = contextFactory.CreateDbContext();
         var owned = context.Set<MinifigOwned>();
         var index = await NextMinifigIndex(owned, userId, minifigId);
-        owned.Add(new MinifigOwned { UserId = userId, MinifigId = minifigId, MinifigIndex = index });
+        owned.Add(new MinifigOwned
+        {
+            UserId = userId, MinifigId = minifigId, MinifigIndex = index, SetId = setId, SetIndex = setIndex,
+        });
         await context.SaveChangesAsync();
         return index;
     }

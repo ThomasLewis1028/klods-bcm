@@ -111,48 +111,55 @@ public static class BomEndpoints
             return Results.Ok(new CompletenessDto(comp.Percent, comp.Status.ToString().ToLowerInvariant()));
         });
 
-        // Inline bricks for a minifig within the BOM context (SetBrickOwned + BrickOwned context).
-        group.MapGet("/{setId}/{setIndex:int}/minifigs/{minifigId}/bricks", async (
+        // Fig instances tied to THIS set copy, each with its own per-part completeness (one row per physical fig).
+        group.MapGet("/{setId}/{setIndex:int}/minifigs/{minifigId}/instances", async (
             string setId, int setIndex, string minifigId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
 
-            var minifigBricks = await db.Set<MinifigBrick>().AsNoTracking()
+            var instances = await db.Set<MinifigOwned>().AsNoTracking()
+                .Where(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == setId && mo.SetIndex == setIndex)
+                .OrderBy(mo => mo.MinifigIndex).ToListAsync();
+            if (instances.Count == 0) return Results.Ok(new List<BomMinifigInstanceDto>());
+
+            var reqParts = await db.Set<MinifigBrick>().AsNoTracking()
                 .Where(mb => mb.MinifigId == minifigId).ToListAsync();
-
-            var brickIds = minifigBricks.Select(mb => mb.PartNum).ToHashSet();
-
-            var brickDict = (await db.Set<Brick>().AsNoTracking().Where(b => brickIds.Contains(b.PartNum)).ToListAsync())
+            var partNums = reqParts.Select(p => p.PartNum).ToHashSet();
+            var brickInfo = (await db.Set<Brick>().AsNoTracking().Where(b => partNums.Contains(b.PartNum)).ToListAsync())
                 .ToDictionary(b => (b.PartNum, b.ColorId ?? ""));
 
-            // Owned part stock is tracked against this copy's lowest-indexed instance of the fig.
-            var instanceIndex = await db.Set<MinifigOwned>().AsNoTracking()
-                .Where(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == setId && mo.SetIndex == setIndex)
-                .OrderBy(mo => mo.MinifigIndex)
-                .Select(mo => (int?)mo.MinifigIndex)
-                .FirstOrDefaultAsync();
+            var indices = instances.Select(i => i.MinifigIndex).ToList();
+            var ownedByIndex = (await db.Set<MinifigBrickOwned>().AsNoTracking()
+                    .Where(x => x.UserId == userId && x.MinifigId == minifigId && indices.Contains(x.MinifigIndex))
+                    .ToListAsync())
+                .GroupBy(x => x.MinifigIndex)
+                .ToDictionary(g => g.Key, g => g.ToDictionary(x => (x.PartNum, x.ColorId), x => x.Stock));
 
-            var ownedDict = instanceIndex == null
-                ? new Dictionary<(string, string), int>()
-                : (await db.Set<MinifigBrickOwned>().AsNoTracking()
-                        .Where(x => x.UserId == userId && x.MinifigId == minifigId && x.MinifigIndex == instanceIndex.Value)
-                        .ToListAsync())
-                    .ToDictionary(x => (x.PartNum, x.ColorId), x => x.Stock);
-
-            var result = minifigBricks
-                .Where(mb => brickDict.ContainsKey((mb.PartNum, mb.ColorId)))
-                .Select(mb =>
-                {
-                    var brick = brickDict[(mb.PartNum, mb.ColorId)];
-                    ownedDict.TryGetValue((mb.PartNum, mb.ColorId), out var owned);
-                    return new BomBrickDto(
-                        mb.PartNum, mb.ColorId, brick.Name, brick.PartImg, brick.ColorName, brick.HexColor,
-                        mb.Count, mb.SpareCount,
-                        owned, 0, brick.BricklinkId);
-                }).ToList();
+            var result = instances.Select(inst =>
+            {
+                var owned = ownedByIndex.GetValueOrDefault(inst.MinifigIndex) ?? new Dictionary<(string, string), int>();
+                var parts = reqParts
+                    .Where(p => brickInfo.ContainsKey((p.PartNum, p.ColorId)))
+                    .Select(p =>
+                    {
+                        var b = brickInfo[(p.PartNum, p.ColorId)];
+                        owned.TryGetValue((p.PartNum, p.ColorId), out var have);
+                        return new BomMinifigInstancePartDto(p.PartNum, p.ColorId, b.Name, b.PartImg, b.ColorName, b.HexColor, p.Count, have);
+                    }).ToList();
+                return new BomMinifigInstanceDto(inst.MinifigIndex, parts);
+            }).ToList();
 
             return Results.Ok(result);
+        });
+
+        // Add one fig instance to this set copy ("I have this one") — returns the new instance index.
+        group.MapPost("/{setId}/{setIndex:int}/minifigs/{minifigId}/instances", async (
+            string setId, int setIndex, string minifigId, HttpContext http, ImportData importer) =>
+        {
+            var userId = http.UserId();
+            var index = await importer.AddMinifigInstance(userId, minifigId, setId, setIndex);
+            return Results.Ok(new NewInstanceDto(index));
         });
 
         // Update SetBrickOwned stock (the stock "used in this set instance").
@@ -177,30 +184,32 @@ public static class BomEndpoints
             return ok ? Results.Ok() : Results.NotFound();
         });
 
-        // Set how many of this fig are present on this set copy (adds/removes linked instances).
-        group.MapPatch("/{setId}/{setIndex:int}/minifigs/{minifigId}", async (
-            string setId, int setIndex, string minifigId,
-            UpdateStockRequest req, HttpContext http, ImportData importer) =>
+        // Remove a specific fig instance from this copy (deletes the droid; its parts cascade at the DB).
+        group.MapDelete("/{setId}/{setIndex:int}/minifigs/{minifigId}/instances/{index:int}", async (
+            string minifigId, int index, HttpContext http, ImportData importer) =>
         {
             var userId = http.UserId();
-            await importer.SetSetCopyMinifigCount(userId, setId, setIndex, minifigId, req.Stock);
-            return Results.Ok();
+            var ok = await importer.RemoveMinifigInstance(userId, minifigId, index);
+            return ok ? Results.Ok() : Results.NotFound();
         });
 
-        // Set owned stock of a single part on this copy's fig instance.
-        group.MapPatch("/{setId}/{setIndex:int}/minifigs/{minifigId}/bricks/{partNum}/{colorId}", async (
-            string setId, int setIndex, string minifigId, string partNum, string colorId,
+        // Set owned stock of a single part for a specific fig instance on this copy.
+        group.MapPatch("/{setId}/{setIndex:int}/minifigs/{minifigId}/instances/{index:int}/parts/{partNum}/{colorId}", async (
+            string minifigId, int index, string partNum, string colorId,
             UpdateStockRequest req, HttpContext http, ImportData importer) =>
         {
             var userId = http.UserId();
-            await importer.SetMinifigBrickOwnedStock(userId, setId, setIndex, minifigId, partNum, colorId, req.Stock);
+            await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
             return Results.Ok();
         });
     }
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
+    public record BomMinifigInstanceDto(int Index, List<BomMinifigInstancePartDto> Parts);
+    public record BomMinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
     public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status);
     public record UpdateStockRequest(int Stock);
+    public record NewInstanceDto(int Index);
     public record CompletenessDto(int Percent, string Status);
 }

@@ -155,11 +155,10 @@
                     </MudDataGrid>
                 </MudTabPanel>
 
-                @* Minifigure Tab *@
-                <MudTabPanel Text="Minifigures" Disabled="@(_setMinifigInfo.Count == 0)">
-                    <MudDataGrid T="SetMinifigInfo" Items="@_setMinifigInfo.OrderBy(b => b.Minifig.MinifigId)"
-                                 SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
-                                 QuickFilter="SetMinifigFilterFunc" ReadOnly="false" Dense="true">
+                @* Minifigure Tab — one row per physical fig ("slot"); duplicates split into separate rows *@
+                <MudTabPanel Text="Minifigures" Disabled="@(_minifigSlots.Count == 0)">
+                    <MudDataGrid T="MinifigSlot" Items="@_minifigSlots" SortMode="@SortMode.None"
+                                 QuickFilter="MinifigSlotFilterFunc" ReadOnly="true" Dense="true">
                         <ToolBarContent>
                             <MudSpacer/>
                             <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
@@ -167,48 +166,68 @@
                                           IconSize="Size.Medium" Class="mt-0"/>
                         </ToolBarContent>
                         <Columns>
-                            <HierarchyColumn/>
+                            <HierarchyColumn ButtonDisabledFunc="@(x => !x.Filled)"/>
                             <TemplateColumn Title="Image" Editable="false">
                                 <CellTemplate>
                                     <MudImage class="cursor-pointer rounded-2" Elevation="2"
+                                              Style="@(context.Item.Filled ? "" : "opacity:.4;")"
                                               Src="@ImageStorage.ResolveUrl(context.Item.Minifig.ImgUrl)" Height="50"
                                               @onclick="() => OpenImagePopup(context.Item.Minifig.MinifigId, context.Item.Minifig.Name, ImageStorage.ResolveUrl(context.Item.Minifig.ImgUrl))"/>
                                 </CellTemplate>
                             </TemplateColumn>
                             <PropertyColumn Property="x => x.Minifig.MinifigId" Title="Minifig Id" Editable="false"/>
                             <PropertyColumn Property="x => x.Minifig.Name" Title="Name" Editable="false"/>
-                            <PropertyColumn Property="x => x.Minifig.Count" Title="Needed" Editable="false"/>
-                            <TemplateColumn Title="My Stock" Editable="false" SortBy="x => x.OwnedStock">
+                            <TemplateColumn Title="Slot" Editable="false">
                                 <CellTemplate>
-                                    <MudNumericField T="int" Value="@context.Item.OwnedStock"
-                                                     ValueChanged="@(v => SaveMinifigOwnedStock(context.Item, v))"
-                                                     Min="0" Disabled="@(AuthService.CurrentUser == null)"
-                                                     Variant="Variant.Text"/>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@context.Item.SlotNumber of @context.Item.SlotTotal</MudText>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Status" Editable="false">
+                                <CellTemplate>
+                                    @if (context.Item.Filled)
+                                    {
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                            <span class="cstatus cstatus-@SlotStatus(context.Item)" style="font-size:.72rem;">
+                                                @context.Item.Percent% · @StatusWord(SlotStatus(context.Item))
+                                            </span>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                                           Disabled="@(AuthService.CurrentUser == null)"
+                                                           OnClick="() => RemoveSlot(context.Item)"/>
+                                        </MudStack>
+                                    }
+                                    else
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                   StartIcon="@Icons.Material.Filled.Add"
+                                                   Disabled="@(AuthService.CurrentUser == null)"
+                                                   OnClick="() => FillSlot(context.Item)">I have this one</MudButton>
+                                    }
                                 </CellTemplate>
                             </TemplateColumn>
                         </Columns>
-                        <ChildRowContent Context="minifigContext">
+                        <ChildRowContent Context="slotContext">
                             <MudCard>
-                                <MudDataGrid T="SetBrickInfo" Items="@minifigContext.Item.BomBricks" Dense="true">
+                                <MudDataGrid T="SlotPart" Items="@slotContext.Item.Parts" Dense="true">
                                     <Columns>
                                         <TemplateColumn Title="Image">
                                             <CellTemplate>
                                                 <MudImage class="cursor-pointer rounded-3" Elevation="2"
-                                                          Src="@ImageStorage.ResolveUrl(context.Item.Brick.PartImg)" Height="50"
-                                                          @onclick="() => OpenImagePopup(context.Item.Brick.PartNum, context.Item.Brick.Name, ImageStorage.ResolveUrl(context.Item.Brick.PartImg))"/>
+                                                          Src="@ImageStorage.ResolveUrl(context.Item.PartImg)" Height="50"
+                                                          @onclick="() => OpenImagePopup(context.Item.PartNum, context.Item.Name, ImageStorage.ResolveUrl(context.Item.PartImg))"/>
                                             </CellTemplate>
                                         </TemplateColumn>
-                                        <PropertyColumn Title="Brick Id" Property="x => x.Brick.PartNum"/>
-                                        <PropertyColumn Title="Name" Property="x => x.Brick.Name"/>
-                                        <TemplateColumn Title="Need" Editable="false" SortBy="x => x.Brick.Count" Sortable="true">
+                                        <PropertyColumn Title="Brick Id" Property="x => x.PartNum"/>
+                                        <PropertyColumn Title="Name" Property="x => x.Name"/>
+                                        <PropertyColumn Title="Color" Property="x => x.ColorName"/>
+                                        <TemplateColumn Title="Need" Editable="false">
                                             <CellTemplate>
-                                                <MudText>@context.Item.Brick.Count</MudText>
+                                                <MudText Color="@(context.Item.Owned >= context.Item.Need ? Color.Success : Color.Error)">@context.Item.Need</MudText>
                                             </CellTemplate>
                                         </TemplateColumn>
-                                        <TemplateColumn Title="Stock Used">
+                                        <TemplateColumn Title="Owned">
                                             <CellTemplate>
-                                                <MudNumericField T="int" Value="@context.Item.SetStock"
-                                                                 ValueChanged="@(v => SaveMinifigBrickOwnedStock(minifigContext.Item, context.Item, v))"
+                                                <MudNumericField T="int" Value="@context.Item.Owned"
+                                                                 ValueChanged="@(v => SaveSlotPart(slotContext.Item, context.Item, v))"
                                                                  Min="0" Disabled="@(AuthService.CurrentUser == null)"
                                                                  Variant="Variant.Text"/>
                                             </CellTemplate>
@@ -218,7 +237,7 @@
                             </MudCard>
                         </ChildRowContent>
                         <PagerContent>
-                            <MudDataGridPager T="SetMinifigInfo"/>
+                            <MudDataGridPager T="MinifigSlot"/>
                         </PagerContent>
                     </MudDataGrid>
                 </MudTabPanel>
@@ -239,7 +258,8 @@
     [Parameter] public int? SetIndex { get; set; }
 
     private List<SetBrickInfo> _setBrickInfo = new();
-    private List<SetMinifigInfo> _setMinifigInfo = new();
+    private List<ApiClient.BomMinifigDto> _bomMinifigs = new();
+    private List<MinifigSlot> _minifigSlots = new();
     private List<int> _ownedInstances = new();
     private string _setName = "";
     private string? _manualUrl;
@@ -286,7 +306,7 @@
         StateHasChanged();
 
         _setBrickInfo.Clear();
-        _setMinifigInfo.Clear();
+        _minifigSlots.Clear();
 
         var bom = await Api.GetBomAsync(SetId, _currentSetIndex);
         if (bom == null)
@@ -308,21 +328,53 @@
             Brick = b, SetStock = b.SetStock, LooseStock = b.LooseStock
         }).ToList();
 
-        _setMinifigInfo = bom.Minifigs.Select(m => new SetMinifigInfo
-        {
-            Minifig = m, OwnedStock = m.OwnedStock
-        }).ToList();
-
-        foreach (var mi in _setMinifigInfo)
-        {
-            var bricks = await Api.GetMinifigBricksInBomAsync(SetId, _currentSetIndex, mi.Minifig.MinifigId);
-            mi.BomBricks = (bricks ?? [])
-                .Select(b => new SetBrickInfo { Brick = b, SetStock = b.SetStock, LooseStock = b.LooseStock })
-                .ToList();
-        }
+        _bomMinifigs = bom.Minifigs.OrderBy(m => m.MinifigId).ToList();
+        await ReloadMinifigSlotsAsync();
 
         _isLoading = false;
         StateHasChanged();
+    }
+
+    // Rebuild the per-fig slot rows: each owned instance on this copy fills a slot; the rest render empty.
+    private async Task ReloadMinifigSlotsAsync()
+    {
+        var expanded = _minifigSlots
+            .Where(s => s is { Expanded: true, InstanceIndex: not null })
+            .Select(s => (s.Minifig.MinifigId, s.InstanceIndex!.Value))
+            .ToHashSet();
+
+        var slots = new List<MinifigSlot>();
+        foreach (var m in _bomMinifigs)
+        {
+            var instances = await Api.GetBomMinifigInstancesAsync(SetId, _currentSetIndex, m.MinifigId) ?? [];
+
+            var filled = instances.Select(inst => new MinifigSlot
+            {
+                Minifig = m,
+                InstanceIndex = inst.Index,
+                Expanded = expanded.Contains((m.MinifigId, inst.Index)),
+                Parts = inst.Parts.Select(p => new SlotPart
+                {
+                    PartNum = p.PartNum, ColorId = p.ColorId, Name = p.Name, PartImg = p.PartImg,
+                    ColorName = p.ColorName, HexColor = p.HexColor, Need = p.Need, Owned = p.Owned
+                }).ToList()
+            }).ToList();
+
+            // Pad to the needed count with empty slots (never hide surplus instances beyond the count).
+            for (var i = filled.Count; i < m.Count; i++)
+                filled.Add(new MinifigSlot { Minifig = m });
+
+            var total = filled.Count;
+            for (var i = 0; i < filled.Count; i++)
+            {
+                filled[i].SlotNumber = i + 1;
+                filled[i].SlotTotal = total;
+            }
+
+            slots.AddRange(filled);
+        }
+
+        _minifigSlots = slots;
     }
 
     private async Task ChangeIndex(int setIndex)
@@ -346,13 +398,13 @@
         return false;
     }
 
-    private bool SetMinifigFilterFunc(SetMinifigInfo info)
+    private bool MinifigSlotFilterFunc(MinifigSlot slot)
     {
         if (string.IsNullOrWhiteSpace(_searchString))
             return true;
-        if (info.Minifig.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+        if (slot.Minifig.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
             return true;
-        if (info.Minifig.MinifigId.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+        if (slot.Minifig.MinifigId.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
             return true;
         return false;
     }
@@ -389,26 +441,44 @@
         await RefreshCompletenessAsync();
     }
 
-    private async Task SaveMinifigOwnedStock(SetMinifigInfo info, int newValue)
+    private async Task SaveSlotPart(MinifigSlot slot, SlotPart part, int newValue)
     {
-        if (AuthService.CurrentUser == null) return;
-        info.OwnedStock = newValue;
-        if (!await Api.UpdateBomMinifigStockAsync(SetId, _currentSetIndex, info.Minifig.MinifigId, newValue))
-            Snackbar.Add("Failed to save minifig stock.", Severity.Error);
-        StateHasChanged();
-        await RefreshCompletenessAsync();
-    }
-
-    private async Task SaveMinifigBrickOwnedStock(SetMinifigInfo minifig, SetBrickInfo info, int newValue)
-    {
-        if (AuthService.CurrentUser == null) return;
-        info.SetStock = newValue;
-        if (!await Api.UpdateBomMinifigBrickStockAsync(
-                SetId, _currentSetIndex, minifig.Minifig.MinifigId, info.Brick.PartNum, info.Brick.ColorId, newValue))
+        if (AuthService.CurrentUser == null || slot.InstanceIndex is not int index) return;
+        part.Owned = newValue;
+        if (!await Api.UpdateBomMinifigInstancePartStockAsync(
+                SetId, _currentSetIndex, slot.Minifig.MinifigId, index, part.PartNum, part.ColorId, newValue))
             Snackbar.Add("Failed to save minifig part stock.", Severity.Error);
         StateHasChanged();
         await RefreshCompletenessAsync();
     }
+
+    private async Task FillSlot(MinifigSlot slot)
+    {
+        if (AuthService.CurrentUser == null) return;
+        if (!await Api.AddBomMinifigInstanceAsync(SetId, _currentSetIndex, slot.Minifig.MinifigId))
+        {
+            Snackbar.Add("Failed to add minifig.", Severity.Error);
+            return;
+        }
+        await ReloadMinifigSlotsAsync();
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private async Task RemoveSlot(MinifigSlot slot)
+    {
+        if (AuthService.CurrentUser == null || slot.InstanceIndex is not int index) return;
+        if (!await Api.RemoveBomMinifigInstanceAsync(SetId, _currentSetIndex, slot.Minifig.MinifigId, index))
+        {
+            Snackbar.Add("Failed to remove minifig.", Severity.Error);
+            return;
+        }
+        await ReloadMinifigSlotsAsync();
+        StateHasChanged();
+        await RefreshCompletenessAsync();
+    }
+
+    private static string SlotStatus(MinifigSlot slot) => slot.IsComplete ? "complete" : "short";
 
     private async Task MoveBrickStock(Direction dir, SetBrickInfo info)
     {
@@ -468,10 +538,38 @@
         public int MoveCount { get; set; }
     }
 
-    public class SetMinifigInfo
+    public class MinifigSlot
     {
         public ApiClient.BomMinifigDto Minifig { get; set; } = null!;
-        public int OwnedStock { get; set; }
-        public List<SetBrickInfo> BomBricks { get; set; } = [];
+        public int SlotNumber { get; set; }
+        public int SlotTotal { get; set; }
+        public int? InstanceIndex { get; set; }
+        public bool Expanded { get; set; }
+        public List<SlotPart> Parts { get; set; } = [];
+
+        public bool Filled => InstanceIndex.HasValue;
+        public bool IsComplete => Filled && Parts.All(p => p.Owned >= p.Need);
+
+        public int Percent
+        {
+            get
+            {
+                var need = Parts.Sum(p => p.Need);
+                if (need == 0) return Filled ? 100 : 0;
+                return (int)Math.Round(100.0 * Parts.Sum(p => Math.Min(p.Owned, p.Need)) / need);
+            }
+        }
+    }
+
+    public class SlotPart
+    {
+        public string PartNum { get; set; } = "";
+        public string ColorId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? PartImg { get; set; }
+        public string? ColorName { get; set; }
+        public string? HexColor { get; set; }
+        public int Need { get; set; }
+        public int Owned { get; set; }
     }
 }
