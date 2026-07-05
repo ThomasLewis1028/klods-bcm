@@ -23,8 +23,8 @@ public class ImageStorageService
         _minio = new MinioClient()
             .WithEndpoint(uri.Host, uri.Port)
             .WithCredentials(
-                config["MINIO_ROOT_USER"]     ?? "minioadmin",
-                config["MINIO_ROOT_PASSWORD"] ?? "minioadmin")
+                config["MINIO_ROOT_USER"]     ?? throw new InvalidOperationException("MINIO_ROOT_USER is not configured."),
+                config["MINIO_ROOT_PASSWORD"] ?? throw new InvalidOperationException("MINIO_ROOT_PASSWORD is not configured."))
             .WithSSL(uri.Scheme == "https")
             .Build();
 
@@ -92,9 +92,19 @@ public class ImageStorageService
         var cached = await TryGetObjectAsync(key, ct);
         if (cached != null) return (cached, contentType);
 
+        byte[] bytes;
         try
         {
-            var bytes = await _http.GetByteArrayAsync(sourceUrl, ct);
+            bytes = await _http.GetByteArrayAsync(sourceUrl, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Read-through fetch failed for {Url}: {Message}", sourceUrl, ex.Message);
+            return null;
+        }
+
+        try
+        {
             using var stream = new MemoryStream(bytes);
             await _minio.PutObjectAsync(new PutObjectArgs()
                 .WithBucket(_bucket)
@@ -102,13 +112,15 @@ public class ImageStorageService
                 .WithStreamData(stream)
                 .WithObjectSize(bytes.Length)
                 .WithContentType(contentType), ct);
-            return (bytes, contentType);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning("Read-through cache failed for {Url}: {Message}", sourceUrl, ex.Message);
-            return null;
+            // Serving the freshly-fetched bytes matters more than caching them; a failed
+            // write just means the next request for this image fetches it again.
+            _logger.LogWarning("Cache write failed for {Url}: {Message}", sourceUrl, ex.Message);
         }
+
+        return (bytes, contentType);
     }
 
     private async Task<byte[]?> TryGetObjectAsync(string key, CancellationToken ct)

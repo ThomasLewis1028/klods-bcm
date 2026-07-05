@@ -2,10 +2,36 @@ using Klods;
 using Klods.Components;
 using Klods.Services;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Persist DataProtection keys so antiforgery tokens survive container restarts. Only when a
+// path is configured (production/compose); locally it falls back to the default per-user
+// store, which is fine for dev. If the configured path isn't writable (e.g. a root-owned
+// volume), fall back to ephemeral keys rather than failing every request — the site stays up,
+// keys just won't survive a restart.
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("Klods.Web");
+var dpKeysPath = builder.Configuration["DATAPROTECTION_KEYS_PATH"];
+if (!string.IsNullOrWhiteSpace(dpKeysPath))
+{
+    try
+    {
+        Directory.CreateDirectory(dpKeysPath);
+        var probe = Path.Combine(dpKeysPath, ".write-probe");
+        File.WriteAllText(probe, string.Empty);
+        File.Delete(probe);
+        dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dpKeysPath));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine(
+            $"DataProtection: keys path '{dpKeysPath}' is not writable ({ex.Message}); " +
+            "falling back to ephemeral keys (they will not survive a restart).");
+    }
+}
 
 builder.Services.AddSingleton<ImageStorageService>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -72,6 +98,8 @@ app.MapGet("/img", async (string u, ImageStorageService img, HttpContext ctx, Ca
     ctx.Response.Headers.CacheControl = "public, max-age=2592000, immutable";
     return Results.File(result.Value.Bytes, result.Value.ContentType);
 });
+
+app.MapGet("/health", () => Results.Ok("healthy"));
 
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<Program>();
 logger.LogInformation("Lego application starting.");

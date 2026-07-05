@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Klods.Api.Auth;
@@ -174,6 +175,13 @@ app.MapBom();
 app.MapAdmin();
 app.MapUsers();
 app.MapHome();
+
+var appVersion =
+    (Assembly.GetEntryAssembly()?
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+     ?? "0.0.0-dev").Split('+')[0];
+app.MapGet("/health", () => Results.Ok("healthy"));
+app.MapGet("/version", () => Results.Ok(new { version = appVersion }));
 
 app.Run();
 
