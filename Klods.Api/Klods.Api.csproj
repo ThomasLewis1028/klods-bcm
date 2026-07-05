@@ -17,6 +17,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Fallback for build paths that don't pass -p:Version (Rider debug, dotnet run).
+         docker compose / the release pipeline override this with the real (git/tag) version. -->
+    <Version>0.0.0-dev</Version>
   </PropertyGroup>
 
 </Project>
