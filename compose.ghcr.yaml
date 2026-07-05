@@ -1,0 +1,110 @@
+# Klods — deploy stack using the published GHCR images.
+#
+# Usage (Docker CLI):
+#   1. Download this file and .env.example next to each other.
+#   2. cp .env.example .env  and fill in the values (see comments in .env.example).
+#   3. docker compose -f compose.ghcr.yaml up -d
+#
+# Usage (Portainer): Stacks -> Add stack -> Web editor -> paste this file, then set the
+#   same variables under the stack's "Environment variables" section, and Deploy.
+#
+# First run: the API prints a generated admin password once in its logs
+#   (docker compose -f compose.ghcr.yaml logs klods_api | grep "generated password"),
+#   unless you set ADMIN_DEFAULT_PASSWORD yourself. Sign in as ADMIN_USERNAME and change it.
+#
+# Pinned to :latest for simplicity — pin to a version (e.g. :1.0.1) for reproducible deploys.
+
+name: klods
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - klods-db-volume:/var/lib/postgresql/data:rw
+    networks: [klods-network]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - klods-minio-volume:/data
+    networks: [klods-network]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  klods_api:
+    image: ghcr.io/thomaslewis1028/klods-api:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      REBRICKABLE_API_KEY: ${REBRICKABLE_API_KEY}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
+      BLAZOR_ORIGIN: ${BLAZOR_ORIGIN:-http://localhost:5100}
+      # OAuth providers — each is skipped unless BOTH its id and secret are set.
+      # Register {BLAZOR public API URL}/signin-<provider> as the redirect URI in each console.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    ports:
+      - "5101:8080"
+    networks: [klods-network]
+
+  klods_web:
+    image: ghcr.io/thomaslewis1028/klods-web:latest
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://klods_api:8080
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:5101}
+      MINIO_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      klods_api: { condition: service_started }
+    ports:
+      - "5100:8080"
+    volumes:
+      - klods-volume:/home/app/.local/share:rw
+    networks: [klods-network]
+
+volumes:
+  klods-volume:
+  klods-db-volume:
+  klods-minio-volume:
+
+networks:
+  klods-network:
+    driver: bridge

@@ -42,21 +42,29 @@ I looked around and found a few websites that allowed you to track your sets, ev
 
 So, my dad and I, having a bunch of free time while off work for the end of the year, started building this little thing to fulfill my own personal needs, even if no one else cared.
 
-### How to build
+### Deploy (recommended — published images)
 
-1. Copy `.env.example` to `.env` and fill it in — the required values (Rebrickable API key, Postgres password, MinIO password, JWT secret) are marked in the file.
-2. Run `docker compose up -d`.
-3. On first startup an admin account is created — username from `ADMIN_USERNAME` (defaults to `admin`). If you left `ADMIN_DEFAULT_PASSWORD` blank, a random password is generated and printed **once** to the logs. Grab it with:
-   ```
-   docker compose logs klods_api | grep "generated password"
-   ```
-   Sign in, then change the password in-app. (Setting `ADMIN_DEFAULT_PASSWORD` *after* the first boot won't change an existing admin — rotate it in the app instead.)
+Runs the prebuilt images from GitHub Container Registry — no cloning or compiling.
 
-Eventually I'll make it even easier.
+1. Download [`compose.ghcr.yaml`](compose.ghcr.yaml) and [`.env.example`](.env.example) into the same folder.
+2. `cp .env.example .env` and fill in the values (required ones are marked in the file).
+3. `docker compose -f compose.ghcr.yaml up -d`
+
+Or paste `compose.ghcr.yaml` into a **Portainer** stack and set the same variables under the stack's *Environment variables*.
+
+**First run:** an admin account is created — username from `ADMIN_USERNAME` (default `admin`). If you left `ADMIN_DEFAULT_PASSWORD` blank, a random password is printed **once** to the logs:
+```
+docker compose -f compose.ghcr.yaml logs klods_api | grep "generated password"
+```
+Sign in, change it in-app, then run the catalog bulk import to populate sets/parts/minifigs. (Setting `ADMIN_DEFAULT_PASSWORD` *after* first boot won't change an existing admin — rotate it in the app.)
+
+### Build from source (development)
+
+Clone the repo, `cp .env.example .env` and fill it in, then `docker compose up -d` — this builds the images locally from the Dockerfiles instead of pulling them.
 
 ### Future goals
 
-- Upload the Docker image somewhere
+- ~~Upload the Docker image somewhere~~ Published to GHCR
 - ~~Add user authentication~~ 
 - Allow users to upload and manage their own API key (and encrypt it)
 - ~~Allow users to have and manage their own inventories~~ 
