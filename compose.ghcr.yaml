@@ -26,6 +26,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - klods-db-volume:/var/lib/postgresql/data:rw
+    # Bound to the host loopback only — reach it remotely over an SSH tunnel
+    # (Rider datasource -> SSH/SSL tab). Change to "5105:5432" to expose it on
+    # all interfaces if the host is firewalled/VPN-only and you want direct access.
+    ports:
+      - "127.0.0.1:5105:5432"
     networks: [klods-network]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
