@@ -65,9 +65,12 @@ services:
       REBRICKABLE_API_KEY: ${REBRICKABLE_API_KEY}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
-      BLAZOR_ORIGIN: ${BLAZOR_ORIGIN:-http://localhost:5100}
+      # Public URL of the web app (klods_web). REQUIRED — the API redirects the
+      # browser here after OAuth sign-in. If unset it would fall back to localhost
+      # and send users to their own machine, so Compose refuses to start without it.
+      BLAZOR_ORIGIN: ${BLAZOR_ORIGIN:?set BLAZOR_ORIGIN to the public URL of the web app, e.g. https://klods.example.net}
       # OAuth providers — each is skipped unless BOTH its id and secret are set.
-      # Register {BLAZOR public API URL}/signin-<provider> as the redirect URI in each console.
+      # Register {API_PUBLIC_URL}/signin-<provider> as the redirect URI in each console.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
@@ -88,7 +91,10 @@ services:
     restart: unless-stopped
     environment:
       API_BASE_URL: http://klods_api:8080
-      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:5101}
+      # Public URL the browser uses to reach the API for the OAuth challenge.
+      # REQUIRED — see BLAZOR_ORIGIN above. Often the same host as BLAZOR_ORIGIN
+      # when a reverse proxy path-routes /auth, /signin-*, and /api to the API.
+      API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL to the public URL of the API, e.g. https://klods.example.net}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
