@@ -34,6 +34,9 @@ public class InventoryContext : DbContext
 
         // BRICK
         modelBuilder.Entity<Brick>().HasKey(e => new { e.PartNum, e.ColorId });
+        // Bulk import inserts Bricks without SetCount and fills it in a later UPDATE, so the column
+        // needs a DB default to satisfy the NOT NULL constraint at insert time.
+        modelBuilder.Entity<Brick>().Property(e => e.SetCount).HasDefaultValue(0);
 
         // SET
         modelBuilder.Entity<Set>().HasKey(e => new { e.SetId });
