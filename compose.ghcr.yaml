@@ -90,6 +90,8 @@ services:
       API_BASE_URL: http://klods_api:8080
       API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:5101}
       MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
