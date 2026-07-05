@@ -87,6 +87,7 @@ services:
     environment:
       API_BASE_URL: "http://klods_api:8080"
       API_PUBLIC_URL: "${API_PUBLIC_URL:-http://localhost:5101}"
+      DATAPROTECTION_KEYS_PATH: /home/app/dp-keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,10 +103,10 @@ services:
     networks:
       - klods-network
     volumes:
-      - klods-volume:/home/app/.local/share:rw
+      - klods-dp-keys-volume:/home/app/dp-keys:rw
 
 volumes:
-  klods-volume:
+  klods-dp-keys-volume:
   klods-db-volume:
   klods-pgadmin-volume:
   klods-minio-volume:
