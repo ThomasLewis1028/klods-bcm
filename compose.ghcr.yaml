@@ -84,6 +84,13 @@ services:
       minio: { condition: service_healthy }
     ports:
       - "5101:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # API migrates the DB, seeds the admin, and inits MinIO on boot — give it room.
+      start_period: 60s
     networks: [klods-network]
 
   klods_web:
@@ -98,18 +105,27 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Persist DataProtection keys (antiforgery tokens) on the volume below so they
+      # survive container restarts.
+      DATAPROTECTION_KEYS_PATH: /home/app/dp-keys
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
-      klods_api: { condition: service_started }
+      klods_api: { condition: service_healthy }
     ports:
       - "5100:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
-      - klods-volume:/home/app/.local/share:rw
+      - klods-dp-keys-volume:/home/app/dp-keys:rw
     networks: [klods-network]
 
 volumes:
-  klods-volume:
+  klods-dp-keys-volume:
   klods-db-volume:
   klods-minio-volume:
 

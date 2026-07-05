@@ -2,10 +2,19 @@ using Klods;
 using Klods.Components;
 using Klods.Services;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Persist DataProtection keys so antiforgery tokens survive container restarts. Only when a
+// path is configured (production/compose); locally it falls back to the default per-user
+// store, which is fine for dev.
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("Klods.Web");
+var dpKeysPath = builder.Configuration["DATAPROTECTION_KEYS_PATH"];
+if (!string.IsNullOrWhiteSpace(dpKeysPath))
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dpKeysPath));
 
 builder.Services.AddSingleton<ImageStorageService>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -72,6 +81,8 @@ app.MapGet("/img", async (string u, ImageStorageService img, HttpContext ctx, Ca
     ctx.Response.Headers.CacheControl = "public, max-age=2592000, immutable";
     return Results.File(result.Value.Bytes, result.Value.ContentType);
 });
+
+app.MapGet("/health", () => Results.Ok("healthy"));
 
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<Program>();
 logger.LogInformation("Lego application starting.");

@@ -12,10 +12,14 @@ RUN dotnet build "Klods.Web/Klods.Web.csproj" -c $BUILD_CONFIGURATION -o /app/bu
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "Klods.Web/Klods.Web.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false && \
+ARG VERSION=0.0.0-dev
+RUN dotnet publish "Klods.Web/Klods.Web.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false /p:Version=$VERSION && \
     rm -f /app/publish/Klods.Web.staticwebassets.runtime.json
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+# curl for the compose healthcheck; dp-keys owned by app so a fresh keys volume is writable.
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /home/app/dp-keys && chown -R app:app /home/app/dp-keys
 WORKDIR /app
 COPY --from=publish /app/publish .
 USER app
