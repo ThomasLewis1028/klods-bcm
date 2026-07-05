@@ -6,6 +6,9 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <RootNamespace>Klods</RootNamespace>
+        <!-- Fallback for build paths that don't pass -p:Version (Rider debug, dotnet run).
+             docker compose / the release pipeline override this with the real (git/tag) version. -->
+        <Version>0.0.0-dev</Version>
     </PropertyGroup>
 
     <ItemGroup>
@@ -13,7 +16,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="DotNetEnv" Version="3.1.1" />
+        <PackageReference Include="DotNetEnv" Version="3.2.0" />
         <PackageReference Include="MudBlazor" Version="8.15.0" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     </ItemGroup>

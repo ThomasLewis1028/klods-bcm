@@ -1,9 +1,9 @@
+@using System.Reflection
 @using Color = MudBlazor.Color
 @using Klods.Services
 @inject AuthService AuthService
 @implements IDisposable
-<MudDrawer Open="true" Anchor="Anchor.Start" Width="250px" Height="100%" Class="py-3" Elevation="0"
-           Variant="DrawerVariant.Persistent">
+<div class="d-flex flex-column flex-grow-1 py-3">
     <MudNavMenu Bordered="true" Class="mud-width-full" Rounded="true" Color="Color.Primary">
 
         <MudNavGroup Title="Catalog" Icon="@Icons.Material.Filled.Public" Expanded="true">
@@ -29,9 +29,16 @@
         }
 
     </MudNavMenu>
-</MudDrawer>
+
+    <MudText Typo="Typo.caption" Class="mt-auto px-4 pt-2 mud-text-secondary">v@_version</MudText>
+</div>
 
 @code {
+    private static readonly string _version =
+        (Assembly.GetEntryAssembly()?
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+         ?? "0.0.0-dev").Split('+')[0];
+
     private bool _signedOut => AuthService.CurrentUser == null;
     private bool _isAdmin => AuthService.CurrentUser?.Role == "Admin";
 

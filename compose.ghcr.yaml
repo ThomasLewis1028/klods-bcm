@@ -65,9 +65,12 @@ services:
       REBRICKABLE_API_KEY: ${REBRICKABLE_API_KEY}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
-      BLAZOR_ORIGIN: ${BLAZOR_ORIGIN:-http://localhost:5100}
+      # Public URL of the web app (klods_web). REQUIRED — the API redirects the
+      # browser here after OAuth sign-in. If unset it would fall back to localhost
+      # and send users to their own machine, so Compose refuses to start without it.
+      BLAZOR_ORIGIN: ${BLAZOR_ORIGIN:?set BLAZOR_ORIGIN to the public URL of the web app, e.g. https://klods.example.net}
       # OAuth providers — each is skipped unless BOTH its id and secret are set.
-      # Register {BLAZOR public API URL}/signin-<provider> as the redirect URI in each console.
+      # Register {API_PUBLIC_URL}/signin-<provider> as the redirect URI in each console.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
@@ -81,6 +84,13 @@ services:
       minio: { condition: service_healthy }
     ports:
       - "5101:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # API migrates the DB, seeds the admin, and inits MinIO on boot — give it room.
+      start_period: 60s
     networks: [klods-network]
 
   klods_web:
@@ -88,20 +98,34 @@ services:
     restart: unless-stopped
     environment:
       API_BASE_URL: http://klods_api:8080
-      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:5101}
+      # Public URL the browser uses to reach the API for the OAuth challenge.
+      # REQUIRED — see BLAZOR_ORIGIN above. Often the same host as BLAZOR_ORIGIN
+      # when a reverse proxy path-routes /auth, /signin-*, and /api to the API.
+      API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL to the public URL of the API, e.g. https://klods.example.net}
       MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Persist DataProtection keys (antiforgery tokens) on the volume below so they
+      # survive container restarts.
+      DATAPROTECTION_KEYS_PATH: /home/app/dp-keys
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
-      klods_api: { condition: service_started }
+      klods_api: { condition: service_healthy }
     ports:
       - "5100:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
-      - klods-volume:/home/app/.local/share:rw
+      - klods-dp-keys-volume:/home/app/dp-keys:rw
     networks: [klods-network]
 
 volumes:
-  klods-volume:
+  klods-dp-keys-volume:
   klods-db-volume:
   klods-minio-volume:
 

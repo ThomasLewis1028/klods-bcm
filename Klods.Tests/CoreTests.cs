@@ -51,9 +51,16 @@ public class ImportTests
         var services = new ServiceCollection();
         services.AddHttpClient();
         var provider = services.BuildServiceProvider();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MINIO_ROOT_USER"]     = "minioadmin",
+                ["MINIO_ROOT_PASSWORD"] = "minioadmin",
+            })
+            .Build();
         return new ImageStorageService(
             provider.GetRequiredService<IHttpClientFactory>(),
-            new ConfigurationBuilder().Build(),
+            config,
             NullLogger<ImageStorageService>.Instance);
     }
 
