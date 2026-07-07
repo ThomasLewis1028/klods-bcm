@@ -1,0 +1,76 @@
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Build actions</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="4" Style="min-width: 380px; max-width: 460px;">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Apply a change to every brick in <b>@SetName</b>@(Copy is int c ? $" · Copy #{c}" : "") at once.
+                Minifigures aren't affected — manage those from the Minifigures tab.
+            </MudText>
+
+            <MudRadioGroup T="string" @bind-Value="_op">
+                @foreach (var o in Options)
+                {
+                    <MudRadio T="string" Value="@o.Value" Color="@o.Color" Dense="true" Class="mb-2">
+                        <div>
+                            <MudText Typo="Typo.body2">@o.Title</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@o.Description</MudText>
+                        </div>
+                    </MudRadio>
+                }
+            </MudRadioGroup>
+
+            @if (_selected?.Destructive == true)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined">
+                    This empties the set to zero and discards those pieces — they are <b>not</b> returned to your loose stock.
+                </MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudSpacer/>
+        <MudButton OnClick="Apply" Variant="Variant.Filled"
+                   Color="@(_selected?.Color ?? Color.Primary)"
+                   StartIcon="@(_selected?.Icon)">
+            @(_selected?.ActionLabel ?? "Apply")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string SetName { get; set; } = "";
+    [Parameter] public int? Copy { get; set; }
+
+    // Defaults to the safest useful action: pull in what the user already has loose.
+    private string _op = "FillFromLoose";
+    private Option? _selected => Options.FirstOrDefault(o => o.Value == _op);
+
+    private void Apply() => MudDialog.Close(DialogResult.Ok(_op));
+
+    // Values must match Klods.UpdateData.BulkBrickOp names (parsed case-insensitively on the API).
+    private static readonly Option[] Options =
+    [
+        new("FillFromLoose", "Transfer all available pieces into the set", Color.Primary,
+            "Move every piece you already have loose into this set, up to what each part still needs.",
+            "Fill from loose", Icons.Material.Filled.MoveDown, false),
+        new("FillFromThinAir", "Add all pieces to the set", Color.Primary,
+            "Mark every part as fully present in this set. Nothing is taken from your loose stock.",
+            "Fill set", Icons.Material.Filled.PlaylistAddCheck, false),
+        new("MoveSetToLoose", "Transfer all pieces to loose (unbuild)", Color.Secondary,
+            "Return every piece currently in this set back to your loose inventory.",
+            "Unbuild to loose", Icons.Material.Filled.Outbox, false),
+        new("ClearFromSet", "Remove all pieces from the set", Color.Error,
+            "Empty this set back to zero. The pieces are discarded, not returned to loose stock.",
+            "Clear set", Icons.Material.Filled.DeleteSweep, true),
+    ];
+
+    private record Option(string Value, string Title, Color Color, string Description,
+        string ActionLabel, string Icon, bool Destructive);
+}

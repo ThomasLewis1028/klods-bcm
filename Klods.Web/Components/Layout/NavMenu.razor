@@ -30,7 +30,8 @@
 
     </MudNavMenu>
 
-    <MudText Typo="Typo.caption" Class="mt-auto px-4 pt-2 mud-text-secondary">v@_version</MudText>
+    <MudLink Href="@_releaseUrl" Target="_blank" Typo="Typo.caption" Underline="Underline.Hover"
+             Class="mt-auto px-4 pt-2 mud-text-secondary">v@_version</MudLink>
 </div>
 
 @code {
@@ -38,6 +39,9 @@
         (Assembly.GetEntryAssembly()?
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
          ?? "0.0.0-dev").Split('+')[0];
+
+    private static readonly string _releaseUrl =
+        $"https://github.com/ThomasLewis1028/klods-bcm/releases/tag/v{_version}";
 
     private bool _signedOut => AuthService.CurrentUser == null;
     private bool _isAdmin => AuthService.CurrentUser?.Role == "Admin";

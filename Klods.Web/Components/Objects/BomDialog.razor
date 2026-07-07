@@ -284,6 +284,11 @@
         </div>
     </DialogContent>
     <DialogActions>
+        @if (!_isLoading && AuthService.CurrentUser != null && _ownedInstances.Count > 0)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Construction" OnClick="OpenBulkActions">Build actions</MudButton>
+        }
+        <MudSpacer/>
         <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
     </DialogActions>
 </MudDialog>
@@ -620,6 +625,41 @@
         // Fills may have changed loose stock and completeness — reload the copy either way.
         if (await dialog.Result is { Canceled: false })
             await LoadBomAsync();
+    }
+
+    private async Task OpenBulkActions()
+    {
+        if (AuthService.CurrentUser == null) return;
+        var parameters = new DialogParameters<BomBulkActionsDialog>
+        {
+            { x => x.SetName, _setName },
+            { x => x.Copy, _currentSetIndex },
+        };
+        var dialog = await DialogService.ShowAsync<BomBulkActionsDialog>("Build actions", parameters,
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: string op }) return;
+
+        var result = await Api.BulkSetBricksAsync(SetId, _currentSetIndex, op);
+        if (result == null)
+        {
+            Snackbar.Add("Could not apply that action.", Severity.Error);
+            return;
+        }
+        Snackbar.Add(BulkResultMessage(op, result.PiecesAffected), result.PiecesAffected > 0 ? Severity.Success : Severity.Info);
+        await LoadBomAsync();
+    }
+
+    private static string BulkResultMessage(string op, int pieces)
+    {
+        var s = pieces == 1 ? "" : "s";
+        return op switch
+        {
+            "FillFromLoose"   => pieces > 0 ? $"Moved {pieces} piece{s} from loose into the set." : "No loose pieces were available to add.",
+            "FillFromThinAir" => pieces > 0 ? $"Added {pieces} piece{s} to the set." : "The set was already full.",
+            "MoveSetToLoose"  => pieces > 0 ? $"Returned {pieces} piece{s} to loose." : "The set had no pieces to return.",
+            "ClearFromSet"    => pieces > 0 ? $"Removed {pieces} piece{s} from the set." : "The set was already empty.",
+            _                 => "Done.",
+        };
     }
 
     private Task OpenImagePopup(string id, string name, string? imgUrl) =>
