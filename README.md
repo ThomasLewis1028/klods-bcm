@@ -76,4 +76,4 @@ Clone the repo, `cp .env.example .env` and fill it in, then `docker compose up -
 - Allow substitution parts so if you want to build the Millennium Falcon with random colors, you could track that
 
 
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/tLewis1028)
+[![Buy Me a Beer](https://img.shields.io/badge/Buy%20Me%20a%20Beer-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/tLewis1028)tLewis1028)
