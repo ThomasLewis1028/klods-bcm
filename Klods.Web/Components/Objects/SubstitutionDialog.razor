@@ -1,0 +1,345 @@
+@inject ApiClient Api
+@inject ImageStorageService ImageStorage
+@inject ISnackbar Snackbar
+@using Klods.Services
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Spacing="0">
+            <MudText Typo="Typo.h6">Substitutions</MudText>
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@ReqName · @ReqPartNum</MudText>
+                @if (ReqHexColor != null)
+                {
+                    <MudChip T="string" Size="Size.Small" class="mud-elevation-1" Style="@ColorHelper.ColorChipStyle(ReqHexColor)">@ReqColorName</MudChip>
+                }
+            </MudStack>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            @* ── Existing fills ────────────────────────────────────────────── *@
+            @if (_subs.Count > 0)
+            {
+                <MudStack Spacing="1">
+                    @foreach (var s in _subs)
+                    {
+                        var sub = s;
+                        <MudPaper Elevation="1" Class="pa-2">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudImage Src="@ImageStorage.ResolveUrl(sub.SubPartImg)" Height="42" Width="42"
+                                          Style="object-fit:contain; flex-shrink:0;"/>
+                                <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@(sub.SubName ?? sub.SubPartNum)</MudText>
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@sub.SubPartNum</MudText>
+                                        @if (sub.SubHexColor != null)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" class="mud-elevation-1" Style="@ColorHelper.ColorChipStyle(sub.SubHexColor)">@sub.SubColorName</MudChip>
+                                        }
+                                    </MudStack>
+                                    @if (!string.IsNullOrWhiteSpace(sub.Notes))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="white-space:pre-wrap;">@sub.Notes</MudText>
+                                    }
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @sub.PulledFromLoose from loose · @(sub.Count - sub.PulledFromLoose) from elsewhere
+                                    </MudText>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Used</MudText>
+                                    <MudStack Row Spacing="0" AlignItems="AlignItems.Center">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                                       Disabled="@(_busy || sub.Count <= 1)" OnClick="() => ChangeUsed(sub, -1)"/>
+                                        <MudText Typo="Typo.body2" Style="min-width:22px; text-align:center;">@sub.Count</MudText>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                                       Disabled="@_busy" OnClick="() => ChangeUsed(sub, 1)"/>
+                                    </MudStack>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                    <MudTooltip Text="@($"You have {sub.SubLooseStock} of this brick in loose stock")">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">From loose</MudText>
+                                    </MudTooltip>
+                                    <MudStack Row Spacing="0" AlignItems="AlignItems.Center">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                                       Disabled="@(_busy || sub.PulledFromLoose <= 0)" OnClick="() => ChangeLoose(sub, -1)"/>
+                                        <MudText Typo="Typo.body2" Style="min-width:22px; text-align:center;">@sub.PulledFromLoose</MudText>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                                       Disabled="@(_busy || sub.PulledFromLoose >= sub.Count || sub.SubLooseStock <= 0)"
+                                                       OnClick="() => ChangeLoose(sub, 1)"/>
+                                    </MudStack>
+                                </MudStack>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                               Disabled="@_busy" OnClick="() => Remove(sub)"/>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                </MudStack>
+                <MudDivider/>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    No substitutions yet. Record a brick you used in place of this piece — any part or colour.
+                </MudText>
+            }
+
+            @* ── Add a fill ────────────────────────────────────────────────── *@
+            @if (_selected == null)
+            {
+                <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged"
+                              Immediate="true" DebounceInterval="350"
+                              Placeholder="Search a substitute by part number, name or colour…"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined" Clearable="true"/>
+
+                @if (_isSearching)
+                {
+                    <MudStack AlignItems="AlignItems.Center"><MudProgressCircular Indeterminate="true" Size="Size.Small"/></MudStack>
+                }
+                else if (_searchResults.Count > 0)
+                {
+                    <MudStack Spacing="1">
+                        @foreach (var r in _searchResults)
+                        {
+                            var result = r;
+                            <MudPaper Elevation="1" Class="pa-2 sub-search-result" @onclick="() => Select(result)">
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudImage Src="@ImageStorage.ResolveUrl(result.PartImg)" Height="42" Width="42"
+                                              Style="object-fit:contain; flex-shrink:0;"/>
+                                    <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@result.Name</MudText>
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@result.PartNum</MudText>
+                                            @if (result.HexColor != null)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" class="mud-elevation-1" Style="@ColorHelper.ColorChipStyle(result.HexColor)">@result.ColorName</MudChip>
+                                            }
+                                        </MudStack>
+                                    </MudStack>
+                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary"/>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                        @if (_total > PageSize)
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="1">
+                                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small"
+                                               Disabled="@(_page == 0)" OnClick="PrevPage"/>
+                                <MudText Typo="Typo.caption">Page @(_page + 1) of @((_total + PageSize - 1) / PageSize)</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small"
+                                               Disabled="@((_page + 1) * PageSize >= _total)" OnClick="NextPage"/>
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+                else if (_search.Length >= 2)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">No bricks found in catalog.</MudAlert>
+                }
+            }
+            else
+            {
+                <MudPaper Outlined="true" Class="pa-2">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudImage Src="@ImageStorage.ResolveUrl(_selected.PartImg)" Height="50" Width="50" Style="object-fit:contain;"/>
+                        <MudStack Spacing="0" Style="flex:1; min-width:0;">
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">@_selected.Name</MudText>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@_selected.PartNum</MudText>
+                                @if (_selected.HexColor != null)
+                                {
+                                    <MudChip T="string" Size="Size.Small" class="mud-elevation-1" Style="@ColorHelper.ColorChipStyle(_selected.HexColor)">@_selected.ColorName</MudChip>
+                                }
+                            </MudStack>
+                        </MudStack>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearSelection"/>
+                    </MudStack>
+                </MudPaper>
+
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText>How many did you use?</MudText>
+                    <MudNumericField T="int" Value="_count" ValueChanged="OnCountChanged" Min="1"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:90px;"/>
+                </MudStack>
+
+                <MudPaper Outlined="true" Class="pa-2">
+                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudStack Spacing="0">
+                            <MudText>Pull from loose stock</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @if (_selectedLoose > 0)
+                                {
+                                    @($"You have {_selectedLoose} loose — pull some in only if you used them.")
+                                }
+                                else
+                                {
+                                    @("You have none of this brick in loose stock.")
+                                }
+                            </MudText>
+                        </MudStack>
+                        <MudNumericField T="int" @bind-Value="_fromLoose" Min="0" Max="@Math.Min(_count, _selectedLoose)"
+                                         Disabled="@(_selectedLoose == 0)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:90px;"/>
+                    </MudStack>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        @Math.Min(_fromLoose, _count) from loose · @(_count - Math.Min(_fromLoose, _count)) from elsewhere
+                    </MudText>
+                </MudPaper>
+
+                <MudTextField @bind-Value="_notes" Label="Notes (optional)" Variant="Variant.Outlined"
+                              Lines="2" MaxLength="2000" HelperText="e.g. page 42, step 3"/>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.Add" Disabled="@(_busy || _count < 1)" OnClick="Add">
+                    Add substitution
+                </MudButton>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseDialog">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .sub-search-result { cursor: pointer; transition: background .1s ease; }
+    .sub-search-result:hover { background: var(--mud-palette-action-hover); }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string SetId { get; set; } = null!;
+    [Parameter] public int SetIndex { get; set; }
+    [Parameter] public string ReqPartNum { get; set; } = null!;
+    [Parameter] public string ReqColorId { get; set; } = null!;
+    [Parameter] public string ReqName { get; set; } = "";
+    [Parameter] public string? ReqColorName { get; set; }
+    [Parameter] public string? ReqHexColor { get; set; }
+    [Parameter] public string? ReqPartImg { get; set; }
+
+    private const int PageSize = 6;
+
+    private List<ApiClient.SubstitutionDto> _subs = new();
+    private string _search = "";
+    private List<ApiClient.BrickCatalogViewDto> _searchResults = [];
+    private int _page;
+    private int _total;
+    private bool _isSearching;
+
+    private ApiClient.BrickCatalogViewDto? _selected;
+    private int _selectedLoose;
+    private int _count = 1;
+    private int _fromLoose;
+    private string? _notes;
+
+    private bool _busy;
+    private bool _changed;
+
+    protected override async Task OnInitializedAsync() => await LoadSubsAsync();
+
+    private async Task LoadSubsAsync()
+    {
+        var all = await Api.GetSubstitutionsAsync(SetId, SetIndex) ?? [];
+        _subs = all.Where(s => s.ReqPartNum == ReqPartNum && s.ReqColorId == ReqColorId).ToList();
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _search = value ?? "";
+        _page = 0;
+        _searchResults = [];
+        _total = 0;
+        if (_search.Length < 2) { StateHasChanged(); return; }
+        await FetchPage();
+    }
+
+    private async Task PrevPage() { _page--; await FetchPage(); }
+    private async Task NextPage() { _page++; await FetchPage(); }
+
+    private async Task FetchPage()
+    {
+        _isSearching = true;
+        StateHasChanged();
+        var result = await Api.GetBricksCatalogPageAsync(_search, "sets", "desc", _page, PageSize);
+        _searchResults = result?.Items ?? [];
+        _total = result?.Total ?? 0;
+        _isSearching = false;
+        StateHasChanged();
+    }
+
+    private async Task Select(ApiClient.BrickCatalogViewDto result)
+    {
+        _selected = result;
+        _count = 1;
+        _fromLoose = 0;
+        _notes = null;
+        _selectedLoose = (await Api.GetMyBrickStockAsync(result.PartNum, result.ColorId ?? ""))?.Stock ?? 0;
+    }
+
+    private void ClearSelection() => _selected = null;
+
+    private void OnCountChanged(int value)
+    {
+        _count = value < 1 ? 1 : value;
+        var max = Math.Min(_count, _selectedLoose);
+        if (_fromLoose > max) _fromLoose = max;
+    }
+
+    private async Task Add()
+    {
+        if (_selected == null || _count < 1) return;
+        _busy = true;
+        var pulled = Math.Clamp(_fromLoose, 0, Math.Min(_count, _selectedLoose));
+        var ok = await Api.AddSubstitutionAsync(SetId, SetIndex, ReqPartNum, ReqColorId,
+            _selected.PartNum, _selected.ColorId ?? "", _count, pulled, _notes);
+        _busy = false;
+        if (!ok) { Snackbar.Add("Failed to add substitution.", Severity.Error); return; }
+        _changed = true;
+        _selected = null;
+        _search = "";
+        _searchResults = [];
+        await LoadSubsAsync();
+        StateHasChanged();
+    }
+
+    private async Task ChangeUsed(ApiClient.SubstitutionDto sub, int delta)
+    {
+        var newCount = Math.Max(1, sub.Count + delta);
+        var newPulled = Math.Min(sub.PulledFromLoose, newCount);
+        await Patch(sub, newCount, newPulled);
+    }
+
+    private async Task ChangeLoose(ApiClient.SubstitutionDto sub, int delta)
+    {
+        var newPulled = Math.Clamp(sub.PulledFromLoose + delta, 0, sub.Count);
+        await Patch(sub, sub.Count, newPulled);
+    }
+
+    private async Task Patch(ApiClient.SubstitutionDto sub, int count, int pulled)
+    {
+        _busy = true;
+        var ok = await Api.UpdateSubstitutionAsync(SetId, SetIndex, sub.Id, count, pulled);
+        _busy = false;
+        if (!ok) { Snackbar.Add("Failed to update substitution.", Severity.Error); return; }
+        _changed = true;
+        await LoadSubsAsync();
+        StateHasChanged();
+    }
+
+    private async Task Remove(ApiClient.SubstitutionDto sub)
+    {
+        _busy = true;
+        var ok = await Api.DeleteSubstitutionAsync(SetId, SetIndex, sub.Id);
+        _busy = false;
+        if (!ok) { Snackbar.Add("Failed to remove substitution.", Severity.Error); return; }
+        _changed = true;
+        await LoadSubsAsync();
+        StateHasChanged();
+    }
+
+    private void CloseDialog() => MudDialog.Close(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
+}

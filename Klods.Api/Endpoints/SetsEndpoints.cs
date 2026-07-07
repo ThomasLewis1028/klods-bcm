@@ -119,9 +119,9 @@ public static class SetsEndpoints
                     var instances = g.OrderBy(so => so.SetIndex).Select(so =>
                     {
                         var comp = completeness.GetValueOrDefault((so.SetId, so.SetIndex))
-                                   ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0);
+                                   ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0, 0);
                         return new OwnedInstanceDto(so.SetIndex, comp.Missing, comp.Have,
-                            comp.Percent, comp.Status.ToString().ToLowerInvariant(), so.Location, so.Notes);
+                            comp.Percent, comp.Status.ToString().ToLowerInvariant(), comp.SubstitutedPercent, comp.HaveSubstituted > 0, so.Location, so.Notes);
                     }).ToList();
                     var themeName = set.ThemeId is int tid ? themeNames.GetValueOrDefault(tid) : null;
                     return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,
@@ -253,7 +253,7 @@ public static class SetsEndpoints
     public record ImportSetRequest(string SetId);
     public record AddOwnedSetRequest(string SetId, bool ApplyBricks);
 
-    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status, string? Location, string? Notes);
+    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status, int SubPercent, bool Substituted, string? Location, string? Notes);
 
     public record NotesRequest(string? Location, string? Notes)
     {

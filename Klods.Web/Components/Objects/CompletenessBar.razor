@@ -1,10 +1,17 @@
-@* Status-coloured completeness bar. Status: "complete" | "completable" | "short". *@
+@* Status-coloured completeness bar. Status: "complete" | "completable" | "short".
+   The substituted share (SubPercent, 0–100 of the whole track) renders as a rainbow band over the
+   right end of the fill, so substitutions read at any completion level. *@
 <div class="cbar cbar-@Status" role="progressbar" aria-valuenow="@Percent" aria-valuemin="0" aria-valuemax="100" title="@Label">
     <div class="cbar-fill" style="width:@Percent%;"></div>
+    @if (SubPercent > 0)
+    {
+        <div class="cbar-sub" style="left:@(Percent - SubPercent)%; width:@SubPercent%;"></div>
+    }
 </div>
 
 @code {
     [Parameter] public int Percent { get; set; }
     [Parameter] public string Status { get; set; } = "short";
+    [Parameter] public int SubPercent { get; set; }
     [Parameter] public string? Label { get; set; }
 }

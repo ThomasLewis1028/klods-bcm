@@ -21,8 +21,8 @@
                 @if (!_isLoading)
                 {
                     <div style="margin-top:6px; max-width:280px; display:flex; flex-direction:column; gap:3px;">
-                        <CompletenessBar Percent="@_percent" Status="@_status" Label="@($"{_percent}% assembled")"/>
-                        <span class="cstatus cstatus-@_status" style="font-size:.72rem;">@_percent% · @StatusWord(_status)</span>
+                        <CompletenessBar Percent="@_percent" Status="@_status" SubPercent="@_subPercent" Label="@($"{_percent}% assembled")"/>
+                        <span class="cstatus cstatus-@_status" style="font-size:.72rem;">@_percent% · @HeaderStatusLabel()</span>
                         <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                             @if (!string.IsNullOrEmpty(_location))
                             {
@@ -85,7 +85,7 @@
                                  QuickFilter="SetBrickFilterFunc" ReadOnly="false" Bordered="false" Dense="true">
                         <ToolBarContent>
                             <MudText Typo="Typo.body1">Missing
-                                Pieces: @_setBrickInfo.Sum(sb => Math.Max(0, sb.Brick.Count - sb.SetStock))
+                                Pieces: @_setBrickInfo.Sum(MissingFor)
                             </MudText>
                             <MudSpacer/>
                             <MudSwitch @bind-Value="_showMissing" UncheckedColor="Color.Default" Color="Color.Error"
@@ -123,19 +123,16 @@
                             <TemplateColumn Title="Required" Editable="false"
                                             SortBy="x => x.Brick.Count" Sortable="true">
                                 <CellTemplate>
-                                    @{ var stock = context.Item.SetStock; }
-                                    @if (context.Item.Brick.Count <= stock)
-                                    {
-                                        <MudText Color="@Color.Success">@context.Item.Brick.Count</MudText>
+                                    @{
+                                        var subbed = SubCount(context.Item);
+                                        var placed = context.Item.SetStock + subbed;   // real + substituted, both physically in place
+                                        var reqColor = context.Item.Brick.Count <= placed ? Color.Success
+                                                     : context.Item.Brick.Count - placed <= context.Item.LooseStock ? Color.Warning
+                                                     : Color.Error;
                                     }
-                                    else if (context.Item.Brick.Count - stock <= context.Item.LooseStock)
-                                    {
-                                        <MudText Color="@Color.Warning">@context.Item.Brick.Count</MudText>
-                                    }
-                                    else
-                                    {
-                                        <MudText Color="@Color.Error">@context.Item.Brick.Count</MudText>
-                                    }
+                                    <MudTooltip Text="Includes substitutions" Disabled="@(subbed == 0)">
+                                        <MudText Color="@reqColor">@context.Item.Brick.Count@(subbed > 0 ? "*" : "")</MudText>
+                                    </MudTooltip>
                                 </CellTemplate>
                             </TemplateColumn>
                             <TemplateColumn Title="Spare" Editable="false" SortBy="x => x.Brick.SpareCount" Sortable="true">
@@ -172,6 +169,21 @@
                                                      ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
                                                      Min="0" Disabled="@(AuthService.CurrentUser == null)"
                                                      Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Substitute" Editable="false">
+                                <HeaderTemplate>
+                                    <MudTooltip Text="Record other bricks used in place of this piece">
+                                        <span>Substitute</span>
+                                    </MudTooltip>
+                                </HeaderTemplate>
+                                <CellTemplate>
+                                    @{ var subbed = SubCount(context.Item); }
+                                    <MudBadge Content="@subbed" Visible="@(subbed > 0)" Color="Color.Primary" Overlap="true">
+                                        <MudIconButton Icon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small"
+                                                       Disabled="@(AuthService.CurrentUser == null)"
+                                                       OnClick="() => OpenSubstitutions(context.Item)"/>
+                                    </MudBadge>
                                 </CellTemplate>
                             </TemplateColumn>
                         </Columns>
@@ -287,10 +299,13 @@
     private List<ApiClient.BomMinifigDto> _bomMinifigs = new();
     private List<MinifigSlot> _minifigSlots = new();
     private List<int> _ownedInstances = new();
+    private List<ApiClient.SubstitutionDto> _substitutions = new();
     private string _setName = "";
     private string? _manualUrl;
     private int _percent;
     private string _status = "short";
+    private int _subPercent;
+    private bool _substituted;
     private string? _location;
     private string? _notes;
 
@@ -350,8 +365,12 @@
         _ownedInstances = bom.OwnedInstances;
         _percent = bom.Percent;
         _status = bom.Status;
+        _subPercent = bom.SubPercent;
+        _substituted = bom.Substituted;
         _location = bom.Location;
         _notes = bom.Notes;
+
+        _substitutions = (await Api.GetSubstitutionsAsync(SetId, _currentSetIndex))?.ToList() ?? new();
 
         _setBrickInfo = bom.Bricks.Select(b => new SetBrickInfo
         {
@@ -443,7 +462,7 @@
 
     private bool SetBrickFilterFunc(SetBrickInfo info)
     {
-        if (_showMissing && info.Brick.Count <= info.SetStock)
+        if (_showMissing && info.Brick.Count <= info.SetStock + SubCount(info))
             return false;
         if (string.IsNullOrWhiteSpace(_searchString))
             return true;
@@ -475,6 +494,8 @@
         {
             _percent = comp.Percent;
             _status = comp.Status;
+            _subPercent = comp.SubPercent;
+            _substituted = comp.Substituted;
             StateHasChanged();
         }
     }
@@ -569,6 +590,36 @@
             Snackbar.Add("Failed to move stock.", Severity.Error);
         StateHasChanged();
         await RefreshCompletenessAsync();
+    }
+
+    private int SubCount(SetBrickInfo info) =>
+        _substitutions.Where(s => s.ReqPartNum == info.Brick.PartNum && s.ReqColorId == info.Brick.ColorId).Sum(s => s.Count);
+
+    // Still-missing for a row: required minus what's physically in place (set stock + substitutions).
+    private int MissingFor(SetBrickInfo info) => Math.Max(0, info.Brick.Count - info.SetStock - SubCount(info));
+
+    private string HeaderStatusLabel() =>
+        _status == "complete" && _substituted ? "Complete with Substitutions" : StatusWord(_status);
+
+    private async Task OpenSubstitutions(SetBrickInfo info)
+    {
+        if (AuthService.CurrentUser == null) return;
+        var parameters = new DialogParameters<SubstitutionDialog>
+        {
+            { x => x.SetId, SetId },
+            { x => x.SetIndex, _currentSetIndex },
+            { x => x.ReqPartNum, info.Brick.PartNum },
+            { x => x.ReqColorId, info.Brick.ColorId },
+            { x => x.ReqName, info.Brick.Name },
+            { x => x.ReqColorName, info.Brick.ColorName },
+            { x => x.ReqHexColor, info.Brick.HexColor },
+            { x => x.ReqPartImg, info.Brick.PartImg },
+        };
+        var dialog = await DialogService.ShowAsync<SubstitutionDialog>("Substitutions", parameters,
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+        // Fills may have changed loose stock and completeness — reload the copy either way.
+        if (await dialog.Result is { Canceled: false })
+            await LoadBomAsync();
     }
 
     private Task OpenImagePopup(string id, string name, string? imgUrl) =>

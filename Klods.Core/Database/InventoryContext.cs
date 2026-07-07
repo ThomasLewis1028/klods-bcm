@@ -12,6 +12,7 @@ public class InventoryContext : DbContext
     public DbSet<Brick> Bricks { get; set; }
     public DbSet<SetBrick> SetBricks { get; set; }
     public DbSet<SetBrickOwned> SetBrickOwneds { get; set; }
+    public DbSet<SetBrickSubstitution> SetBrickSubstitutions { get; set; }
     public DbSet<BrickOwned> BrickOwneds { get; set; }
     public DbSet<Set> Sets { get; set; }
     public DbSet<Minifig> Minifigs { get; set; }
@@ -86,6 +87,31 @@ public class InventoryContext : DbContext
             .HasOne<SetOwned>()
             .WithMany()
             .HasForeignKey(s => new { s.UserId, s.SetId, s.SetIndex })
+            .IsRequired();
+
+        // SET BRICK SUBSTITUTION — user-declared fills toward a set-brick requirement on one owned copy.
+        modelBuilder.Entity<SetBrickSubstitution>().HasKey(e => e.Id);
+        modelBuilder.Entity<SetBrickSubstitution>().HasIndex(e => new { e.UserId, e.SetId, e.SetIndex });
+
+        // The copy this fill belongs to — deleting the copy cascades its substitutions.
+        modelBuilder.Entity<SetBrickSubstitution>()
+            .HasOne<SetOwned>()
+            .WithMany()
+            .HasForeignKey(s => new { s.UserId, s.SetId, s.SetIndex })
+            .IsRequired();
+
+        // The requirement being filled — must be a real BOM row for this set.
+        modelBuilder.Entity<SetBrickSubstitution>()
+            .HasOne<SetBrick>()
+            .WithMany()
+            .HasForeignKey(s => new { s.SetId, s.ReqPartNum, s.ReqColorId })
+            .IsRequired();
+
+        // The substitute brick — any catalog part+colour (cross-mold allowed).
+        modelBuilder.Entity<SetBrickSubstitution>()
+            .HasOne<Brick>()
+            .WithMany()
+            .HasForeignKey(s => new { s.SubPartNum, s.SubColorId })
             .IsRequired();
 
         // SET MINIFIG (BOM — one row per set/minifig)

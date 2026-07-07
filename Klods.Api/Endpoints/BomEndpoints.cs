@@ -92,13 +92,13 @@ public static class BomEndpoints
                 }).ToList();
 
             var comp = (await SetCompleteness.ComputeAsync(db, userId, new[] { (setId, setIndex) }))
-                .GetValueOrDefault((setId, setIndex)) ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0);
+                .GetValueOrDefault((setId, setIndex)) ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0, 0);
 
             return Results.Ok(new BomResponse(
                 setId, setIndex, set.Name, set.ManualUrl,
                 ownedInstances, ownedSetIds,
                 brickItems, minifigItems,
-                comp.Percent, comp.Status.ToString().ToLowerInvariant(),
+                comp.Percent, comp.Status.ToString().ToLowerInvariant(), comp.SubstitutedPercent, comp.HaveSubstituted > 0,
                 ownedCopy.Location, ownedCopy.Notes));
         });
 
@@ -109,8 +109,8 @@ public static class BomEndpoints
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
             var comp = (await SetCompleteness.ComputeAsync(db, userId, new[] { (setId, setIndex) }))
-                .GetValueOrDefault((setId, setIndex)) ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0);
-            return Results.Ok(new CompletenessDto(comp.Percent, comp.Status.ToString().ToLowerInvariant()));
+                .GetValueOrDefault((setId, setIndex)) ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0, 0);
+            return Results.Ok(new CompletenessDto(comp.Percent, comp.Status.ToString().ToLowerInvariant(), comp.SubstitutedPercent, comp.HaveSubstituted > 0));
         });
 
         // Fig instances tied to THIS set copy, each with its own per-part completeness (one row per physical fig).
@@ -204,14 +204,160 @@ public static class BomEndpoints
             await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
             return Results.Ok();
         });
+
+        // All substitution fills recorded on this copy (across every requirement), with substitute display info.
+        group.MapGet("/{setId}/{setIndex:int}/substitutions", async (
+            string setId, int setIndex, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+
+            var subs = await db.Set<SetBrickSubstitution>().AsNoTracking()
+                .Where(s => s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex)
+                .ToListAsync();
+            if (subs.Count == 0) return Results.Ok(new List<SubstitutionDto>());
+
+            var subPartNums = subs.Select(s => s.SubPartNum).ToHashSet();
+            var brickDict = (await db.Set<Brick>().AsNoTracking()
+                    .Where(b => subPartNums.Contains(b.PartNum))
+                    .ToListAsync())
+                .ToDictionary(b => (b.PartNum, b.ColorId ?? ""));
+
+            // The user's current loose stock of each substitute — bounds how much a fill can pull from loose.
+            var looseDict = (await db.Set<BrickOwned>().AsNoTracking()
+                    .Where(bo => bo.UserId == userId && subPartNums.Contains(bo.PartNum))
+                    .ToListAsync())
+                .ToDictionary(bo => (bo.PartNum, bo.ColorId), bo => bo.Stock);
+
+            var result = subs.Select(s =>
+            {
+                brickDict.TryGetValue((s.SubPartNum, s.SubColorId), out var b);
+                return new SubstitutionDto(s.Id, s.ReqPartNum, s.ReqColorId, s.SubPartNum, s.SubColorId,
+                    b?.Name, b?.PartImg, b?.ColorName, b?.HexColor,
+                    looseDict.GetValueOrDefault((s.SubPartNum, s.SubColorId), 0), s.Count, s.PulledFromLoose, s.Notes);
+            }).ToList();
+            return Results.Ok(result);
+        });
+
+        // Record a substitution fill toward a requirement, pulling from loose stock as available.
+        group.MapPost("/{setId}/{setIndex:int}/substitutions", async (
+            string setId, int setIndex, AddSubstitutionRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            if (req.Count < 1) return Results.BadRequest("Count must be at least 1.");
+
+            await using var db = dbFactory.CreateDbContext();
+
+            var ownsCopy = await db.Set<SetOwned>()
+                .AnyAsync(so => so.UserId == userId && so.SetId == setId && so.SetIndex == setIndex);
+            if (!ownsCopy) return Results.NotFound();
+
+            var reqExists = await db.Set<SetBrick>()
+                .AnyAsync(sb => sb.SetId == setId && sb.PartNum == req.ReqPartNum && sb.ColorId == req.ReqColorId);
+            if (!reqExists) return Results.NotFound();
+
+            var subExists = await db.Set<Brick>()
+                .AnyAsync(b => b.PartNum == req.SubPartNum && b.ColorId == req.SubColorId);
+            if (!subExists) return Results.NotFound();
+
+            // Pull exactly what the user chose from loose, bounded by the count and what they actually have.
+            // The remainder of the count is declared "from thin air" with no deduction.
+            var loose = await db.Set<BrickOwned>()
+                .FirstOrDefaultAsync(bo => bo.UserId == userId && bo.PartNum == req.SubPartNum && bo.ColorId == req.SubColorId);
+            var pulled = Math.Clamp(req.PulledFromLoose, 0, Math.Min(req.Count, loose?.Stock ?? 0));
+            if (pulled > 0) loose!.Stock -= pulled;
+
+            db.Set<SetBrickSubstitution>().Add(new SetBrickSubstitution
+            {
+                UserId = userId, SetId = setId, SetIndex = setIndex,
+                ReqPartNum = req.ReqPartNum, ReqColorId = req.ReqColorId,
+                SubPartNum = req.SubPartNum, SubColorId = req.SubColorId,
+                Count = req.Count, PulledFromLoose = pulled,
+                Notes = string.IsNullOrWhiteSpace(req.Notes) ? null : req.Notes.Trim(),
+            });
+            await db.SaveChangesAsync();
+            return Results.Ok(new NewSubstitutionDto(pulled));
+        });
+
+        // Adjust an existing fill's total count and/or how much of it is pulled from loose, moving
+        // loose stock in or out to match. Loose can never be over-drawn.
+        group.MapPatch("/{setId}/{setIndex:int}/substitutions/{id:int}", async (
+            string setId, int setIndex, int id, UpdateSubstitutionRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            if (req.Count < 1) return Results.BadRequest("Count must be at least 1.");
+
+            await using var db = dbFactory.CreateDbContext();
+
+            var sub = await db.Set<SetBrickSubstitution>()
+                .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex);
+            if (sub is null) return Results.NotFound();
+
+            var loose = await db.Set<BrickOwned>()
+                .FirstOrDefaultAsync(bo => bo.UserId == userId && bo.PartNum == sub.SubPartNum && bo.ColorId == sub.SubColorId);
+
+            // Target pull is bounded by the new count; an increase is further bounded by loose on hand.
+            var desired = Math.Clamp(req.PulledFromLoose, 0, req.Count);
+            var delta = desired - sub.PulledFromLoose;      // >0 draws more from loose, <0 returns to loose
+            if (delta > (loose?.Stock ?? 0)) delta = loose?.Stock ?? 0;
+
+            if (delta != 0)
+            {
+                if (loose is null)
+                    db.Set<BrickOwned>().Add(new BrickOwned
+                    {
+                        UserId = userId, PartNum = sub.SubPartNum, ColorId = sub.SubColorId, Stock = -delta,
+                    });
+                else
+                    loose.Stock -= delta;
+            }
+
+            sub.Count = req.Count;
+            sub.PulledFromLoose += delta;
+            await db.SaveChangesAsync();
+            return Results.Ok();
+        });
+
+        // Remove a substitution fill, returning whatever it pulled from loose back to loose.
+        group.MapDelete("/{setId}/{setIndex:int}/substitutions/{id:int}", async (
+            string setId, int setIndex, int id, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+
+            var sub = await db.Set<SetBrickSubstitution>()
+                .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex);
+            if (sub is null) return Results.NotFound();
+
+            if (sub.PulledFromLoose > 0)
+            {
+                var loose = await db.Set<BrickOwned>()
+                    .FirstOrDefaultAsync(bo => bo.UserId == userId && bo.PartNum == sub.SubPartNum && bo.ColorId == sub.SubColorId);
+                if (loose is null)
+                    db.Set<BrickOwned>().Add(new BrickOwned
+                    {
+                        UserId = userId, PartNum = sub.SubPartNum, ColorId = sub.SubColorId, Stock = sub.PulledFromLoose,
+                    });
+                else
+                    loose.Stock += sub.PulledFromLoose;
+            }
+
+            db.Set<SetBrickSubstitution>().Remove(sub);
+            await db.SaveChangesAsync();
+            return Results.Ok();
+        });
     }
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
     public record BomMinifigInstanceDto(int Index, List<BomMinifigInstancePartDto> Parts);
     public record BomMinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
-    public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, string? Location, string? Notes);
+    public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, int SubPercent, bool Substituted, string? Location, string? Notes);
     public record UpdateStockRequest(int Stock);
     public record NewInstanceDto(int Index);
-    public record CompletenessDto(int Percent, string Status);
+    public record CompletenessDto(int Percent, string Status, int SubPercent, bool Substituted);
+    public record SubstitutionDto(int Id, string ReqPartNum, string ReqColorId, string SubPartNum, string SubColorId, string? SubName, string? SubPartImg, string? SubColorName, string? SubHexColor, int SubLooseStock, int Count, int PulledFromLoose, string? Notes);
+    public record AddSubstitutionRequest(string ReqPartNum, string ReqColorId, string SubPartNum, string SubColorId, int Count, int PulledFromLoose, string? Notes);
+    public record UpdateSubstitutionRequest(int Count, int PulledFromLoose);
+    public record NewSubstitutionDto(int PulledFromLoose);
 }

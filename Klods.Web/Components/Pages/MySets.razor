@@ -128,10 +128,12 @@
                             <MudText Typo="Typo.caption" Color="Color.Secondary">@row.Set.SetId · #@row.Instance.SetIndex</MudText>
                             <div class="card-progress">
                                 <CompletenessBar Percent="@row.Instance.Percent" Status="@row.Instance.Status"
+                                                 SubPercent="@row.Instance.SubPercent"
                                                  Label="@($"{row.Instance.Percent}% assembled")"/>
                                 <div class="card-progress-meta">
                                     <span>@row.Instance.Percent%</span>
-                                    <span class="cstatus cstatus-@row.Instance.Status">@StatusWord(row.Instance.Status)</span>
+                                    <span class="cstatus cstatus-@row.Instance.Status"
+                                          title="@(IsSubstituted(row.Instance) ? "Complete with substitutions" : null)">@StatusLabel(row.Instance)</span>
                                 </div>
                             </div>
                         </div>
@@ -423,6 +425,11 @@
         _             => "Missing parts",
     };
 
+    private static bool IsSubstituted(ApiClient.OwnedInstanceDto i) => i.Status == "complete" && i.Substituted;
+
+    // Compact label for the grid card — an asterisk flags a copy completed with substitutions.
+    private static string StatusLabel(ApiClient.OwnedInstanceDto i) => IsSubstituted(i) ? "Complete*" : StatusWord(i.Status);
+
     private Task<IEnumerable<string>> SearchThemes(string value, CancellationToken token)
         => Task.FromResult<IEnumerable<string>>(
             AvailableThemes.Where(t => string.IsNullOrEmpty(value) || t.Contains(value, StringComparison.OrdinalIgnoreCase)));
@@ -453,6 +460,8 @@
             { x => x.MyCopy, true },
             { x => x.Percent, row.Instance.Percent },
             { x => x.Status, row.Instance.Status },
+            { x => x.SubPercent, row.Instance.SubPercent },
+            { x => x.Substituted, row.Instance.Substituted },
             { x => x.Location, row.Instance.Location },
             { x => x.Notes, row.Instance.Notes }
         };
