@@ -25,9 +25,9 @@
                 <div style="width:100%;" class="mt-2">
                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
                         <MudText Typo="Typo.subtitle2">Copy #@BomInstanceIndex</MudText>
-                        <span class="cstatus cstatus-@_status" style="font-size:.78rem;">@_percent% · @StatusWord(_status)</span>
+                        <span class="cstatus cstatus-@_status" style="font-size:.78rem;">@_percent% · @StatusLabel()</span>
                     </MudStack>
-                    <CompletenessBar Percent="@_percent" Status="@_status" Label="@($"{_percent}% assembled")"/>
+                    <CompletenessBar Percent="@_percent" Status="@_status" SubPercent="@_subPercent" Label="@($"{_percent}% assembled")"/>
                 </div>
 
                 <MudPaper Outlined="true" Class="pa-2 mt-2" Style="width:100%;">
@@ -112,12 +112,16 @@
     [Parameter] public bool MyCopy { get; set; }
     [Parameter] public int Percent { get; set; }
     [Parameter] public string Status { get; set; } = "short";
+    [Parameter] public int SubPercent { get; set; }
+    [Parameter] public bool Substituted { get; set; }
     [Parameter] public string? Location { get; set; }
     [Parameter] public string? Notes { get; set; }
 
     private int _owned;
     private int _percent;
     private string _status = "short";
+    private int _subPercent;
+    private bool _substituted;
     private string? _location;
     private string? _notes;
 
@@ -126,6 +130,8 @@
         _owned = Owned;
         _percent = Percent;
         _status = Status;
+        _subPercent = SubPercent;
+        _substituted = Substituted;
         _location = Location;
         _notes = Notes;
     }
@@ -202,11 +208,14 @@
         if (MyCopy && BomInstanceIndex is int idx)
         {
             var comp = await Api.GetBomCompletenessAsync(Set.SetId, idx);
-            if (comp != null) { _percent = comp.Percent; _status = comp.Status; StateHasChanged(); }
+            if (comp != null) { _percent = comp.Percent; _status = comp.Status; _subPercent = comp.SubPercent; _substituted = comp.Substituted; StateHasChanged(); }
         }
     }
 
     private void Close() => MudDialog.Close(DialogResult.Ok(_owned));
+
+    private string StatusLabel() =>
+        _status == "complete" && _substituted ? "Complete with Substitutions" : StatusWord(_status);
 
     private static string StatusWord(string status) => status switch
     {

@@ -401,3 +401,173 @@ public class ImportTests
         }
     }
 }
+
+// Substitution-aware completeness: a fill adds to a requirement's Have after exact parts, and its share
+// is reported as HaveSubstituted. Seeds directly against a real DB — no network.
+[TestClass]
+public class SetCompletenessSubstitutionTests
+{
+    private const string ColorId = "0";
+
+    private static IDbContextFactory<InventoryContext> CreateFactory()
+    {
+        var services = new ServiceCollection();
+        services.AddDbContextFactory<InventoryContext>();
+        return services.BuildServiceProvider().GetRequiredService<IDbContextFactory<InventoryContext>>();
+    }
+
+    // Seeds a set that needs `need` of reqPart plus a substitute brick, and one owned copy (index 0).
+    private static async Task<int> Seed(InventoryContext context, string setId, string reqPart, string subPart, int need)
+    {
+        var user = new User { UserName = $"subcomp_{setId}", PasswordHash = "test" };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        context.Set<Set>().Add(new Set
+        {
+            SetId = setId, Name = "Sub Test", NumBricks = need, ReleaseYear = 2000,
+            DateModified = DateTime.UnixEpoch, ManualUrl = "",
+        });
+        context.Set<Brick>().Add(new Brick { PartNum = reqPart, Name = "Req", ColorId = ColorId });
+        if (subPart != reqPart)
+            context.Set<Brick>().Add(new Brick { PartNum = subPart, Name = "Sub", ColorId = ColorId });
+        context.Set<SetBrick>().Add(new SetBrick { SetId = setId, PartNum = reqPart, ColorId = ColorId, Count = need });
+        await context.SaveChangesAsync();
+
+        context.Set<SetOwned>().Add(new SetOwned { UserId = user.UserId, SetId = setId, SetIndex = 0 });
+        await context.SaveChangesAsync();
+        return user.UserId;
+    }
+
+    private static async Task Cleanup(InventoryContext context, string setId, int userId, params string[] parts)
+    {
+        context.Set<SetBrickSubstitution>().Where(s => s.UserId == userId).ExecuteDelete();
+        context.Set<SetBrickOwned>().Where(sbo => sbo.UserId == userId).ExecuteDelete();
+        context.Set<SetOwned>().Where(so => so.UserId == userId).ExecuteDelete();
+        context.Set<SetBrick>().Where(sb => sb.SetId == setId).ExecuteDelete();
+        context.Set<Brick>().Where(b => parts.Contains(b.PartNum)).ExecuteDelete();
+        context.Set<Set>().Where(s => s.SetId == setId).ExecuteDelete();
+        context.Users.Where(u => u.UserId == userId).ExecuteDelete();
+        await context.SaveChangesAsync();
+    }
+
+    private static void AddSub(InventoryContext context, int userId, string setId, string reqPart, string subPart, int count) =>
+        context.Set<SetBrickSubstitution>().Add(new SetBrickSubstitution
+        {
+            UserId = userId, SetId = setId, SetIndex = 0,
+            ReqPartNum = reqPart, ReqColorId = ColorId,
+            SubPartNum = subPart, SubColorId = ColorId, Count = count,
+        });
+
+    // A full substitution fill completes the copy; the whole Have is reported as substituted.
+    [TestMethod]
+    public async Task SubstitutionCompletesShortfall()
+    {
+        const string setId = "sub-complete"; const string req = "sc-req"; const string sub = "sc-sub";
+        var factory = CreateFactory();
+        await using var context = factory.CreateDbContext();
+        var userId = await Seed(context, setId, req, sub, need: 4);
+        try
+        {
+            AddSub(context, userId, setId, req, sub, 4);
+            await context.SaveChangesAsync();
+
+            var r = (await SetCompleteness.ComputeAsync(context, userId, new[] { (setId, 0) }))[(setId, 0)];
+            Assert.AreEqual(SetCompleteness.Status.Complete, r.Status);
+            Assert.AreEqual(100, r.Percent);
+            Assert.AreEqual(4, r.Have);
+            Assert.AreEqual(4, r.HaveSubstituted);
+            Assert.AreEqual(100, r.SubstitutedPercent);
+        }
+        finally { await Cleanup(context, setId, userId, req, sub); }
+    }
+
+    // Two partial fills sum toward the same requirement.
+    [TestMethod]
+    public async Task MultiplePartialFillsSum()
+    {
+        const string setId = "sub-multi"; const string req = "sm-req"; const string sub = "sm-sub";
+        var factory = CreateFactory();
+        await using var context = factory.CreateDbContext();
+        var userId = await Seed(context, setId, req, sub, need: 4);
+        try
+        {
+            AddSub(context, userId, setId, req, sub, 2);
+            AddSub(context, userId, setId, req, sub, 1);
+            await context.SaveChangesAsync();
+
+            var r = (await SetCompleteness.ComputeAsync(context, userId, new[] { (setId, 0) }))[(setId, 0)];
+            Assert.AreEqual(3, r.Have);
+            Assert.AreEqual(3, r.HaveSubstituted);
+            Assert.AreEqual(1, r.Missing);
+            Assert.AreEqual(75, r.Percent);
+        }
+        finally { await Cleanup(context, setId, userId, req, sub); }
+    }
+
+    // Declaring more than needed caps at the requirement.
+    [TestMethod]
+    public async Task OverfillCapsAtNeed()
+    {
+        const string setId = "sub-over"; const string req = "so-req"; const string sub = "so-sub";
+        var factory = CreateFactory();
+        await using var context = factory.CreateDbContext();
+        var userId = await Seed(context, setId, req, sub, need: 2);
+        try
+        {
+            AddSub(context, userId, setId, req, sub, 5);
+            await context.SaveChangesAsync();
+
+            var r = (await SetCompleteness.ComputeAsync(context, userId, new[] { (setId, 0) }))[(setId, 0)];
+            Assert.AreEqual(SetCompleteness.Status.Complete, r.Status);
+            Assert.AreEqual(2, r.Have);
+            Assert.AreEqual(2, r.HaveSubstituted);
+        }
+        finally { await Cleanup(context, setId, userId, req, sub); }
+    }
+
+    // Exact parts count first: a substitution for a requirement already satisfied by real parts adds nothing.
+    [TestMethod]
+    public async Task ExactPartsCountedFirst()
+    {
+        const string setId = "sub-exact"; const string req = "se-req"; const string sub = "se-sub";
+        var factory = CreateFactory();
+        await using var context = factory.CreateDbContext();
+        var userId = await Seed(context, setId, req, sub, need: 2);
+        try
+        {
+            context.Set<SetBrickOwned>().Add(new SetBrickOwned
+            {
+                UserId = userId, SetId = setId, SetIndex = 0, PartNum = req, ColorId = ColorId, Stock = 2,
+            });
+            AddSub(context, userId, setId, req, sub, 2); // redundant — real parts already cover the need
+            await context.SaveChangesAsync();
+
+            var r = (await SetCompleteness.ComputeAsync(context, userId, new[] { (setId, 0) }))[(setId, 0)];
+            Assert.AreEqual(SetCompleteness.Status.Complete, r.Status);
+            Assert.AreEqual(2, r.Have);
+            Assert.AreEqual(0, r.HaveSubstituted); // the redundant substitution never inflated the total
+        }
+        finally { await Cleanup(context, setId, userId, req, sub); }
+    }
+
+    // A cross-mold substitute (different PartNum) counts toward the requirement just like a same-mold one.
+    [TestMethod]
+    public async Task CrossMoldSubstituteCounts()
+    {
+        const string setId = "sub-cross"; const string req = "cx-req"; const string sub = "cx-sub-other-mold";
+        var factory = CreateFactory();
+        await using var context = factory.CreateDbContext();
+        var userId = await Seed(context, setId, req, sub, need: 1);
+        try
+        {
+            AddSub(context, userId, setId, req, sub, 1);
+            await context.SaveChangesAsync();
+
+            var r = (await SetCompleteness.ComputeAsync(context, userId, new[] { (setId, 0) }))[(setId, 0)];
+            Assert.AreEqual(SetCompleteness.Status.Complete, r.Status);
+            Assert.AreEqual(1, r.HaveSubstituted);
+        }
+        finally { await Cleanup(context, setId, userId, req, sub); }
+    }
+}

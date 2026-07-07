@@ -9,6 +9,8 @@ namespace Klods;
 /// (its <see cref="SetBrickOwned"/> plus the parts of the figs tied to it) is compared against that;
 /// any shortfall is tested against the user's LOOSE pool (loose bricks plus the parts of loose figs).
 /// The loose pool is read independently per copy — parts locked in other copies never count.
+/// User-declared substitutions (<see cref="SetBrickSubstitution"/>) add to a requirement's Have after
+/// exact parts, and their share is reported separately as <see cref="Result.HaveSubstituted"/>.
 /// </summary>
 public static class SetCompleteness
 {
@@ -16,7 +18,13 @@ public static class SetCompleteness
 
     /// <param name="Have">Pieces present toward completion (per-part capped at what's required).</param>
     /// <param name="Missing">Pieces still needed (per-part shortfall) — Have + Missing == Required.</param>
-    public record Result(int Percent, Status Status, int Required, int Have, int Missing);
+    /// <param name="HaveSubstituted">The portion of <paramref name="Have"/> supplied by user-declared
+    /// substitutions (exact parts are counted first, substitutions fill the remainder).</param>
+    public record Result(int Percent, Status Status, int Required, int Have, int Missing, int HaveSubstituted)
+    {
+        /// <summary>Substituted share of the whole copy, 0–100 — the rainbow segment of the bar.</summary>
+        public int SubstitutedPercent => Required == 0 ? 0 : (int)Math.Floor(100.0 * HaveSubstituted / Required);
+    }
 
     public static async Task<Dictionary<(string SetId, int SetIndex), Result>> ComputeAsync(
         InventoryContext db, int userId, IReadOnlyCollection<(string SetId, int SetIndex)> copies)
@@ -85,24 +93,46 @@ public static class SetCompleteness
                          (mo, mbo) => new { mbo.PartNum, mbo.ColorId, mbo.Stock }).ToListAsync())
             AddLoose(mp.PartNum, mp.ColorId, mp.Stock);
 
+        // User-declared substitution fills per copy: (required part,color) → total substitute qty.
+        // What the substitute physically is doesn't matter here — a fill counts toward the requirement it names.
+        var subByCopy = new Dictionary<(string, int), Dictionary<(string, string), int>>();
+        void AddSub(string setId, int idx, string part, string color, int qty)
+        {
+            var key = (setId, idx);
+            if (!subByCopy.TryGetValue(key, out var d)) subByCopy[key] = d = new();
+            d[(part, color)] = d.GetValueOrDefault((part, color)) + qty;
+        }
+
+        foreach (var sub in await db.Set<SetBrickSubstitution>().AsNoTracking()
+                     .Where(x => x.UserId == userId && setIds.Contains(x.SetId))
+                     .Select(x => new { x.SetId, x.SetIndex, x.ReqPartNum, x.ReqColorId, x.Count }).ToListAsync())
+            AddSub(sub.SetId, sub.SetIndex, sub.ReqPartNum, sub.ReqColorId, sub.Count);
+
         foreach (var copy in copies)
         {
             var required = requiredBySet.GetValueOrDefault(copy.SetId);
             if (required is null || required.Count == 0)
             {
-                results[copy] = new Result(100, Status.Complete, 0, 0, 0);
+                results[copy] = new Result(100, Status.Complete, 0, 0, 0, 0);
                 continue;
             }
 
             var inPlace = inPlaceByCopy.GetValueOrDefault((copy.SetId, copy.SetIndex));
-            int totalReq = 0, totalHave = 0;
+            var subs = subByCopy.GetValueOrDefault((copy.SetId, copy.SetIndex));
+            int totalReq = 0, totalHave = 0, totalSubHave = 0;
             bool anyShort = false, anyUncoverable = false;
 
             foreach (var (key, need) in required)
             {
                 totalReq += need;
-                var have = inPlace?.GetValueOrDefault(key) ?? 0;
-                totalHave += Math.Min(have, need);
+                // Exact parts count first; substitutions fill only the remaining shortfall, so a
+                // redundant substitution (where the real part is also present) never inflates the total.
+                var exactHave = Math.Min(inPlace?.GetValueOrDefault(key) ?? 0, need);
+                var subHave = Math.Min(subs?.GetValueOrDefault(key) ?? 0, need - exactHave);
+                var have = exactHave + subHave;
+                totalHave += have;
+                totalSubHave += subHave;
+
                 var shortfall = need - have;
                 if (shortfall > 0)
                 {
@@ -115,7 +145,7 @@ public static class SetCompleteness
             // (otherwise missing 1 part out of hundreds rounds up to a misleading 100%).
             var percent = totalReq == 0 ? 100 : (int)Math.Floor(100.0 * totalHave / totalReq);
             var status = !anyShort ? Status.Complete : anyUncoverable ? Status.Short : Status.Completable;
-            results[copy] = new Result(percent, status, totalReq, totalHave, totalReq - totalHave);
+            results[copy] = new Result(percent, status, totalReq, totalHave, totalReq - totalHave, totalSubHave);
         }
 
         return results;

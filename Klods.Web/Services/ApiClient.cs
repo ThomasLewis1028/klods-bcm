@@ -280,6 +280,16 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         => (await DeleteAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/instances/{index}")).Ok;
     public async Task<bool> UpdateBomMinifigInstancePartStockAsync(string setId, int setIndex, string minifigId, int index, string partNum, string colorId, int stock)
         => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/instances/{index}/parts/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
+    public Task<SubstitutionDto[]?> GetSubstitutionsAsync(string setId, int setIndex)
+        => GetAsync<SubstitutionDto[]>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/substitutions");
+    public async Task<bool> AddSubstitutionAsync(string setId, int setIndex, string reqPartNum, string reqColorId, string subPartNum, string subColorId, int count, int pulledFromLoose, string? notes)
+        => (await PostAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/substitutions",
+            new { ReqPartNum = reqPartNum, ReqColorId = reqColorId, SubPartNum = subPartNum, SubColorId = subColorId, Count = count, PulledFromLoose = pulledFromLoose, Notes = notes })).Ok;
+    public async Task<bool> UpdateSubstitutionAsync(string setId, int setIndex, int id, int count, int pulledFromLoose)
+        => (await PatchAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/substitutions/{id}",
+            new { Count = count, PulledFromLoose = pulledFromLoose })).Ok;
+    public async Task<bool> DeleteSubstitutionAsync(string setId, int setIndex, int id)
+        => (await DeleteAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/substitutions/{id}")).Ok;
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
@@ -430,7 +440,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
     public record ThemeDto(int Id, string Name);
-    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status, string? Location, string? Notes);
+    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status, int SubPercent, bool Substituted, string? Location, string? Notes);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCandidateDto(string SetNum, string Name, int Year, string? ImageUrl);
     public record ResolveSetResponse(List<SetCandidateDto> Results, bool Resolved, bool HasMore);
@@ -466,8 +476,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
     public record BomMinifigInstanceDto(int Index, List<BomMinifigInstancePartDto> Parts);
     public record BomMinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
-    public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, string? Location, string? Notes);
-    public record CompletenessDto(int Percent, string Status);
+    public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, int SubPercent, bool Substituted, string? Location, string? Notes);
+    public record CompletenessDto(int Percent, string Status, int SubPercent, bool Substituted);
+    public record SubstitutionDto(int Id, string ReqPartNum, string ReqColorId, string SubPartNum, string SubColorId, string? SubName, string? SubPartImg, string? SubColorName, string? SubHexColor, int SubLooseStock, int Count, int PulledFromLoose, string? Notes);
 
     public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string Status);
     public record RegistrationSettingsDto(bool AutoApprove);
