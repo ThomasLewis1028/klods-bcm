@@ -2,10 +2,18 @@ name: klods
 
 services:
   # https://github.com/felipewom/docker-compose-postgres/blob/main/README.md
+  #
+  # NOTE ON CONFIG: every service loads its config from `.env` via `env_file`, NOT via
+  # `environment: KEY: ${KEY}` interpolation. This is deliberate — `${KEY}` is resolved by
+  # Docker Compose from the *shell* environment first and `.env` only second, so a stale export
+  # in your shell (e.g. POSTGRES_DB) would silently override `.env` and point the app at the wrong
+  # database. `env_file` reads `.env` directly into the container and can't be shadowed that way.
   postgres:
     image: 'postgres:17'
+    # Loopback only — reach it remotely over an SSH tunnel if needed. The raw DB port has no
+    # business being reachable from the LAN/internet even in dev.
     ports:
-      - 5105:5432
+      - "127.0.0.1:5105:5432"
     env_file:
       - .env
     networks:
@@ -23,10 +31,11 @@ services:
       retries: 5
       start_period: 80s
 
+  # Full DB-admin UI — loopback only, never expose this beyond the host.
   pgwebadmin:
     image: dpage/pgadmin4
     ports:
-      - 5102:80
+      - "127.0.0.1:5102:80"
     env_file:
       - .env
     depends_on:
@@ -41,9 +50,11 @@ services:
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
+    # Loopback only — the S3 API and (especially) the admin console shouldn't be reachable
+    # off the host; klods_api/klods_web reach it over the internal Docker network instead.
     ports:
-      - "5103:9000"
-      - "5104:9001"
+      - "127.0.0.1:5103:9000"
+      - "127.0.0.1:5104:9001"
     env_file:
       - .env
     networks:

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Klods.Database;
+using Klods.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Klods.Api.Endpoints;
@@ -22,6 +23,8 @@ public static class AuthProfileEndpoints
         group.MapPatch("/username", async (ChangeUsernameRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             if (string.IsNullOrWhiteSpace(req.NewUsername)) return Results.BadRequest("Username is required.");
+            if (req.NewUsername.Length > User.MaxUserNameLength)
+                return Results.BadRequest($"Username must be under {User.MaxUserNameLength} characters.");
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
             if (await db.Users.AnyAsync(u => u.UserName == req.NewUsername && u.UserId != userId))
@@ -39,6 +42,8 @@ public static class AuthProfileEndpoints
             if (user is null) return Results.NotFound();
             if (string.IsNullOrEmpty(user.PasswordHash) || !PasswordHasher.Verify(req.CurrentPassword, user.PasswordHash))
                 return Results.BadRequest("Current password is incorrect.");
+            if (!PasswordHasher.IsValidLength(req.NewPassword))
+                return Results.BadRequest($"Password must be {PasswordHasher.MinLength}-{PasswordHasher.MaxLength} characters.");
             user.PasswordHash = PasswordHasher.Hash(req.NewPassword);
             await db.SaveChangesAsync();
             return Results.Ok();
@@ -73,6 +78,11 @@ public static class AuthProfileEndpoints
 
         group.MapPatch("/picture", async (ChangePictureRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
+            // Only catalog images (or removal) — otherwise a user's avatar could point at an
+            // arbitrary external URL shown to every other user (tracking pixel / shock content).
+            if (req.Url is not null && !ImageStorageService.IsCacheableImageHost(req.Url))
+                return Results.BadRequest("Profile picture must be a catalog image.");
+
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
             await db.Users.Where(u => u.UserId == userId)

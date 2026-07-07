@@ -94,7 +94,10 @@
                               InputType="@(_showNew ? InputType.Text : InputType.Password)"
                               Adornment="Adornment.End"
                               AdornmentIcon="@(_showNew ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
-                              OnAdornmentClick="() => _showNew = !_showNew"/>
+                              OnAdornmentClick="() => _showNew = !_showNew"
+                              HelperText="Must be 8-128 characters"
+                              Error="@(!string.IsNullOrEmpty(_newPassword) && _newPassword.Length is < 8 or > 128)"
+                              ErrorText="Must be 8-128 characters"/>
                 <MudTextField T="string" Label="Confirm New Password" @bind-Value="_confirmPassword"
                               Variant="Variant.Outlined"
                               InputType="@(_showConfirm ? InputType.Text : InputType.Password)"
@@ -276,7 +279,7 @@
 
     private bool CanSavePassword =>
         !string.IsNullOrEmpty(_currentPassword) &&
-        !string.IsNullOrEmpty(_newPassword) &&
+        _newPassword.Length is >= 8 and <= 128 &&
         _newPassword == _confirmPassword;
 
     protected override async Task OnInitializedAsync()

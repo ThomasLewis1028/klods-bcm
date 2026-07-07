@@ -4,7 +4,9 @@ using Klods.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using MudBlazor.Services;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,11 +46,37 @@ var apiBase = builder.Configuration["API_BASE_URL"] ?? "http://klods_api:8080";
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBase));
 builder.Services.AddScoped<ApiClient>();
 
+// A direct client can spoof X-Forwarded-* freely unless we only trust a configured proxy — that
+// would defeat IP-based rate limiting. When TRUSTED_PROXY_NETWORKS (comma-separated CIDRs) isn't
+// set, leave ASP.NET Core's default (loopback only) in place rather than trusting every client.
+var trustedProxyNetworks = builder.Configuration["TRUSTED_PROXY_NETWORKS"];
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    if (string.IsNullOrWhiteSpace(trustedProxyNetworks)) return;
+
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
+    foreach (var cidr in trustedProxyNetworks.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(cidr));
+});
+
+// Anonymous, unbounded-key read-through cache (/img?u=) — bound the rate so a scripted loop of
+// distinct query strings against the same host can't be used to hammer outbound fetches / MinIO writes.
+// Limit is generous because ordinary browsing legitimately bursts through many images at once (a single
+// paginated grid page can carry 25+ set/brick images, and this endpoint also serves inline <img> tags
+// throughout the catalog, not just one image per page load).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("img", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 500,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
 });
 
 var app = builder.Build();
@@ -61,6 +89,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders();
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
@@ -97,7 +126,7 @@ app.MapGet("/img", async (string u, ImageStorageService img, HttpContext ctx, Ca
     if (result is null) return Results.NotFound();
     ctx.Response.Headers.CacheControl = "public, max-age=2592000, immutable";
     return Results.File(result.Value.Bytes, result.Value.ContentType);
-});
+}).RequireRateLimiting("img");
 
 app.MapGet("/health", () => Results.Ok("healthy"));
 

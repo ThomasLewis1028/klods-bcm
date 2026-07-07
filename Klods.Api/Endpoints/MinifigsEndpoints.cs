@@ -136,6 +136,11 @@ public static class MinifigsEndpoints
 
         group.MapPost("/owned", async (AddOwnedMinifigRequest req, HttpContext http, ImportData importer) =>
         {
+            // Count drives a per-unit row-insert loop in ImportData.AddOwnedMinifig — an unbounded
+            // value is a direct DoS (unbounded DB rows / EF change-tracker memory), not just a stored count.
+            if (req.Count is < 1 or > AddOwnedMinifigRequest.MaxCount)
+                return Results.BadRequest($"Count must be between 1 and {AddOwnedMinifigRequest.MaxCount}.");
+
             var userId = http.UserId();
             var ok = await importer.AddOwnedMinifig(req.MinifigId, userId, req.Count, req.ApplyParts);
             return ok ? Results.Ok() : Results.BadRequest("Could not add owned minifig.");
@@ -145,6 +150,8 @@ public static class MinifigsEndpoints
         group.MapPatch("/owned/{minifigId}", async (
             string minifigId, UpdateStockRequest req, HttpContext http, ImportData importer) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {AddOwnedMinifigRequest.MaxCount}.");
+
             var userId = http.UserId();
             await importer.SetLooseMinifigCount(userId, minifigId, req.Stock);
             return Results.Ok();
@@ -175,6 +182,15 @@ public static class MinifigsEndpoints
     public record OwnedMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock);
     public record ImportMinifigRequest(string Query, int Page = 0);
     public record ResolveMinifigResponse(IEnumerable<MinifigCandidate> Results, bool Resolved, bool HasMore);
-    public record AddOwnedMinifigRequest(string MinifigId, int Count, bool ApplyParts = false);
-    public record UpdateStockRequest(int Stock);
+    public record AddOwnedMinifigRequest(string MinifigId, int Count, bool ApplyParts = false)
+    {
+        // Count/Stock here drive a per-unit MinifigOwned row-insert loop (ImportData.AddOwnedMinifig /
+        // SetMinifigInstanceCount) — much stricter than a plain stored counter, since the cap directly
+        // bounds how many rows one request can insert.
+        public const int MaxCount = 10_000;
+    }
+    public record UpdateStockRequest(int Stock)
+    {
+        public bool IsValid => Stock is >= 0 and <= AddOwnedMinifigRequest.MaxCount;
+    }
 }

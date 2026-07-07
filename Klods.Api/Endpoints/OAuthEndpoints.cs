@@ -91,10 +91,16 @@ public static class OAuthEndpoints
                 {
                     var autoApprove = await settings.GetBoolAsync(AuthEndpoints.AutoApproveKey, fallback: true);
 
-                    var username = displayName;
+                    // Leave room for a disambiguating numeric suffix — an external provider's display
+                    // name is attacker-influenced and otherwise unbounded.
+                    const int suffixRoom = 5;
+                    var baseUsername = displayName.Length > User.MaxUserNameLength - suffixRoom
+                        ? displayName[..(User.MaxUserNameLength - suffixRoom)]
+                        : displayName;
+                    var username = baseUsername;
                     var counter  = 1;
                     while (await db.Users.AnyAsync(u => u.UserName == username))
-                        username = $"{displayName}{counter++}";
+                        username = $"{baseUsername}{counter++}";
 
                     user = new User { UserName = username, PasswordHash = string.Empty, Status = autoApprove ? "Active" : "Pending" };
                     db.Users.Add(user);

@@ -136,6 +136,8 @@ public static class SetsEndpoints
         group.MapPut("/owned/{setId}/{setIndex:int}/notes", async (
             string setId, int setIndex, NotesRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
+            if (!NotesRequest.IsValid(req)) return Results.BadRequest("Location must be under 100 characters; notes under 2000.");
+
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
             var so = await db.Set<SetOwned>()
@@ -258,6 +260,11 @@ public static class SetsEndpoints
     public record NotesRequest(string? Location, string? Notes)
     {
         public static string? Normalize(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+        // Matches the SetOwned column caps (Location varchar(100), Notes varchar(2000)) so an
+        // over-length value gets a clean 400 instead of a DB error.
+        public static bool IsValid(NotesRequest req) =>
+            (req.Location?.Length ?? 0) <= 100 && (req.Notes?.Length ?? 0) <= 2000;
     }
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);

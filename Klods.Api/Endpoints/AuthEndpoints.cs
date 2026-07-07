@@ -1,6 +1,7 @@
 using Klods.Api.Auth;
 using Klods.Database;
 using Klods.Services;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace Klods.Api.Endpoints;
@@ -24,12 +25,16 @@ public static class AuthEndpoints
                 return Results.StatusCode(403);
 
             return Results.Ok(new TokenResponse(jwt.Generate(user)));
-        });
+        }).RequireRateLimiting("auth");
 
         group.MapPost("/register", async (RegisterRequest req, IDbContextFactory<InventoryContext> dbFactory, JwtService jwt, SettingsService settings) =>
         {
             if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
                 return Results.BadRequest("Username and password are required.");
+            if (req.Username.Length > User.MaxUserNameLength)
+                return Results.BadRequest($"Username must be under {User.MaxUserNameLength} characters.");
+            if (!PasswordHasher.IsValidLength(req.Password))
+                return Results.BadRequest($"Password must be {PasswordHasher.MinLength}-{PasswordHasher.MaxLength} characters.");
 
             await using var db = dbFactory.CreateDbContext();
             if (await db.Users.AnyAsync(u => u.UserName == req.Username))
@@ -51,7 +56,7 @@ public static class AuthEndpoints
                 return Results.Accepted();
 
             return Results.Ok(new TokenResponse(jwt.Generate(user)));
-        });
+        }).RequireRateLimiting("auth");
     }
 
     public record LoginRequest(string Username, string Password);
