@@ -7,6 +7,9 @@ namespace Klods;
 /// <summary>A recently-added set from Rebrickable's public sets RSS feed.</summary>
 public record RssSetItem(string SetNum, string Name, DateTime PubDate);
 
+/// <summary>A catalog set with its upstream last-modified timestamp, from the ordered sets list.</summary>
+public record ModifiedSetItem(string SetNum, DateTime LastModified);
+
 /// <summary>
 /// Thrown when the Rebrickable API returns a non-success status. Carries the HTTP status code so
 /// callers can distinguish a permanent 404 from a transient 429/5xx (worth retrying).
@@ -110,6 +113,58 @@ public class RebrickableApi
     {
         _logger.LogInformation("Searching sets for {Query} (page {Page})", query, page);
         return await SendQuery($"{BaseUrl}sets/?search={Uri.EscapeDataString(query)}&page={page}&page_size=25&");
+    }
+
+    // ── Catalog change feed (sets ordered by last-modified, newest first) ────
+
+    /// <summary>
+    /// Streams catalog sets newest-modified-first, stopping as soon as a set's last_modified_dt is at
+    /// or before <paramref name="since"/>. Returns only sets modified strictly after <paramref name="since"/>,
+    /// oldest of those last. One page (1000) spans ~2 months of catalog churn, so this is normally a
+    /// single API call; it follows pagination only when the gap since the last poll is very large.
+    /// </summary>
+    public async Task<List<ModifiedSetItem>> GetSetsModifiedSince(DateTime since, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Fetching sets modified since {Since:o}", since);
+        var results = new List<ModifiedSetItem>();
+        string? apiKey = Environment.GetEnvironmentVariable("REBRICKABLE_API_KEY");
+
+        Uri nextUri = new Uri($"{BaseUrl}sets/?ordering=-last_modified_dt&page_size={PageSize}&key={apiKey}");
+
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var page = await FetchAsync(nextUri);
+            if (page?["results"] is not JsonArray rows)
+                break;
+
+            var crossedWatermark = false;
+            foreach (var row in rows)
+            {
+                var lmRaw = row?["last_modified_dt"]?.ToString();
+                var setNum = row?["set_num"]?.ToString();
+                if (lmRaw == null || setNum == null)
+                    continue;
+
+                var lastModified = DateTime.Parse(lmRaw).ToUniversalTime();
+                if (lastModified <= since) { crossedWatermark = true; break; }
+
+                results.Add(new ModifiedSetItem(setNum, lastModified));
+            }
+
+            if (crossedWatermark)
+                break;
+
+            var nextUrl = page?["next"]?.ToString();
+            if (nextUrl == null)
+                break;
+
+            nextUri = new Uri($"{nextUrl}&key={apiKey}");
+        }
+
+        _logger.LogInformation("Found {Count} sets modified since {Since:o}", results.Count, since);
+        return results;
     }
 
     // ── Public RSS feed (no API key; newest sets first) ──────────────────────

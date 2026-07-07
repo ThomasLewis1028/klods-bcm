@@ -1,7 +1,5 @@
-using System.Globalization;
 using Klods;
 using Klods.Services;
-using NCrontab;
 
 namespace Klods.Api;
 
@@ -35,35 +33,17 @@ public class RssBackgroundService(IServiceScopeFactory scopeFactory, ILogger<Rss
         using var scope = scopeFactory.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
 
-        if (!await settings.GetBoolAsync(RssUpdateService.EnabledKey, ct: ct)) return;
-
-        var cron = await settings.GetAsync(RssUpdateService.CronKey, ct) ?? RssUpdateService.DefaultCron;
-        var schedule = CrontabSchedule.TryParse(cron);
-        if (schedule is null)
-        {
-            logger.LogWarning("Invalid RSS cron expression '{Cron}'; skipping", cron);
-            return;
-        }
-
-        var tz = CronHelper.ResolveTimeZone(await settings.GetAsync(RssUpdateService.TimezoneKey, ct));
-        var nowUtc = DateTime.UtcNow;
-        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, tz);
-        var lastStr = await settings.GetAsync(RssUpdateService.LastPollAtKey, ct);
-
-        // First run (or unparseable): anchor now so the first poll lands at the next scheduled time.
-        if (lastStr is null || !DateTime.TryParse(lastStr, null, DateTimeStyles.RoundtripKind, out var lastPollUtc))
-        {
-            await settings.SetAsync(RssUpdateService.LastPollAtKey, nowUtc.ToString("o"), ct);
-            return;
-        }
-
-        // Evaluate the schedule in the configured timezone.
-        var lastLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(lastPollUtc, DateTimeKind.Utc), tz);
-        if (schedule.GetNextOccurrence(lastLocal) > nowLocal) return; // not due yet
-
-        var max = await settings.GetIntAsync(RssUpdateService.MaxImportsKey, RssUpdateService.DefaultMaxImports, ct);
-        var rss = scope.ServiceProvider.GetRequiredService<RssUpdateService>();
-        await rss.PollAsync(max, ct);
-        await settings.SetAsync(RssUpdateService.LastPollAtKey, nowUtc.ToString("o"), ct);
+        await CronPollRunner.RunIfDueAsync(
+            settings, logger, "RSS",
+            RssUpdateService.EnabledKey, RssUpdateService.CronKey,
+            RssUpdateService.TimezoneKey, RssUpdateService.LastPollAtKey,
+            RssUpdateService.DefaultCron,
+            async token =>
+            {
+                var max = await settings.GetIntAsync(RssUpdateService.MaxImportsKey, RssUpdateService.DefaultMaxImports, token);
+                var rss = scope.ServiceProvider.GetRequiredService<RssUpdateService>();
+                await rss.PollAsync(max, token);
+            },
+            ct);
     }
 }

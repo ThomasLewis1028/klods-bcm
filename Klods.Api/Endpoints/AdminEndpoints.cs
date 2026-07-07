@@ -128,6 +128,38 @@ public static class AdminEndpoints
             return Results.Ok(new CatalogImportDto(result.ImportedAt, result.SnapshotDate, result.Source, result.Status, result.Notes));
         });
 
+        // Set-update auto-refresh settings + manual poll (re-imports locally-held sets changed upstream).
+        group.MapGet("/set-update-settings", async (SettingsService settings) =>
+            Results.Ok(new SetUpdateSettingsDto(
+                await settings.GetBoolAsync(SetUpdateService.EnabledKey),
+                await settings.GetAsync(SetUpdateService.CronKey) ?? SetUpdateService.DefaultCron,
+                await settings.GetAsync(SetUpdateService.TimezoneKey) ?? SetUpdateService.DefaultTimezone,
+                await settings.GetIntAsync(SetUpdateService.MaxReimportsKey, SetUpdateService.DefaultMaxReimports))));
+
+        group.MapPut("/set-update-settings", async (SetUpdateSettingsDto req, SettingsService settings) =>
+        {
+            var cron = (req.Cron ?? "").Trim();
+            if (NCrontab.CrontabSchedule.TryParse(cron) is null)
+                return Results.BadRequest("Invalid cron expression (expected 5 fields, e.g. '0 3 * * *').");
+            var tz = (req.Timezone ?? "").Trim();
+            if (!CronHelper.IsValidTimeZone(tz))
+                return Results.BadRequest($"Unknown timezone '{tz}'.");
+            var max = Math.Clamp(req.MaxReimports, 1, 1000);
+
+            await settings.SetAsync(SetUpdateService.EnabledKey, req.Enabled ? "true" : "false");
+            await settings.SetAsync(SetUpdateService.CronKey, cron);
+            await settings.SetAsync(SetUpdateService.TimezoneKey, tz);
+            await settings.SetAsync(SetUpdateService.MaxReimportsKey, max.ToString());
+            return Results.Ok();
+        });
+
+        group.MapPost("/set-update-poll", async (SetUpdateService svc, SettingsService settings, CancellationToken ct) =>
+        {
+            var max = await settings.GetIntAsync(SetUpdateService.MaxReimportsKey, SetUpdateService.DefaultMaxReimports, ct);
+            var result = await svc.PollAsync(max, ct);
+            return Results.Ok(new CatalogImportDto(result.ImportedAt, result.SnapshotDate, result.Source, result.Status, result.Notes));
+        });
+
         // Theme visibility: every theme in the catalog with its set count and whether it's hidden
         // from the set browse/search surfaces.
         group.MapGet("/theme-visibility", async (IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
@@ -217,6 +249,7 @@ public static class AdminEndpoints
     public record BulkImportResultDto(string Status, string? Notes, DateTime ImportedAt);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
     public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
+    public record SetUpdateSettingsDto(bool Enabled, string Cron, string Timezone, int MaxReimports);
     public record ThemeVisibilityDto(int Id, string Name, int? ParentId, int SetCount, bool Hidden);
     public record ThemeVisibilityUpdateDto(int[] HiddenThemeIds);
     public record TimezoneDto(string Id, string DisplayName);

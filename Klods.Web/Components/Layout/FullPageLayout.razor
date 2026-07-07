@@ -25,6 +25,7 @@
 
         @if (AuthService.CurrentUser != null)
         {
+            <NotificationBell/>
             <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 <ActivatorContent>
                     <MudTooltip Text="@AuthService.CurrentUser.UserName">

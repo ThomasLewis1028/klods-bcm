@@ -24,6 +24,8 @@ public class InventoryContext : DbContext
     public DbSet<Theme> Themes { get; set; }
     public DbSet<CatalogImport> CatalogImports { get; set; }
     public DbSet<Setting> Settings { get; set; }
+    public DbSet<SetUpdateNotification> SetUpdateNotifications { get; set; }
+    public DbSet<SetUpdateNotificationItem> SetUpdateNotificationItems { get; set; }
     public DbSet<SetOwned> SetsOwned { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<UserExternalLogin> UserExternalLogins { get; set; }
@@ -186,6 +188,30 @@ public class InventoryContext : DbContext
 
         // SETTING (key/value app settings)
         modelBuilder.Entity<Setting>().HasKey(e => e.Key);
+
+        // SET UPDATE NOTIFICATION — per-user "a set you own changed" notice; items cascade with it.
+        modelBuilder.Entity<SetUpdateNotification>().HasKey(e => e.Id);
+        modelBuilder.Entity<SetUpdateNotification>().HasIndex(e => new { e.UserId, e.ReadAt });
+
+        modelBuilder.Entity<SetUpdateNotification>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .IsRequired();
+
+        modelBuilder.Entity<SetUpdateNotification>()
+            .HasOne<Set>()
+            .WithMany()
+            .HasForeignKey(e => e.SetId)
+            .IsRequired();
+
+        modelBuilder.Entity<SetUpdateNotification>()
+            .HasMany(e => e.Items)
+            .WithOne()
+            .HasForeignKey(i => i.NotificationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SetUpdateNotificationItem>().HasKey(e => e.Id);
 
         // USER — unique index on UserName for login/uniqueness-check lookups
         modelBuilder.Entity<User>()

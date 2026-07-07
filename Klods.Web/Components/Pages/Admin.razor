@@ -184,13 +184,70 @@
                 {
                     <tr>
                         <td style="white-space: nowrap;">@ci.ImportedAt.ToLocalTime().ToString("g")</td>
-                        <td>@(ci.Source == "RssPoll" ? "RSS" : "Bulk")</td>
+                        <td>@SourceLabel(ci.Source)</td>
                         <td>@ci.Status</td>
                         <td>@ci.Notes</td>
                     </tr>
                 }
                 </tbody>
             </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Set Update Check</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            When on, the server periodically checks Rebrickable for changes to sets already in the catalog and
+            re-imports the ones that changed — refreshing part lists and returning any now-removed parts you
+            owned to your loose bricks. Sets not in the catalog are left alone.
+        </MudText>
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+            <MudSwitch T="bool" Value="_suEnabled" ValueChanged="ToggleSu" Color="Color.Primary"
+                       Label="@(_suEnabled ? "On" : "Off")"/>
+            <MudButton OnClick="SuCheckNow" Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh" Disabled="_suChecking">
+                @(_suChecking ? "Checking..." : "Check now")
+            </MudButton>
+            @if (_suChecking)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small"/>
+            }
+        </MudStack>
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="mt-3" Style="flex-wrap: wrap;">
+            <MudTextField T="string" Value="_suCron" ValueChanged="OnSuCronChanged" Immediate="true" DebounceInterval="500"
+                          Label="Schedule (cron)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 220px;"
+                          HelperText="0 3 * * * = daily 3am · 0 * * * * = hourly"/>
+            <MudAutocomplete T="string" Value="_suTimezone" ValueChanged="OnSuTzChanged"
+                             Label="Timezone" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             SearchFunc="SearchTimezones" MaxItems="50" Clearable="false" Style="max-width: 280px;"/>
+            <MudNumericField T="int" @bind-Value="_suMax" Label="Max re-imports / run" Min="1" Max="1000"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 190px;"/>
+            <MudButton OnClick="SaveSu" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save" Disabled="!_suCronValid">
+                Save schedule
+            </MudButton>
+        </MudStack>
+
+        @if (!_suCronValid)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Error" Class="mt-2">Invalid cron expression.</MudText>
+        }
+        else if (_suCronNext.Count > 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                <strong>Next runs (@_suTimezone):</strong>&nbsp; @string.Join("  ·  ", _suCronNext)
+            </MudText>
+        }
+
+        @if (_suSaveError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_suSaveError</MudAlert>
+        }
+        @if (_suResult is not null)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">@_suResult</MudAlert>
         }
     </MudPaper>
 
@@ -334,6 +391,16 @@
     private string? _rssResult;
     private string? _rssSaveError;
 
+    private bool _suEnabled;
+    private string _suCron = "0 3 * * *";
+    private string _suTimezone = "UTC";
+    private int _suMax = 100;
+    private bool _suChecking;
+    private string? _suResult;
+    private string? _suSaveError;
+    private bool _suCronValid = true;
+    private List<string> _suCronNext = [];
+
     private List<ApiClient.TimezoneDto> _timezones = [];
     private bool _cronValid = true;
     private List<string> _cronNext = [];
@@ -361,6 +428,16 @@
             _rssMax = rss.MaxImports;
         }
         await RefreshPreview();
+
+        var su = await Api.GetSetUpdateSettingsAsync();
+        if (su != null)
+        {
+            _suEnabled = su.Enabled;
+            _suCron = su.Cron;
+            _suTimezone = su.Timezone;
+            _suMax = su.MaxReimports;
+        }
+        await RefreshSuPreview();
 
         var regSettings = await Api.GetRegistrationSettingsAsync();
         if (regSettings != null)
@@ -528,6 +605,61 @@
         _rssChecking = false;
         StateHasChanged();
     }
+
+    private async Task OnSuCronChanged(string value)
+    {
+        _suCron = value ?? "";
+        await RefreshSuPreview();
+    }
+
+    private async Task OnSuTzChanged(string value)
+    {
+        _suTimezone = string.IsNullOrWhiteSpace(value) ? "UTC" : value;
+        await RefreshSuPreview();
+    }
+
+    private async Task RefreshSuPreview()
+    {
+        var preview = await Api.PreviewCronAsync(_suCron, _suTimezone);
+        _suCronValid = preview?.Valid ?? false;
+        _suCronNext = preview?.Next ?? [];
+        StateHasChanged();
+    }
+
+    private async Task ToggleSu(bool value)
+    {
+        _suEnabled = value;
+        await SaveSu();
+    }
+
+    private async Task SaveSu()
+    {
+        var (ok, error) = await Api.SaveSetUpdateSettingsAsync(_suEnabled, _suCron, _suTimezone, _suMax);
+        _suSaveError = ok ? null : error;
+        StateHasChanged();
+    }
+
+    private async Task SuCheckNow()
+    {
+        _suChecking = true;
+        _suResult = null;
+        StateHasChanged();
+
+        var result = await Api.SetUpdatePollNowAsync();
+        _suResult = result is null ? "Check failed." : $"{result.Status}: {result.Notes}";
+        _catalogImports = (await Api.GetCatalogImportsAsync())?.ToList() ?? [];
+
+        _suChecking = false;
+        StateHasChanged();
+    }
+
+    private static string SourceLabel(string source) => source switch
+    {
+        "RssPoll" => "RSS",
+        "SetUpdatePoll" => "Set update",
+        "BulkUpload" => "Bulk",
+        _ => source,
+    };
 
     private async Task RunBulkImport()
     {

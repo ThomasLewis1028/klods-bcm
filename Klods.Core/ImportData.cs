@@ -12,7 +12,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     /// Imports set catalog info, bricks, and BOM data from Rebrickable.
     /// Does NOT create an owned set — call AddOwnedSet separately.
     /// </summary>
-    public async Task<bool> ImportAll(List<string> setIds, bool throwOnError = false)
+    public async Task<bool> ImportAll(List<string> setIds, bool throwOnError = false, List<PartChange>? changes = null)
     {
         foreach (string setId in setIds)
         {
@@ -20,12 +20,21 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             {
                 logger.LogInformation("Importing all data for set {SetId}", setId);
 
+                // Only a re-import of a set we already hold produces a changelog — a first import isn't a "change".
+                List<PartChange>? collector = null;
+                if (changes != null)
+                {
+                    await using var probe = contextFactory.CreateDbContext();
+                    if (await probe.Set<Set>().AnyAsync(s => s.SetId == setId))
+                        collector = changes;
+                }
+
                 await ImportSetInfo(setId);
                 // Fetch the set's parts once and reuse for both the catalog and BOM steps.
                 var setParts = await rebrickable.GetSetParts(setId);
                 await ImportBricks(setId, setParts);
-                await ImportSetBOM(setId, setParts);
-                await ImportSetMinifigBOM(setId);
+                await ImportSetBOM(setId, setParts, collector);
+                await ImportSetMinifigBOM(setId, collector);
 
                 logger.LogInformation("Finished importing all data for set {SetId}", setId);
             }
@@ -455,7 +464,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
     /// <summary>
     /// Creates/updates SetBrick BOM entries for a set (no SetIndex — BOM is per-set).
     /// </summary>
-    public async Task<bool> ImportSetBOM(string setId, JsonArray? setParts = null)
+    public async Task<bool> ImportSetBOM(string setId, JsonArray? setParts = null, List<PartChange>? changes = null)
     {
         logger.LogInformation("Importing SetBrick BOM for {SetId}", setId);
 
@@ -469,6 +478,18 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         var brickContext = context.Set<Brick>();
         var setBrickContext = context.Set<SetBrick>();
 
+        // Snapshot the pre-import counts so we can emit a diff once the upsert + reconcile settle.
+        var before = changes == null
+            ? null
+            : await setBrickContext.AsNoTracking()
+                .Where(sb => sb.SetId == setId)
+                .ToDictionaryAsync(sb => (sb.PartNum, sb.ColorId), sb => sb.Count);
+
+        // Every (part, color) present in the fresh BOM. Anything currently stored for this set but
+        // absent here has been removed upstream and is reconciled away after the upsert pass.
+        // ColorId is nullable on Brick, so the key type follows suit.
+        var liveKeys = new HashSet<(string PartNum, string? ColorId)>();
+
         foreach (var part in setParts!)
         {
             var brick = await brickContext.FirstOrDefaultAsync(b =>
@@ -477,6 +498,8 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
             if (brick == null)
                 throw new Exception($"No brick found with ID {part!["part"]!["part_num"]}");
+
+            liveKeys.Add((brick.PartNum, brick.ColorId));
 
             var isSpare = part!["is_spare"]!.ToString().Equals("true");
             var quantity = int.Parse(part!["quantity"].ToString());
@@ -505,14 +528,87 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         }
 
         var saved = await context.SaveChangesAsync();
+
+        await ReconcileRemovedSetBricks(setId, liveKeys);
+
+        if (changes != null && before != null)
+        {
+            var after = await setBrickContext.AsNoTracking()
+                .Where(sb => sb.SetId == setId)
+                .ToDictionaryAsync(sb => (sb.PartNum, sb.ColorId), sb => sb.Count);
+            CollectDiff(before, after, changes);
+        }
+
         logger.LogInformation("Finished importing SetBrick BOM for {SetId}", setId);
         return saved > 0;
+    }
+
+    private static void CollectDiff(
+        Dictionary<(string PartNum, string ColorId), int> before,
+        Dictionary<(string PartNum, string ColorId), int> after,
+        List<PartChange> changes)
+        => PartDiff.Collect(before, after, changes);
+
+    /// <summary>
+    /// Deletes SetBrick BOM rows for a set that are no longer in the upstream inventory
+    /// (<paramref name="liveKeys"/>). Any stock an owner had placed against a removed part — on any
+    /// copy of the set — is returned to that owner's loose inventory (BrickOwned) before the owned
+    /// rows are deleted, so a re-import that drops a part never silently loses the physical brick.
+    /// </summary>
+    private async Task ReconcileRemovedSetBricks(string setId, HashSet<(string PartNum, string? ColorId)> liveKeys)
+    {
+        await using var context = contextFactory.CreateDbContext();
+
+        // A set's BOM is small (hundreds of rows), so filtering the tuple membership in memory is
+        // cheaper than trying to translate a HashSet<(string,string)> Contains into SQL.
+        var stale = (await context.Set<SetBrick>()
+                .Where(sb => sb.SetId == setId)
+                .ToListAsync())
+            .Where(sb => !liveKeys.Contains((sb.PartNum, sb.ColorId)))
+            .ToList();
+
+        if (stale.Count == 0)
+            return;
+
+        var staleKeys = stale.Select(sb => (sb.PartNum, sb.ColorId)).ToHashSet();
+
+        // Owned stock recorded against the removed parts, across every copy of this set and every user.
+        var ownedRows = (await context.Set<SetBrickOwned>()
+                .Where(sbo => sbo.SetId == setId)
+                .ToListAsync())
+            .Where(sbo => staleKeys.Contains((sbo.PartNum, sbo.ColorId)))
+            .ToList();
+
+        var brickOwnedContext = context.Set<BrickOwned>();
+        var returned = ownedRows
+            .Where(sbo => sbo.Stock > 0)
+            .GroupBy(sbo => (sbo.UserId, sbo.PartNum, sbo.ColorId))
+            .Select(g => (g.Key.UserId, g.Key.PartNum, g.Key.ColorId, Stock: g.Sum(x => x.Stock)));
+
+        foreach (var (userId, partNum, colorId, stock) in returned)
+        {
+            var existing = await brickOwnedContext.FirstOrDefaultAsync(bo =>
+                bo.UserId == userId && bo.PartNum == partNum && bo.ColorId == colorId);
+            if (existing == null)
+                brickOwnedContext.Add(new BrickOwned { UserId = userId, PartNum = partNum, ColorId = colorId, Stock = stock });
+            else
+                existing.Stock += stock;
+        }
+
+        // Owned rows (including zero-stock ones) must go first — they FK to SetBrick.
+        context.Set<SetBrickOwned>().RemoveRange(ownedRows);
+        context.Set<SetBrick>().RemoveRange(stale);
+
+        await context.SaveChangesAsync();
+        logger.LogInformation(
+            "Reconciled {SetId}: removed {StaleCount} stale BOM part(s), returned stock from {OwnedCount} owned row(s) to loose inventory",
+            setId, stale.Count, ownedRows.Count(o => o.Stock > 0));
     }
 
     /// <summary>
     /// Creates/updates SetMinifig BOM entries and merges minifig brick parts into SetBrick BOM.
     /// </summary>
-    public async Task ImportSetMinifigBOM(string setId)
+    public async Task ImportSetMinifigBOM(string setId, List<PartChange>? changes = null)
     {
         logger.LogInformation("Importing SetMinifig BOM for {SetId}", setId);
         var api = rebrickable;
@@ -525,7 +621,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             var quantity = (int)minifig!["quantity"]!;
 
             await ImportMinifig(minifigId);
-            await LinkMinifigBricks(minifigId);
+            await LinkMinifigBricks(minifigId, changes: changes);
             await LinkMinifigToSetBOM(minifigId, setId, quantity);
         }
     }
@@ -599,7 +695,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         return await context.SaveChangesAsync() > 0;
     }
 
-    public async Task<bool> LinkMinifigBricks(string minifigId)
+    public async Task<bool> LinkMinifigBricks(string minifigId, JsonArray? parts = null, List<PartChange>? changes = null)
     {
         logger.LogInformation("Linking minifig bricks for {MinifigId}", minifigId);
 
@@ -607,7 +703,14 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         var minifigBrickContext = context.Set<MinifigBrick>();
         var brickContext = context.Set<Brick>();
 
-        var parts = await rebrickable.GetMinifigParts(minifigId);
+        parts ??= await rebrickable.GetMinifigParts(minifigId);
+
+        // Snapshot pre-import counts for this minifig so we can fold its part changes into the set's diff.
+        var before = changes == null
+            ? null
+            : await minifigBrickContext.AsNoTracking()
+                .Where(mb => mb.MinifigId == minifigId)
+                .ToDictionaryAsync(mb => (mb.PartNum, mb.ColorId), mb => mb.Count);
 
         // Aggregate API rows by (part, color): Rebrickable can return the same part twice
         // (regular + spare), which would otherwise collide on the (MinifigId, PartNum, ColorId) key.
@@ -652,7 +755,73 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             }
         }
 
-        return await context.SaveChangesAsync() > 0;
+        var saved = await context.SaveChangesAsync() > 0;
+
+        await ReconcileRemovedMinifigBricks(minifigId, aggregated.Keys.ToHashSet());
+
+        if (changes != null && before != null)
+        {
+            var after = await minifigBrickContext.AsNoTracking()
+                .Where(mb => mb.MinifigId == minifigId)
+                .ToDictionaryAsync(mb => (mb.PartNum, mb.ColorId), mb => mb.Count);
+            CollectDiff(before, after, changes);
+        }
+
+        return saved;
+    }
+
+    /// <summary>
+    /// Minifig-parts equivalent of <see cref="ReconcileRemovedSetBricks"/>: deletes MinifigBrick rows no
+    /// longer in the upstream inventory (<paramref name="liveKeys"/>), first returning any owned per-instance
+    /// stock (MinifigBrickOwned) recorded against a removed part to that owner's loose inventory (BrickOwned).
+    /// </summary>
+    private async Task ReconcileRemovedMinifigBricks(string minifigId, HashSet<(string PartNum, string ColorId)> liveKeys)
+    {
+        await using var context = contextFactory.CreateDbContext();
+
+        // A minifig's parts list is tiny, so the tuple membership filter runs in memory (see the set-BOM twin).
+        var stale = (await context.Set<MinifigBrick>()
+                .Where(mb => mb.MinifigId == minifigId)
+                .ToListAsync())
+            .Where(mb => !liveKeys.Contains((mb.PartNum, mb.ColorId)))
+            .ToList();
+
+        if (stale.Count == 0)
+            return;
+
+        var staleKeys = stale.Select(mb => (mb.PartNum, mb.ColorId)).ToHashSet();
+
+        // Owned stock recorded against the removed parts, across every instance of this fig and every user.
+        var ownedRows = (await context.Set<MinifigBrickOwned>()
+                .Where(mbo => mbo.MinifigId == minifigId)
+                .ToListAsync())
+            .Where(mbo => staleKeys.Contains((mbo.PartNum, mbo.ColorId)))
+            .ToList();
+
+        var brickOwnedContext = context.Set<BrickOwned>();
+        var returned = ownedRows
+            .Where(mbo => mbo.Stock > 0)
+            .GroupBy(mbo => (mbo.UserId, mbo.PartNum, mbo.ColorId))
+            .Select(g => (g.Key.UserId, g.Key.PartNum, g.Key.ColorId, Stock: g.Sum(x => x.Stock)));
+
+        foreach (var (userId, partNum, colorId, stock) in returned)
+        {
+            var existing = await brickOwnedContext.FirstOrDefaultAsync(bo =>
+                bo.UserId == userId && bo.PartNum == partNum && bo.ColorId == colorId);
+            if (existing == null)
+                brickOwnedContext.Add(new BrickOwned { UserId = userId, PartNum = partNum, ColorId = colorId, Stock = stock });
+            else
+                existing.Stock += stock;
+        }
+
+        // Owned rows (including zero-stock ones) must go first — they FK to MinifigBrick.
+        context.Set<MinifigBrickOwned>().RemoveRange(ownedRows);
+        context.Set<MinifigBrick>().RemoveRange(stale);
+
+        await context.SaveChangesAsync();
+        logger.LogInformation(
+            "Reconciled minifig {MinifigId}: removed {StaleCount} stale part(s), returned stock from {OwnedCount} owned row(s) to loose inventory",
+            minifigId, stale.Count, ownedRows.Count(o => o.Stock > 0));
     }
 
     public async Task<bool> ImportBricks(string setId, JsonArray? setParts = null)
