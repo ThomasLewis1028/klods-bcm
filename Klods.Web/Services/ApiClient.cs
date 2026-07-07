@@ -322,6 +322,34 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         catch { return null; }
     }
 
+    public Task<SetUpdateSettingsDto?> GetSetUpdateSettingsAsync() => GetAsync<SetUpdateSettingsDto>("/api/admin/set-update-settings");
+    public async Task<(bool Ok, string? Error)> SaveSetUpdateSettingsAsync(bool enabled, string cron, string timezone, int maxReimports)
+    {
+        try
+        {
+            var resp = await Http().PutAsJsonAsync("/api/admin/set-update-settings",
+                new { Enabled = enabled, Cron = cron, Timezone = timezone, MaxReimports = maxReimports }, JsonOpts);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var body = await resp.Content.ReadAsStringAsync();
+            return (false, string.IsNullOrWhiteSpace(body) ? "Failed to save settings." : body);
+        }
+        catch (Exception e) { return (false, e.Message); }
+    }
+    public async Task<CatalogImportDto?> SetUpdatePollNowAsync()
+    {
+        try
+        {
+            var resp = await Http().PostAsync("/api/admin/set-update-poll", null);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<CatalogImportDto>(JsonOpts) : null;
+        }
+        catch { return null; }
+    }
+
+    public Task<NotificationDto[]?> GetNotificationsAsync() => GetAsync<NotificationDto[]>("/api/notifications/");
+    public async Task<int> GetUnreadNotificationCountAsync() => await GetAsync<int?>("/api/notifications/unread-count") ?? 0;
+    public Task MarkAllNotificationsReadAsync() => PostAsync("/api/notifications/read-all");
+    public Task MarkNotificationReadAsync(int id) => PostAsync($"/api/notifications/{id}/read");
+
     public async Task<(bool Ok, string? Message)> BulkImportCatalogAsync(
         IReadOnlyList<IBrowserFile> files, DateTime? snapshot, CancellationToken ct = default)
     {
@@ -441,6 +469,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record RegistrationSettingsDto(bool AutoApprove);
     public record CatalogImportDto(DateTime ImportedAt, DateTime? SnapshotDate, string Source, string Status, string? Notes);
     public record RssSettingsDto(bool Enabled, string Cron, string Timezone, int MaxImports);
+    public record SetUpdateSettingsDto(bool Enabled, string Cron, string Timezone, int MaxReimports);
+    public record NotificationDto(int Id, string SetId, string SetName, string? SetImg, DateTime DetectedAt, bool Read, List<NotificationItemDto> Items);
+    public record NotificationItemDto(string PartNum, string? PartName, string? PartImg, string? ColorName, string? HexColor, string ChangeKind, int OldCount, int NewCount);
     public record ThemeVisibilityDto(int Id, string Name, int? ParentId, int SetCount, bool Hidden);
     public record TimezoneDto(string Id, string DisplayName);
     public record CronPreviewDto(bool Valid, List<string> Next);

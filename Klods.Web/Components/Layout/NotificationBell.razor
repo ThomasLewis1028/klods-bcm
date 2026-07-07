@@ -1,0 +1,48 @@
+@using Klods.Services
+@using Microsoft.AspNetCore.Components.Routing
+@using Color = MudBlazor.Color
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@implements IDisposable
+
+<MudTooltip Text="Set updates">
+    <MudBadge Content="_unread" Color="Color.Error" Overlap="true" Bordered="true" Visible="_unread > 0" Max="99">
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit"
+                       OnClick="@(() => Nav.NavigateTo("/notifications"))"/>
+    </MudBadge>
+</MudTooltip>
+
+@code {
+    private int _unread;
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        AuthService.OnChange += OnAuthChanged;
+    }
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+
+    // Refresh the badge as the user navigates (cheap count call), so notifications created by a poll
+    // during the session surface without a full page reload.
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = RefreshAndRender();
+    private void OnAuthChanged() => _ = RefreshAndRender();
+
+    private async Task RefreshAndRender()
+    {
+        await Refresh();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Refresh()
+    {
+        _unread = AuthService.CurrentUser == null ? 0 : await Api.GetUnreadNotificationCountAsync();
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        AuthService.OnChange -= OnAuthChanged;
+    }
+}

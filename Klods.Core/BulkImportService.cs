@@ -13,7 +13,10 @@ namespace Klods;
 /// Each attempt is recorded in <see cref="CatalogImport"/>.
 /// </para>
 /// </summary>
-public class BulkImportService(IDbContextFactory<InventoryContext> contextFactory, ILogger<BulkImportService> logger)
+public class BulkImportService(
+    IDbContextFactory<InventoryContext> contextFactory,
+    NotificationService notifications,
+    ILogger<BulkImportService> logger)
 {
     /// <summary>CSV files we consume; all must be supplied for a load to proceed.</summary>
     public static readonly string[] RequiredFiles =
@@ -182,6 +185,76 @@ public class BulkImportService(IDbContextFactory<InventoryContext> contextFactor
         """,
     ];
 
+    // Removal reconcile — the upserts above only add/update, so a part dropped upstream would linger.
+    // This deletes BOM rows that aren't in the new snapshot, first returning any owned stock recorded
+    // against a removed part to that owner's loose inventory (BrickOwned). The key temp tables reuse the
+    // exact "latest inventory version per set/fig" logic as the SetBricks/MinifigBricks upserts, so the
+    // surviving keys line up precisely — only genuinely-removed parts get deleted. Runs in the same
+    // transaction as the upserts (all-or-nothing).
+    private const string ReconcileSql = """
+        CREATE TEMP TABLE stg_new_setbrick_keys ON COMMIT DROP AS
+        WITH set_inv AS (
+            SELECT DISTINCT ON (set_num) id AS inventory_id, set_num
+            FROM stg_inventories WHERE set_num IN (SELECT set_num FROM stg_sets)
+            ORDER BY set_num, version::int DESC
+        )
+        SELECT DISTINCT si.set_num, ip.part_num, ip.color_id
+        FROM set_inv si JOIN stg_inventory_parts ip ON ip.inventory_id = si.inventory_id;
+        CREATE INDEX ON stg_new_setbrick_keys(set_num, part_num, color_id);
+
+        CREATE TEMP TABLE stg_new_minifigbrick_keys ON COMMIT DROP AS
+        WITH fig_inv AS (
+            SELECT DISTINCT ON (set_num) id AS inventory_id, set_num AS fig_num
+            FROM stg_inventories WHERE set_num IN (SELECT fig_num FROM stg_minifigs)
+            ORDER BY set_num, version::int DESC
+        )
+        SELECT DISTINCT fi.fig_num, ip.part_num, ip.color_id
+        FROM fig_inv fi JOIN stg_inventory_parts ip ON ip.inventory_id = fi.inventory_id;
+        CREATE INDEX ON stg_new_minifigbrick_keys(fig_num, part_num, color_id);
+
+        -- SET PARTS: return owned stock for removed parts, then drop owned rows and the stale BOM rows.
+        INSERT INTO "BrickOwned" ("UserId","PartNum","ColorId","Stock")
+        SELECT sbo."UserId", sbo."PartNum", sbo."ColorId", SUM(sbo."Stock")
+        FROM "SetBrickOwned" sbo
+        WHERE sbo."Stock" > 0
+          AND sbo."SetId" IN (SELECT set_num FROM stg_sets)
+          AND NOT EXISTS (SELECT 1 FROM stg_new_setbrick_keys k
+                          WHERE k.set_num = sbo."SetId" AND k.part_num = sbo."PartNum" AND k.color_id = sbo."ColorId")
+        GROUP BY sbo."UserId", sbo."PartNum", sbo."ColorId"
+        ON CONFLICT ("UserId","PartNum","ColorId") DO UPDATE SET "Stock" = "BrickOwned"."Stock" + EXCLUDED."Stock";
+
+        DELETE FROM "SetBrickOwned" sbo
+        WHERE sbo."SetId" IN (SELECT set_num FROM stg_sets)
+          AND NOT EXISTS (SELECT 1 FROM stg_new_setbrick_keys k
+                          WHERE k.set_num = sbo."SetId" AND k.part_num = sbo."PartNum" AND k.color_id = sbo."ColorId");
+
+        DELETE FROM "SetBricks" sb
+        WHERE sb."SetId" IN (SELECT set_num FROM stg_sets)
+          AND NOT EXISTS (SELECT 1 FROM stg_new_setbrick_keys k
+                          WHERE k.set_num = sb."SetId" AND k.part_num = sb."PartNum" AND k.color_id = sb."ColorId");
+
+        -- MINIFIG PARTS: same reconcile, returning stock to loose inventory.
+        INSERT INTO "BrickOwned" ("UserId","PartNum","ColorId","Stock")
+        SELECT mbo."UserId", mbo."PartNum", mbo."ColorId", SUM(mbo."Stock")
+        FROM "MinifigBrickOwned" mbo
+        WHERE mbo."Stock" > 0
+          AND mbo."MinifigId" IN (SELECT fig_num FROM stg_minifigs)
+          AND NOT EXISTS (SELECT 1 FROM stg_new_minifigbrick_keys k
+                          WHERE k.fig_num = mbo."MinifigId" AND k.part_num = mbo."PartNum" AND k.color_id = mbo."ColorId")
+        GROUP BY mbo."UserId", mbo."PartNum", mbo."ColorId"
+        ON CONFLICT ("UserId","PartNum","ColorId") DO UPDATE SET "Stock" = "BrickOwned"."Stock" + EXCLUDED."Stock";
+
+        DELETE FROM "MinifigBrickOwned" mbo
+        WHERE mbo."MinifigId" IN (SELECT fig_num FROM stg_minifigs)
+          AND NOT EXISTS (SELECT 1 FROM stg_new_minifigbrick_keys k
+                          WHERE k.fig_num = mbo."MinifigId" AND k.part_num = mbo."PartNum" AND k.color_id = mbo."ColorId");
+
+        DELETE FROM "MinifigBricks" mb
+        WHERE mb."MinifigId" IN (SELECT fig_num FROM stg_minifigs)
+          AND NOT EXISTS (SELECT 1 FROM stg_new_minifigbrick_keys k
+                          WHERE k.fig_num = mb."MinifigId" AND k.part_num = mb."PartNum" AND k.color_id = mb."ColorId");
+        """;
+
     /// <summary>
     /// Loads the supplied CSV files into the catalog. <paramref name="files"/> is keyed by logical name
     /// (e.g. "inventory_parts"). Always returns a <see cref="CatalogImport"/> record (Success or Failed).
@@ -199,6 +272,9 @@ public class BulkImportService(IDbContextFactory<InventoryContext> contextFactor
 
         try
         {
+            // Snapshot owned sets' BOMs before the load so we can diff and notify owners afterwards.
+            var beforeOwned = await SnapshotOwnedSetBricksAsync(ct);
+
             await using var csCtx = await contextFactory.CreateDbContextAsync(ct);
             var connString = csCtx.Database.GetConnectionString();
 
@@ -216,7 +292,12 @@ public class BulkImportService(IDbContextFactory<InventoryContext> contextFactor
             foreach (var sql in Upserts)
                 await ExecuteAsync(conn, sql, ct);
 
+            // Delete BOM rows no longer in the snapshot and return owned stock to loose inventory.
+            await ExecuteAsync(conn, ReconcileSql, ct);
+
             await tx.CommitAsync(ct);
+
+            await NotifyOwnersAsync(beforeOwned, ct);
 
             var counts = await CountsAsync(ct);
             logger.LogInformation("Bulk import complete. {Counts}", counts);
@@ -226,6 +307,66 @@ public class BulkImportService(IDbContextFactory<InventoryContext> contextFactor
         {
             logger.LogError(ex, "Bulk import failed");
             return await RecordAsync("BulkUpload", "Failed", snapshotDate, ex.Message, ct);
+        }
+    }
+
+    /// <summary>
+    /// Snapshots the current SetBrick BOM (regular counts, keyed by part+color) for every set any user owns.
+    /// Small — only owned sets — so it's cheap to hold in memory across the import for a before/after diff.
+    /// </summary>
+    private async Task<Dictionary<string, Dictionary<(string, string), int>>> SnapshotOwnedSetBricksAsync(CancellationToken ct)
+    {
+        await using var ctx = await contextFactory.CreateDbContextAsync(ct);
+
+        var ownedSetIds = await ctx.Set<SetOwned>().AsNoTracking()
+            .Select(so => so.SetId).Distinct().ToListAsync(ct);
+        if (ownedSetIds.Count == 0)
+            return new();
+
+        var rows = await ctx.Set<SetBrick>().AsNoTracking()
+            .Where(sb => ownedSetIds.Contains(sb.SetId))
+            .Select(sb => new { sb.SetId, sb.PartNum, sb.ColorId, sb.Count })
+            .ToListAsync(ct);
+
+        return rows.GroupBy(r => r.SetId).ToDictionary(
+            g => g.Key,
+            g => g.ToDictionary(r => (r.PartNum, r.ColorId), r => r.Count));
+    }
+
+    /// <summary>
+    /// Diffs each owned set's before/after BOM and fans out a notification per owner for the ones that
+    /// changed. Best-effort: the catalog import has already committed, so a notification failure is logged
+    /// rather than surfaced as an import failure.
+    /// </summary>
+    private async Task NotifyOwnersAsync(Dictionary<string, Dictionary<(string, string), int>> before, CancellationToken ct)
+    {
+        try
+        {
+            var after = await SnapshotOwnedSetBricksAsync(ct);
+            var setIds = before.Keys.Union(after.Keys);
+            var detectedAt = DateTime.UtcNow;
+            var notified = 0;
+
+            foreach (var setId in setIds)
+            {
+                var b = before.GetValueOrDefault(setId) ?? new();
+                var a = after.GetValueOrDefault(setId) ?? new();
+
+                var changes = new List<PartChange>();
+                PartDiff.Collect(b, a, changes);
+                if (changes.Count == 0)
+                    continue;
+
+                await notifications.WriteForSetChangeAsync(setId, changes, detectedAt, ct);
+                notified++;
+            }
+
+            if (notified > 0)
+                logger.LogInformation("Bulk import: wrote update notifications for {Count} changed owned set(s)", notified);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Bulk import: writing owner notifications failed (catalog import already committed)");
         }
     }
 

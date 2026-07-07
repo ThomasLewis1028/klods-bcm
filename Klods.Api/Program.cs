@@ -20,6 +20,9 @@ builder.Services.AddScoped<BulkImportService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<RssUpdateService>();
 builder.Services.AddHostedService<Klods.Api.RssBackgroundService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<SetUpdateService>();
+builder.Services.AddHostedService<Klods.Api.SetUpdateBackgroundService>();
 builder.Services.AddScoped<UpdateData>();
 builder.Services.AddScoped<DeleteData>();
 
@@ -175,6 +178,7 @@ app.MapBom();
 app.MapAdmin();
 app.MapUsers();
 app.MapHome();
+app.MapNotifications();
 
 var appVersion =
     (Assembly.GetEntryAssembly()?

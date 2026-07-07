@@ -1,0 +1,140 @@
+@page "/notifications"
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject ApiClient Api
+@inject ImageStorageService ImageStorage
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+@attribute [Authorize]
+@implements IDisposable
+
+<PageTitle>Set Updates</PageTitle>
+
+<MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4" Style="font-weight:700;">Set Updates</MudText>
+    @if (_items.Any(n => !n.Read))
+    {
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.DoneAll"
+                   OnClick="MarkAllRead">Mark all read</MudButton>
+    }
+</MudStack>
+
+@if (_loading)
+{
+    <div style="display:flex; justify-content:center; padding:3rem;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"/>
+    </div>
+}
+else if (_items.Count == 0)
+{
+    <MudPaper Class="pa-8" Elevation="0">
+        <MudStack AlignItems="AlignItems.Center" Spacing="3">
+            <MudIcon Icon="@Icons.Material.Filled.NotificationsNone" Size="Size.Large" Color="Color.Secondary"/>
+            <MudText Typo="Typo.h6">No set updates</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width:480px;">
+                When a set you own changes on Rebrickable, the changes show up here.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    <MudStack Spacing="3">
+        @foreach (var n in _items)
+        {
+            var notif = n;
+            <MudPaper Elevation="2" Class="pa-4"
+                      Style="@(notif.Read ? null : "border-left: 4px solid var(--mud-palette-primary);")">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                        <MudImage Src="@ImageStorage.ResolveUrl(notif.SetImg)" Height="44" Style="object-fit:contain;"/>
+                        <div>
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@notif.SetName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @notif.SetId · @notif.DetectedAt.ToLocalTime().ToString("g") ·
+                                @notif.Items.Count change@(notif.Items.Count == 1 ? "" : "s")
+                            </MudText>
+                        </div>
+                    </MudStack>
+                    @if (!notif.Read)
+                    {
+                        <MudTooltip Text="Mark read">
+                            <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
+                                           OnClick="@(() => MarkRead(notif.Id))"/>
+                        </MudTooltip>
+                    }
+                </MudStack>
+                <MudDivider Class="mb-2"/>
+                <MudStack Spacing="1">
+                    @foreach (var item in notif.Items)
+                    {
+                        var meta = KindMeta(item.ChangeKind);
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudChip T="string" Size="Size.Small" Color="@meta.Color" Icon="@meta.Icon" Variant="Variant.Text">@meta.Label</MudChip>
+                            <MudImage Src="@ImageStorage.ResolveUrl(item.PartImg)" Height="28" Style="object-fit:contain;"/>
+                            <MudText Typo="Typo.body2">@(item.PartName ?? item.PartNum)</MudText>
+                            @if (item.ColorName != null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Style="@ColorHelper.ColorChipStyle(item.HexColor)">@item.ColorName</MudChip>
+                            }
+                            <MudSpacer/>
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">@CountText(item)</MudText>
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@code {
+    private List<ApiClient.NotificationDto> _items = [];
+    private bool _loading = true;
+
+    protected override void OnInitialized() => AuthService.SessionRestored += OnSessionRestored;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private void OnSessionRestored() => InvokeAsync(async () =>
+    {
+        if (AuthService.CurrentUser == null) { Nav.NavigateTo("/not-authorized"); return; }
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        _items = (await Api.GetNotificationsAsync())?.ToList() ?? [];
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task MarkAllRead()
+    {
+        await Api.MarkAllNotificationsReadAsync();
+        await LoadAsync();
+    }
+
+    private async Task MarkRead(int id)
+    {
+        await Api.MarkNotificationReadAsync(id);
+        await LoadAsync();
+    }
+
+    public void Dispose() => AuthService.SessionRestored -= OnSessionRestored;
+
+    private static (string Label, Color Color, string Icon) KindMeta(string kind) => kind switch
+    {
+        "Added"   => ("Added", Color.Success, Icons.Material.Filled.Add),
+        "Removed" => ("Removed", Color.Error, Icons.Material.Filled.Remove),
+        _         => ("Changed", Color.Warning, Icons.Material.Filled.SwapVert),
+    };
+
+    private static string CountText(ApiClient.NotificationItemDto i) => i.ChangeKind switch
+    {
+        "Added"   => $"×{i.NewCount}",
+        "Removed" => $"×{i.OldCount}",
+        _         => $"{i.OldCount} → {i.NewCount}",
+    };
+}
