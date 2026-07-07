@@ -190,6 +190,19 @@ public static class BomEndpoints
             return ok ? Results.Ok() : Results.NotFound();
         });
 
+        // Whole-copy brick operation: clear, unbuild-to-loose, fill-from-thin-air, or fill-from-loose.
+        // Returns how many pieces were changed/moved.
+        group.MapPost("/{setId}/{setIndex:int}/bulk-bricks", async (
+            string setId, int setIndex, BulkBricksRequest req, HttpContext http, UpdateData updater) =>
+        {
+            if (!Enum.TryParse<UpdateData.BulkBrickOp>(req.Operation, ignoreCase: true, out var op))
+                return Results.BadRequest("Unknown operation.");
+
+            var userId = http.UserId();
+            var affected = await updater.BulkSetBricksAsync(userId, setId, setIndex, op);
+            return affected < 0 ? Results.NotFound() : Results.Ok(new BulkBricksResult(affected));
+        });
+
         // Remove a specific fig instance from this copy (deletes the droid; its parts cascade at the DB).
         group.MapDelete("/{setId}/{setIndex:int}/minifigs/{minifigId}/instances/{index:int}", async (
             string minifigId, int index, HttpContext http, ImportData importer) =>
@@ -374,4 +387,6 @@ public static class BomEndpoints
     public record AddSubstitutionRequest(string ReqPartNum, string ReqColorId, string SubPartNum, string SubColorId, int Count, int PulledFromLoose, string? Notes);
     public record UpdateSubstitutionRequest(int Count, int PulledFromLoose);
     public record NewSubstitutionDto(int PulledFromLoose);
+    public record BulkBricksRequest(string Operation);
+    public record BulkBricksResult(int PiecesAffected);
 }

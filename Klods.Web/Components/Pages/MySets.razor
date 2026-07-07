@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @inject ApiClient Api
 @inject ImageStorageService ImageStorage
+@inject ISnackbar Snackbar
 @using Klods.Components.Objects
 @using Klods.Services
 @using Microsoft.AspNetCore.Components.Routing
@@ -62,11 +63,22 @@
     @* Toolbar: Add Set + view toggle *@
     <MudItem xs="12">
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenAddSetDialog">
-                Add Set
-            </MudButton>
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenAddSetDialog">
+                    Add Set
+                </MudButton>
+                <MudMenu Label="Export" StartIcon="@Icons.Material.Filled.Download"
+                         EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined" Size="Size.Small"
+                         Disabled="@(_setInfos.Count == 0 || _exporting)">
+                    <MudMenuItem OnClick="@(() => ExportParts(false, "xlsx"))" Icon="@Icons.Material.Filled.Image">All parts — Excel (with images)</MudMenuItem>
+                    <MudMenuItem OnClick="@(() => ExportParts(true, "xlsx"))" Icon="@Icons.Material.Filled.Image">Missing parts — Excel (with images)</MudMenuItem>
+                    <MudDivider/>
+                    <MudMenuItem OnClick="@(() => ExportParts(false, "csv"))" Icon="@Icons.Material.Filled.TableChart">All parts — CSV</MudMenuItem>
+                    <MudMenuItem OnClick="@(() => ExportParts(true, "csv"))" Icon="@Icons.Material.Filled.TableChart">Missing parts — CSV</MudMenuItem>
+                </MudMenu>
+            </MudStack>
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                 @if (_view == "grid")
                 {
@@ -488,6 +500,35 @@
     }
 
     private void OpenBuildingInstructions(string url) => JsRuntime.InvokeVoidAsync("open", url, "_blank");
+
+    private bool _exporting;
+
+    private async Task ExportParts(bool onlyMissing, string format)
+    {
+        _exporting = true;
+        try
+        {
+            if (format == "xlsx")
+                Snackbar.Add("Preparing your spreadsheet — fetching part images may take a moment…", Severity.Info);
+
+            var bytes = await Api.ExportPartsAsync(onlyMissing, format);
+            if (bytes is not { Length: > 0 })
+            {
+                Snackbar.Add("Export failed. Please try again.", Severity.Error);
+                return;
+            }
+
+            var scope = onlyMissing ? "missing" : "all";
+            var (ext, mime) = format == "xlsx"
+                ? ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                : ("csv", "text/csv");
+            await JsRuntime.InvokeVoidAsync("klodsDownloadFile", $"klods-{scope}-parts.{ext}", mime, Convert.ToBase64String(bytes));
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
 
     private async Task DeleteOwnedSet(string setId, int setIndex, string setName, string? setImgUrl)
     {

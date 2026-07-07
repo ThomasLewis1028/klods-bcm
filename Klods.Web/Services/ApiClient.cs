@@ -32,6 +32,16 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         catch { return default; }
     }
 
+    private async Task<byte[]?> GetBytesAsync(string url)
+    {
+        try
+        {
+            var resp = await Http().GetAsync(url);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadAsByteArrayAsync() : null;
+        }
+        catch { return null; }
+    }
+
     private async Task<(bool Ok, HttpStatusCode Status)> SendAsync(HttpMethod method, string url, object? body = null)
     {
         try
@@ -45,6 +55,18 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
             return (resp.IsSuccessStatusCode, resp.StatusCode);
         }
         catch { return (false, HttpStatusCode.ServiceUnavailable); }
+    }
+
+    private async Task<T?> PostAsync<T>(string url, object? body = null)
+    {
+        try
+        {
+            var resp = body is null
+                ? await Http().PostAsync(url, null)
+                : await Http().PostAsJsonAsync(url, body, JsonOpts);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<T>(JsonOpts) : default;
+        }
+        catch { return default; }
     }
 
     private Task<(bool Ok, HttpStatusCode Status)> PostAsync(string url, object? body = null)  => SendAsync(HttpMethod.Post,   url, body);
@@ -290,6 +312,13 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
             new { Count = count, PulledFromLoose = pulledFromLoose })).Ok;
     public async Task<bool> DeleteSubstitutionAsync(string setId, int setIndex, int id)
         => (await DeleteAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/substitutions/{id}")).Ok;
+    public Task<BulkBricksResultDto?> BulkSetBricksAsync(string setId, int setIndex, string operation)
+        => PostAsync<BulkBricksResultDto>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/bulk-bricks", new { Operation = operation });
+
+    // ── Export ───────────────────────────────────────────────────────────────
+
+    public Task<byte[]?> ExportPartsAsync(bool onlyMissing, string format)
+        => GetBytesAsync($"/api/export/parts?onlyMissing={(onlyMissing ? "true" : "false")}&format={Uri.EscapeDataString(format)}");
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
@@ -479,6 +508,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, int SubPercent, bool Substituted, string? Location, string? Notes);
     public record CompletenessDto(int Percent, string Status, int SubPercent, bool Substituted);
     public record SubstitutionDto(int Id, string ReqPartNum, string ReqColorId, string SubPartNum, string SubColorId, string? SubName, string? SubPartImg, string? SubColorName, string? SubHexColor, int SubLooseStock, int Count, int PulledFromLoose, string? Notes);
+    public record BulkBricksResultDto(int PiecesAffected);
 
     public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string Status);
     public record RegistrationSettingsDto(bool AutoApprove);

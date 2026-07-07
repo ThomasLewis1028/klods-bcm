@@ -243,6 +243,7 @@ app.MapMinifigs();
 app.MapBricks();
 app.MapMyCatalog();
 app.MapBom();
+app.MapExport();
 app.MapAdmin();
 app.MapUsers();
 app.MapHome();
