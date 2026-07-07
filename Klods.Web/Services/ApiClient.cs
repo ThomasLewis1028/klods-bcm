@@ -317,8 +317,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     // ── Export ───────────────────────────────────────────────────────────────
 
-    public Task<byte[]?> ExportPartsCsvAsync(bool onlyMissing)
-        => GetBytesAsync($"/api/export/parts?onlyMissing={(onlyMissing ? "true" : "false")}");
+    public Task<byte[]?> ExportPartsAsync(bool onlyMissing, string format)
+        => GetBytesAsync($"/api/export/parts?onlyMissing={(onlyMissing ? "true" : "false")}&format={Uri.EscapeDataString(format)}");
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
