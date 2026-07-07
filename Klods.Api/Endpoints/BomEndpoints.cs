@@ -169,6 +169,8 @@ public static class BomEndpoints
             string setId, int setIndex, string partNum, string colorId,
             UpdateStockRequest req, HttpContext http, UpdateData updater) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             var sbo = new SetBrickOwned { UserId = userId, SetId = setId, SetIndex = setIndex, PartNum = partNum, ColorId = colorId, Stock = req.Stock };
             var ok = updater.UpdateSetBrickOwned(sbo, userId);
@@ -180,6 +182,8 @@ public static class BomEndpoints
             string setId, int setIndex, string partNum, string colorId,
             UpdateStockRequest req, HttpContext http, UpdateData updater) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             var bo = new BrickOwned { UserId = userId, PartNum = partNum, ColorId = colorId, Stock = req.Stock };
             var ok = updater.UpdateBrickOwned(bo, userId);
@@ -200,6 +204,8 @@ public static class BomEndpoints
             string minifigId, int index, string partNum, string colorId,
             UpdateStockRequest req, HttpContext http, ImportData importer) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
             return Results.Ok();
@@ -244,7 +250,8 @@ public static class BomEndpoints
             string setId, int setIndex, AddSubstitutionRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
-            if (req.Count < 1) return Results.BadRequest("Count must be at least 1.");
+            if (req.Count is < 1 or > UpdateStockRequest.MaxStock)
+                return Results.BadRequest($"Count must be between 1 and {UpdateStockRequest.MaxStock}.");
 
             await using var db = dbFactory.CreateDbContext();
 
@@ -285,7 +292,8 @@ public static class BomEndpoints
             string setId, int setIndex, int id, UpdateSubstitutionRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
-            if (req.Count < 1) return Results.BadRequest("Count must be at least 1.");
+            if (req.Count is < 1 or > UpdateStockRequest.MaxStock)
+                return Results.BadRequest($"Count must be between 1 and {UpdateStockRequest.MaxStock}.");
 
             await using var db = dbFactory.CreateDbContext();
 
@@ -353,7 +361,13 @@ public static class BomEndpoints
     public record BomMinifigInstanceDto(int Index, List<BomMinifigInstancePartDto> Parts);
     public record BomMinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
     public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, int SubPercent, bool Substituted, string? Location, string? Notes);
-    public record UpdateStockRequest(int Stock);
+    public record UpdateStockRequest(int Stock)
+    {
+        // Generous ceiling — no real collection gets anywhere near this — that just keeps a stray
+        // huge value from a client out of stock sums (InventoryAggregates, catalog totals, etc.).
+        public const int MaxStock = 1_000_000;
+        public bool IsValid => Stock is >= 0 and <= MaxStock;
+    }
     public record NewInstanceDto(int Index);
     public record CompletenessDto(int Percent, string Status, int SubPercent, bool Substituted);
     public record SubstitutionDto(int Id, string ReqPartNum, string ReqColorId, string SubPartNum, string SubColorId, string? SubName, string? SubPartImg, string? SubColorName, string? SubHexColor, int SubLooseStock, int Count, int PulledFromLoose, string? Notes);

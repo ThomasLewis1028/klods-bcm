@@ -1,12 +1,15 @@
 using System.Reflection;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Klods.Api.Auth;
 using Klods.Api.Endpoints;
 using Klods.Database;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +39,10 @@ builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri("https://
 // ── JWT ────────────────────────────────────────────────────────────────────
 var jwtSecret = builder.Configuration["JWT_SECRET"]
     ?? throw new InvalidOperationException("JWT_SECRET is not configured.");
+if (Encoding.UTF8.GetByteCount(jwtSecret) < 32)
+    throw new InvalidOperationException(
+        "JWT_SECRET is too short (must be at least 32 bytes) — a weak secret lets anyone forge tokens, " +
+        "including admin ones. Generate one with: openssl rand -base64 48");
 
 builder.Services.AddScoped<JwtService>();
 
@@ -55,6 +62,39 @@ var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.Authentic
             IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
             RoleClaimType            = "role",
             NameClaimType            = "name",
+        };
+        // JWTs are long-lived (30 days) and carry Role/Status as of issuance. Re-check both against
+        // the DB on every request so a suspension or role change takes effect immediately instead of
+        // waiting for the token to expire.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                if (!int.TryParse(context.Principal?.FindFirstValue("sub"), out var userId))
+                {
+                    context.Fail("Invalid token.");
+                    return;
+                }
+
+                var dbFactory = context.HttpContext.RequestServices
+                    .GetRequiredService<IDbContextFactory<InventoryContext>>();
+                await using var db = await dbFactory.CreateDbContextAsync();
+                var user = await db.Users.AsNoTracking()
+                    .Where(u => u.UserId == userId)
+                    .Select(u => new { u.Status, u.Role })
+                    .FirstOrDefaultAsync();
+
+                if (user is null || user.Status != "Active")
+                {
+                    context.Fail("Account is no longer active.");
+                    return;
+                }
+
+                var identity = (ClaimsIdentity)context.Principal!.Identity!;
+                foreach (var roleClaim in identity.FindAll("role").ToList())
+                    identity.RemoveClaim(roleClaim);
+                identity.AddClaim(new Claim("role", user.Role));
+            }
         };
     })
     .AddCookie(ExternalScheme, options =>
@@ -99,6 +139,23 @@ if (!string.IsNullOrEmpty(githubId) && !string.IsNullOrEmpty(githubSecret))
 }
 
 builder.Services.AddSingleton(new PendingAuthService { EnabledProviders = enabledProviders });
+
+// ── Rate limiting ──────────────────────────────────────────────────────────
+// Login/register are brute-forceable and spammable without this. Keyed on remote IP — note this
+// trusts X-Forwarded-For as configured below, so it's only meaningful behind a proxy that strips
+// client-supplied forwarding headers (or with no proxy at all).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+});
 
 builder.Services.AddAuthorization(options =>
 {
@@ -159,11 +216,22 @@ var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
 };
-forwardedHeadersOptions.KnownNetworks.Clear();
-forwardedHeadersOptions.KnownProxies.Clear();
+// A direct client can spoof X-Forwarded-* freely unless we only trust a configured proxy — that
+// would defeat IP-based rate limiting and let a client dictate its own request host. When
+// TRUSTED_PROXY_NETWORKS (comma-separated CIDRs) isn't set, leave ASP.NET Core's default
+// (loopback only) in place rather than trusting every client.
+var trustedProxyNetworks = builder.Configuration["TRUSTED_PROXY_NETWORKS"];
+if (!string.IsNullOrWhiteSpace(trustedProxyNetworks))
+{
+    forwardedHeadersOptions.KnownIPNetworks.Clear();
+    forwardedHeadersOptions.KnownProxies.Clear();
+    foreach (var cidr in trustedProxyNetworks.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        forwardedHeadersOptions.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(cidr));
+}
 app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

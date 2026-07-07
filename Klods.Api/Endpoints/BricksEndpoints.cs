@@ -137,6 +137,8 @@ public static class BricksEndpoints
         group.MapPut("/owned/{partNum}/{colorId}/notes", async (
             string partNum, string colorId, NotesRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
+            if (!NotesRequest.IsValid(req)) return Results.BadRequest("Location must be under 100 characters; notes under 2000.");
+
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
             var bo = await db.Set<BrickOwned>()
@@ -161,6 +163,8 @@ public static class BricksEndpoints
 
         group.MapPost("/owned", async (AddLooseBrickRequest req, HttpContext http, ImportData importer) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Quantity must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             var colorInfo = new PartColorInfo(req.ColorId, req.ColorName, req.PartImgUrl);
             await importer.AddLooseBrick(req.PartNum, req.PartName, colorInfo, req.Quantity, userId);
@@ -171,6 +175,8 @@ public static class BricksEndpoints
             string partNum, string colorId, UpdateStockRequest req, HttpContext http,
             IDbContextFactory<InventoryContext> dbFactory, UpdateData updater) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
             var bo = await db.Set<BrickOwned>()
@@ -212,9 +218,23 @@ public static class BricksEndpoints
     public record NotesRequest(string? Location, string? Notes)
     {
         public static string? Normalize(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+        // Matches the BrickOwned column caps (Location varchar(100), Notes varchar(2000)) so an
+        // over-length value gets a clean 400 instead of a DB error.
+        public static bool IsValid(NotesRequest req) =>
+            (req.Location?.Length ?? 0) <= 100 && (req.Notes?.Length ?? 0) <= 2000;
     }
     public record ResolveBrickRequest(string PartNum);
     public record ResolveBrickResponse(string? PartName, IEnumerable<PartColorInfo> Colors);
-    public record AddLooseBrickRequest(string PartNum, string PartName, string ColorId, string ColorName, string? PartImgUrl, int Quantity);
-    public record UpdateStockRequest(int Stock);
+    public record AddLooseBrickRequest(string PartNum, string PartName, string ColorId, string ColorName, string? PartImgUrl, int Quantity)
+    {
+        public bool IsValid => Quantity is >= 0 and <= UpdateStockRequest.MaxStock;
+    }
+    public record UpdateStockRequest(int Stock)
+    {
+        // Generous ceiling — no real collection gets anywhere near this — that just keeps a stray
+        // huge value from a client out of stock sums (InventoryAggregates, catalog totals, etc.).
+        public const int MaxStock = 1_000_000;
+        public bool IsValid => Stock is >= 0 and <= MaxStock;
+    }
 }

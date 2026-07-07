@@ -75,18 +75,25 @@ public class ImageStorageService
         return IsCacheableImageHost(stored) ? $"/img?u={Uri.EscapeDataString(stored)}" : stored;
     }
 
+    // Cacheable hosts serve static CDN images with stable paths — a query string never changes which
+    // image comes back, so an attacker appending junk query params (?a=1, ?a=2, ...) to a real image
+    // URL can't be used to force unbounded distinct cache entries; only the path (not the query
+    // string) feeds the cache key.
+    private const long MaxImageBytes = 15L * 1024 * 1024;
+
     /// <summary>
     /// Read-through cache: returns the bytes for <paramref name="sourceUrl"/>, fetching from the source
     /// and storing in MinIO on the first request, then serving from MinIO thereafter. Returns null if the
-    /// host isn't cacheable or the fetch fails.
+    /// host isn't cacheable, the fetch fails, or the image exceeds <see cref="MaxImageBytes"/>.
     /// </summary>
     public async Task<(byte[] Bytes, string ContentType)?> GetThroughCacheAsync(string sourceUrl, CancellationToken ct = default)
     {
         if (!IsCacheableImageHost(sourceUrl)) return null;
 
-        var ext = Path.GetExtension(sourceUrl.Split('?')[0]);
+        var basePath = sourceUrl.Split('?')[0];
+        var ext = Path.GetExtension(basePath);
         if (string.IsNullOrEmpty(ext)) ext = ".jpg";
-        var key = $"cache/{Sha256Hex(sourceUrl)}{ext}";
+        var key = $"cache/{Sha256Hex(basePath)}{ext}";
         var contentType = GuessContentType(sourceUrl);
 
         var cached = await TryGetObjectAsync(key, ct);
@@ -95,7 +102,31 @@ public class ImageStorageService
         byte[] bytes;
         try
         {
-            bytes = await _http.GetByteArrayAsync(sourceUrl, ct);
+            using var response = await _http.GetAsync(sourceUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            response.EnsureSuccessStatusCode();
+
+            if (response.Content.Headers.ContentLength > MaxImageBytes)
+            {
+                _logger.LogWarning("Read-through fetch rejected for {Url}: reported size exceeds cap", sourceUrl);
+                return null;
+            }
+
+            await using var responseStream = await response.Content.ReadAsStreamAsync(ct);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[81920];
+            long total = 0;
+            int read;
+            while ((read = await responseStream.ReadAsync(chunk, ct)) > 0)
+            {
+                total += read;
+                if (total > MaxImageBytes)
+                {
+                    _logger.LogWarning("Read-through fetch aborted for {Url}: exceeded size cap", sourceUrl);
+                    return null;
+                }
+                await buffer.WriteAsync(chunk.AsMemory(0, read), ct);
+            }
+            bytes = buffer.ToArray();
         }
         catch (Exception ex)
         {

@@ -56,6 +56,8 @@ public static class MyCatalogEndpoints
             string partNum, string colorId, UpdateStockRequest req, HttpContext http,
             IDbContextFactory<InventoryContext> dbFactory) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
             var existing = await db.Set<BrickOwned>()
@@ -151,10 +153,15 @@ public static class MyCatalogEndpoints
             return Results.Ok(result);
         });
 
-        // Set the user's loose count for a fig (adds/removes loose instances).
+        // Set the user's loose count for a fig (adds/removes loose instances). SetLooseMinifigCount
+        // inserts one MinifigOwned row per unit, so this needs the tighter row-insert-loop cap, not
+        // the generic stock cap used for plain counter fields below.
         group.MapPut("/{minifigId}/stock", async (
             string minifigId, UpdateStockRequest req, HttpContext http, ImportData importer) =>
         {
+            if (req.Stock is < 0 or > MinifigsEndpoints.AddOwnedMinifigRequest.MaxCount)
+                return Results.BadRequest($"Stock must be between 0 and {MinifigsEndpoints.AddOwnedMinifigRequest.MaxCount}.");
+
             var userId = http.UserId();
             await importer.SetLooseMinifigCount(userId, minifigId, req.Stock);
             return Results.Ok();
@@ -202,6 +209,8 @@ public static class MyCatalogEndpoints
         group.MapPatch("/{minifigId}/loose-bricks/{partNum}/{colorId}", async (
             string minifigId, string partNum, string colorId, UpdateStockRequest req, HttpContext http, ImportData importer) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             await importer.SetLooseMinifigBrickOwnedStock(userId, minifigId, partNum, colorId, req.Stock);
             return Results.Ok();
@@ -293,6 +302,8 @@ public static class MyCatalogEndpoints
             string minifigId, int index, string partNum, string colorId, UpdateStockRequest req,
             HttpContext http, ImportData importer) =>
         {
+            if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
+
             var userId = http.UserId();
             await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
             return Results.Ok();
@@ -341,7 +352,13 @@ public static class MyCatalogEndpoints
         });
     }
 
-    public record UpdateStockRequest(int Stock);
+    public record UpdateStockRequest(int Stock)
+    {
+        // Generous ceiling — no real collection gets anywhere near this — that just keeps a stray
+        // huge value from a client out of stock sums (InventoryAggregates, catalog totals, etc.).
+        public const int MaxStock = 1_000_000;
+        public bool IsValid => Stock is >= 0 and <= MaxStock;
+    }
     public record MyBrickDto(string PartNum, string Name, string? PartImg, string? ColorId, string? ColorName, string? HexColor, bool IsTrans, string? BricklinkId, int Stock, int UserNeeded, int UserSetCount);
     public record MyBrickSetDetailDto(string SetId, string SetName, string? SetImg, int BrickCount, int CopiesOwned);
     public record MyMinifigDto(string MinifigId, string MinifigName, string? ImgUrl, int Stock, int InUseStock, int UserNeeded, int UserSetCount, int PartCount);

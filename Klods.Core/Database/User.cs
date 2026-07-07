@@ -1,8 +1,14 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Klods.Database;
 
 public class User
 {
+    public const int MaxUserNameLength = 40;
+
     public int UserId { get; set; }
+
+    [MaxLength(MaxUserNameLength)]
     public string UserName { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string? ProfilePictureUrl { get; set; }

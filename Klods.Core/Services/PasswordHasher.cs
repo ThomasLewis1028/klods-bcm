@@ -6,6 +6,12 @@ public static class PasswordHasher
 {
     private const int Iterations = 100_000;
 
+    public const int MinLength = 8;
+    public const int MaxLength = 128;
+
+    public static bool IsValidLength(string password) =>
+        password.Length is >= MinLength and <= MaxLength;
+
     public static string Hash(string password)
     {
         var salt = RandomNumberGenerator.GetBytes(16);

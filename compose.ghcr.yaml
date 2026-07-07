@@ -70,6 +70,9 @@ services:
       REBRICKABLE_API_KEY: ${REBRICKABLE_API_KEY}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
+      # Set this if you put a reverse proxy in front (see .env.example) so IP-based rate limiting
+      # sees the real client IP instead of the proxy's. Leave unset if there's no proxy.
+      TRUSTED_PROXY_NETWORKS: ${TRUSTED_PROXY_NETWORKS:-}
       # Public URL of the web app (klods_web). REQUIRED — the API redirects the
       # browser here after OAuth sign-in. If unset it would fall back to localhost
       # and send users to their own machine, so Compose refuses to start without it.
@@ -110,6 +113,8 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # See the same variable on klods_api above.
+      TRUSTED_PROXY_NETWORKS: ${TRUSTED_PROXY_NETWORKS:-}
       # Persist DataProtection keys (antiforgery tokens) on the volume below so they
       # survive container restarts.
       DATAPROTECTION_KEYS_PATH: /home/app/dp-keys
