@@ -116,7 +116,7 @@ input[type="password"]::-ms-clear {
    status colour and sweeps the hue wheel, so it blends seamlessly with the solid fill to its left.
    Derived from the palette var via relative-colour syntax; on a browser without support the whole
    declaration is dropped, leaving the band transparent over the status-coloured fill (graceful). */
-.cbar-sub { position: absolute; top: 0; height: 100%; transition: left .25s ease, width .25s ease; }
+.cbar-sub { position: absolute; top: 0; height: 100%; border-radius: 0 999px 999px 0; transition: left .25s ease, width .25s ease; }
 .cbar-complete .cbar-sub { background: linear-gradient(90deg,
     hsl(from var(--mud-palette-success) h s l),
     hsl(from var(--mud-palette-success) calc(h + 60) s l),
