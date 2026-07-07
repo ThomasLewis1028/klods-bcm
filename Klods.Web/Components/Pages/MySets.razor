@@ -452,7 +452,9 @@
             { x => x.BomInstanceIndex, row.Instance.SetIndex },
             { x => x.MyCopy, true },
             { x => x.Percent, row.Instance.Percent },
-            { x => x.Status, row.Instance.Status }
+            { x => x.Status, row.Instance.Status },
+            { x => x.Location, row.Instance.Location },
+            { x => x.Notes, row.Instance.Notes }
         };
         var dialog = await DialogService.ShowAsync<SetDetailDialog>(row.Set.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });

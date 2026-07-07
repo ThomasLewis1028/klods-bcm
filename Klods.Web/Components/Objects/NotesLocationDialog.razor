@@ -1,0 +1,64 @@
+@inject ImageStorageService ImageStorage
+@using Klods.Services
+@using Color = MudBlazor.Color
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3" Style="min-width: 320px;">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                @if (!string.IsNullOrEmpty(SubjectImg))
+                {
+                    <MudImage class="rounded-2" Elevation="1" Src="@ImageStorage.ResolveUrl(SubjectImg)"
+                              Height="48" Width="48" ObjectFit="ObjectFit.Contain" Style="flex-shrink:0;"/>
+                }
+                <MudStack Spacing="0" Style="min-width:0;">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@SubjectName</MudText>
+                    @if (!string.IsNullOrEmpty(Subtitle))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Subtitle</MudText>
+                    }
+                </MudStack>
+            </MudStack>
+
+            <MudTextField @bind-Value="_location" Label="Location" MaxLength="100"
+                          Placeholder="e.g. Bin 1A1" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Place" Clearable="true"/>
+
+            <MudTextField @bind-Value="_notes" Label="Notes" MaxLength="2000" Lines="4"
+                          Placeholder="e.g. one canopy piece has crusted gum, replace" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" AutoGrow="true"/>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string SubjectName { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? SubjectImg { get; set; }
+    [Parameter] public string? Location { get; set; }
+    [Parameter] public string? Notes { get; set; }
+
+    private string? _location;
+    private string? _notes;
+
+    protected override void OnInitialized()
+    {
+        _location = Location;
+        _notes = Notes;
+    }
+
+    private void Save()
+    {
+        static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        MudDialog.Close(DialogResult.Ok(new Result(Trim(_location), Trim(_notes))));
+    }
+
+    /// <summary>Edited values returned to the caller, which owns persistence.</summary>
+    public record Result(string? Location, string? Notes);
+}

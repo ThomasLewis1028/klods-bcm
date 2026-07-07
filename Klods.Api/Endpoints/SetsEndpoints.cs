@@ -121,7 +121,7 @@ public static class SetsEndpoints
                         var comp = completeness.GetValueOrDefault((so.SetId, so.SetIndex))
                                    ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0);
                         return new OwnedInstanceDto(so.SetIndex, comp.Missing, comp.Have,
-                            comp.Percent, comp.Status.ToString().ToLowerInvariant());
+                            comp.Percent, comp.Status.ToString().ToLowerInvariant(), so.Location, so.Notes);
                     }).ToList();
                     var themeName = set.ThemeId is int tid ? themeNames.GetValueOrDefault(tid) : null;
                     return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,
@@ -130,6 +130,21 @@ public static class SetsEndpoints
                 .ToList();
 
             return Results.Ok(result);
+        });
+
+        // Set the per-copy location + notes for one owned copy.
+        group.MapPut("/owned/{setId}/{setIndex:int}/notes", async (
+            string setId, int setIndex, NotesRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            var so = await db.Set<SetOwned>()
+                .FirstOrDefaultAsync(s => s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex);
+            if (so is null) return Results.NotFound();
+            so.Location = NotesRequest.Normalize(req.Location);
+            so.Notes = NotesRequest.Normalize(req.Notes);
+            await db.SaveChangesAsync();
+            return Results.Ok();
         });
 
         // Lightweight catalog stats (no row load) for the Sets page header.
@@ -238,7 +253,12 @@ public static class SetsEndpoints
     public record ImportSetRequest(string SetId);
     public record AddOwnedSetRequest(string SetId, bool ApplyBricks);
 
-    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status);
+    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status, string? Location, string? Notes);
+
+    public record NotesRequest(string? Location, string? Notes)
+    {
+        public static string? Normalize(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    }
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCatalogStatsDto(int TotalSets, int TotalOwnedInstances, int TotalOwners, long TotalPieces);
     public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);

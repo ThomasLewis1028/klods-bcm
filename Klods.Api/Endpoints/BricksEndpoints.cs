@@ -127,10 +127,29 @@ public static class BricksEndpoints
         {
             var userId = http.UserId();
             await using var db = dbFactory.CreateDbContext();
-            var stock = await db.Set<BrickOwned>().AsNoTracking()
-                .Where(bo => bo.UserId == userId && bo.PartNum == partNum && bo.ColorId == colorId)
-                .Select(bo => (int?)bo.Stock).FirstOrDefaultAsync() ?? 0;
-            return Results.Ok(new OwnedStockDto(stock));
+            var bo = await db.Set<BrickOwned>().AsNoTracking()
+                .FirstOrDefaultAsync(b => b.UserId == userId && b.PartNum == partNum && b.ColorId == colorId);
+            return Results.Ok(new OwnedStockDto(bo?.Stock ?? 0, bo?.Location, bo?.Notes));
+        });
+
+        // Set the location + notes for the user's loose stock of a brick. Upserts (a needed-but-unowned
+        // brick has no BrickOwned row yet, but the user may still want to note where they'll store it).
+        group.MapPut("/owned/{partNum}/{colorId}/notes", async (
+            string partNum, string colorId, NotesRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            var bo = await db.Set<BrickOwned>()
+                .FirstOrDefaultAsync(b => b.UserId == userId && b.PartNum == partNum && b.ColorId == colorId);
+            if (bo is null)
+            {
+                bo = new BrickOwned { UserId = userId, PartNum = partNum, ColorId = colorId, Stock = 0 };
+                db.Set<BrickOwned>().Add(bo);
+            }
+            bo.Location = NotesRequest.Normalize(req.Location);
+            bo.Notes = NotesRequest.Normalize(req.Notes);
+            await db.SaveChangesAsync();
+            return Results.Ok();
         });
 
         group.MapPost("/resolve", async (ResolveBrickRequest req, ImportData importer) =>
@@ -188,7 +207,12 @@ public static class BricksEndpoints
     public record BrickCatalogPage(List<BrickCatalogViewDto> Items, int Total);
     public record SetForBrickDto(string SetId, string Name, string? SetImg, int Count);
     public record SetForBrickPage(List<SetForBrickDto> Items, int Total);
-    public record OwnedStockDto(int Stock);
+    public record OwnedStockDto(int Stock, string? Location, string? Notes);
+
+    public record NotesRequest(string? Location, string? Notes)
+    {
+        public static string? Normalize(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    }
     public record ResolveBrickRequest(string PartNum);
     public record ResolveBrickResponse(string? PartName, IEnumerable<PartColorInfo> Colors);
     public record AddLooseBrickRequest(string PartNum, string PartName, string ColorId, string ColorName, string? PartImgUrl, int Quantity);

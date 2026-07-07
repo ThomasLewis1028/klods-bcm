@@ -23,6 +23,29 @@
                     <div style="margin-top:6px; max-width:280px; display:flex; flex-direction:column; gap:3px;">
                         <CompletenessBar Percent="@_percent" Status="@_status" Label="@($"{_percent}% assembled")"/>
                         <span class="cstatus cstatus-@_status" style="font-size:.72rem;">@_percent% · @StatusWord(_status)</span>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                            @if (!string.IsNullOrEmpty(_location))
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Color="Color.Secondary"/>
+                                <MudText Typo="Typo.caption">@_location</MudText>
+                            }
+                            else if (!string.IsNullOrEmpty(_notes))
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Notes" Size="Size.Small" Color="Color.Secondary"/>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Add location or notes</MudText>
+                            }
+                            @if (AuthService.CurrentUser != null)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="EditNotes"/>
+                            }
+                        </MudStack>
+                        @if (!string.IsNullOrEmpty(_notes))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="white-space:pre-wrap;">@_notes</MudText>
+                        }
                     </div>
                 }
             </MudStack>
@@ -268,6 +291,8 @@
     private string? _manualUrl;
     private int _percent;
     private string _status = "short";
+    private string? _location;
+    private string? _notes;
 
     private static string StatusWord(string status) => status switch
     {
@@ -325,6 +350,8 @@
         _ownedInstances = bom.OwnedInstances;
         _percent = bom.Percent;
         _status = bom.Status;
+        _location = bom.Location;
+        _notes = bom.Notes;
 
         _setBrickInfo = bom.Bricks.Select(b => new SetBrickInfo
         {
@@ -384,6 +411,34 @@
     {
         _currentSetIndex = setIndex;
         await LoadBomAsync();
+    }
+
+    private async Task EditNotes()
+    {
+        if (AuthService.CurrentUser == null) return;
+        var parameters = new DialogParameters<NotesLocationDialog>
+        {
+            { x => x.SubjectName, _setName },
+            { x => x.Subtitle, $"Copy #{_currentSetIndex}" },
+            { x => x.SubjectImg, SetImg },
+            { x => x.Location, _location },
+            { x => x.Notes, _notes }
+        };
+        var dialog = await DialogService.ShowAsync<NotesLocationDialog>("Location & Notes", parameters,
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: NotesLocationDialog.Result r })
+        {
+            if (await Api.UpdateOwnedSetNotesAsync(SetId, _currentSetIndex, r.Location, r.Notes))
+            {
+                _location = r.Location;
+                _notes = r.Notes;
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Failed to save location & notes.", Severity.Error);
+            }
+        }
     }
 
     private bool SetBrickFilterFunc(SetBrickInfo info)
