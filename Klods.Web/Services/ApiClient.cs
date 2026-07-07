@@ -32,6 +32,16 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         catch { return default; }
     }
 
+    private async Task<byte[]?> GetBytesAsync(string url)
+    {
+        try
+        {
+            var resp = await Http().GetAsync(url);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadAsByteArrayAsync() : null;
+        }
+        catch { return null; }
+    }
+
     private async Task<(bool Ok, HttpStatusCode Status)> SendAsync(HttpMethod method, string url, object? body = null)
     {
         try
@@ -304,6 +314,11 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         => (await DeleteAsync($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/substitutions/{id}")).Ok;
     public Task<BulkBricksResultDto?> BulkSetBricksAsync(string setId, int setIndex, string operation)
         => PostAsync<BulkBricksResultDto>($"/api/bom/{Uri.EscapeDataString(setId)}/{setIndex}/bulk-bricks", new { Operation = operation });
+
+    // ── Export ───────────────────────────────────────────────────────────────
+
+    public Task<byte[]?> ExportPartsCsvAsync(bool onlyMissing)
+        => GetBytesAsync($"/api/export/parts?onlyMissing={(onlyMissing ? "true" : "false")}");
 
     // ── Admin ────────────────────────────────────────────────────────────────
 
