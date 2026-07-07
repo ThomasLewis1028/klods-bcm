@@ -2,6 +2,7 @@
 @inject AuthService AuthService
 @inject ImageStorageService ImageStorage
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @using Klods.Services
 @using Color = MudBlazor.Color
 
@@ -25,6 +26,34 @@
                 <MudButton OnClick="SaveStock" Variant="Variant.Filled" Color="Color.Primary"
                            Disabled="@(AuthService.CurrentUser == null)">Save</MudButton>
             </MudStack>
+
+            @if (AuthService.CurrentUser != null)
+            {
+                <MudPaper Outlined="true" Class="pa-2" Style="width:100%;">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText Typo="Typo.subtitle2">Location &amp; Notes</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="EditNotes"/>
+                    </MudStack>
+                    @if (string.IsNullOrEmpty(_location) && string.IsNullOrEmpty(_notes))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">No location or notes yet.</MudText>
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrEmpty(_location))
+                        {
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Color="Color.Secondary"/>
+                                <MudText Typo="Typo.body2">@_location</MudText>
+                            </MudStack>
+                        }
+                        @if (!string.IsNullOrEmpty(_notes))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="white-space:pre-wrap;">@_notes</MudText>
+                        }
+                    }
+                </MudPaper>
+            }
 
             <MudDivider Class="my-2" FlexItem="true"/>
 
@@ -95,6 +124,8 @@
     private const int SetPageSize = 6;
 
     private int _stock;
+    private string? _location;
+    private string? _notes;
     private string _query = "";
     private int _page = 1;
     private int _total;
@@ -107,7 +138,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _stock = (await Api.GetMyBrickStockAsync(Brick.PartNum, Brick.ColorId ?? ""))?.Stock ?? 0;
+        var owned = await Api.GetMyBrickStockAsync(Brick.PartNum, Brick.ColorId ?? "");
+        _stock = owned?.Stock ?? 0;
+        _location = owned?.Location;
+        _notes = owned?.Notes;
         _mySetsOnly = OwnedContext && AuthService.CurrentUser != null;
         await LoadSetsAsync();
     }
@@ -155,5 +189,33 @@
             Snackbar.Add("Stock updated.", Severity.Success);
         else
             Snackbar.Add("Failed to update stock.", Severity.Error);
+    }
+
+    private async Task EditNotes()
+    {
+        if (AuthService.CurrentUser == null) return;
+        var parameters = new DialogParameters<NotesLocationDialog>
+        {
+            { x => x.SubjectName, Brick.Name },
+            { x => x.Subtitle, Brick.ColorName is { Length: > 0 } c ? $"{Brick.PartNum} · {c}" : Brick.PartNum },
+            { x => x.SubjectImg, Brick.PartImg },
+            { x => x.Location, _location },
+            { x => x.Notes, _notes }
+        };
+        var dialog = await DialogService.ShowAsync<NotesLocationDialog>("Location & Notes", parameters,
+            new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: NotesLocationDialog.Result r })
+        {
+            if (await Api.UpdateBrickNotesAsync(Brick.PartNum, Brick.ColorId ?? "", r.Location, r.Notes))
+            {
+                _location = r.Location;
+                _notes = r.Notes;
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Failed to save location & notes.", Severity.Error);
+            }
+        }
     }
 }

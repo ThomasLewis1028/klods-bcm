@@ -187,6 +187,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         => (await DeleteAsync($"/api/sets/owned/{Uri.EscapeDataString(setId)}/last")).Ok;
     public async Task<bool> DeleteSetFromCatalogAsync(string setId)
         => (await DeleteAsync($"/api/sets/{Uri.EscapeDataString(setId)}")).Ok;
+    public async Task<bool> UpdateOwnedSetNotesAsync(string setId, int setIndex, string? location, string? notes)
+        => (await PutAsync($"/api/sets/owned/{Uri.EscapeDataString(setId)}/{setIndex}/notes", new { Location = location, Notes = notes })).Ok;
 
     // ── Bricks ───────────────────────────────────────────────────────────────
 
@@ -209,6 +211,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         => await PostAsync("/api/bricks/owned", new { PartNum = partNum, PartName = partName, ColorId = colorInfo.ColorId, ColorName = colorInfo.ColorName, PartImgUrl = colorInfo.PartImgUrl, Quantity = quantity });
     public async Task<bool> UpdateBrickStockAsync(string partNum, string colorId, int stock)
         => (await PatchAsync($"/api/bricks/owned/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}", new { Stock = stock })).Ok;
+    public async Task<bool> UpdateBrickNotesAsync(string partNum, string colorId, string? location, string? notes)
+        => (await PutAsync($"/api/bricks/owned/{Uri.EscapeDataString(partNum)}/{Uri.EscapeDataString(colorId)}/notes", new { Location = location, Notes = notes })).Ok;
 
     // ── My Bricks ────────────────────────────────────────────────────────────
 
@@ -426,7 +430,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record SetCatalogSearchDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, int UserOwnedCount);
     public record SetCatalogPage(List<SetCatalogSearchDto> Items, int Total);
     public record ThemeDto(int Id, string Name);
-    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status);
+    public record OwnedInstanceDto(int SetIndex, int MissingPieceCount, int StockCount, int Percent, string Status, string? Location, string? Notes);
     public record MyOwnedSetDto(string SetId, string Name, string? SetImg, int NumBricks, int ReleaseYear, string? ThemeName, string ManualUrl, List<OwnedInstanceDto> Instances);
     public record SetCandidateDto(string SetNum, string Name, int Year, string? ImageUrl);
     public record ResolveSetResponse(List<SetCandidateDto> Results, bool Resolved, bool HasMore);
@@ -437,7 +441,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record BrickCatalogPage(List<BrickCatalogViewDto> Items, int Total);
     public record SetForBrickDto(string SetId, string Name, string? SetImg, int Count);
     public record SetForBrickPage(List<SetForBrickDto> Items, int Total);
-    public record OwnedStockDto(int Stock);
+    public record OwnedStockDto(int Stock, string? Location, string? Notes);
     public record LooseCountDto(int Count);
     public record PartColorInfoDto(string ColorId, string ColorName, string? PartImgUrl);
     public record ResolveBrickResponse(string? PartName, List<PartColorInfoDto> Colors);
@@ -462,7 +466,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
     public record BomMinifigInstanceDto(int Index, List<BomMinifigInstancePartDto> Parts);
     public record BomMinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
-    public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status);
+    public record BomResponseDto(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, string? Location, string? Notes);
     public record CompletenessDto(int Percent, string Status);
 
     public record AdminUserDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string Status);

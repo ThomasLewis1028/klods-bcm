@@ -19,8 +19,9 @@ public static class BomEndpoints
             var set = await db.Set<Set>().AsNoTracking().FirstOrDefaultAsync(s => s.SetId == setId);
             if (set is null) return Results.NotFound();
 
-            var owned = await db.Set<SetOwned>().AnyAsync(so => so.SetId == setId && so.SetIndex == setIndex && so.UserId == userId);
-            if (!owned) return Results.NotFound();
+            var ownedCopy = await db.Set<SetOwned>().AsNoTracking()
+                .FirstOrDefaultAsync(so => so.SetId == setId && so.SetIndex == setIndex && so.UserId == userId);
+            if (ownedCopy is null) return Results.NotFound();
 
             // All owned instances of this set (for index switching in the UI)
             var ownedInstances = await db.Set<SetOwned>().AsNoTracking()
@@ -97,7 +98,8 @@ public static class BomEndpoints
                 setId, setIndex, set.Name, set.ManualUrl,
                 ownedInstances, ownedSetIds,
                 brickItems, minifigItems,
-                comp.Percent, comp.Status.ToString().ToLowerInvariant()));
+                comp.Percent, comp.Status.ToString().ToLowerInvariant(),
+                ownedCopy.Location, ownedCopy.Notes));
         });
 
         // Just the completeness for a copy — cheap enough to re-poll after each edit for a live bar.
@@ -208,7 +210,7 @@ public static class BomEndpoints
     public record BomMinifigDto(string MinifigId, string Name, string? ImgUrl, int Count, int OwnedStock);
     public record BomMinifigInstanceDto(int Index, List<BomMinifigInstancePartDto> Parts);
     public record BomMinifigInstancePartDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Need, int Owned);
-    public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status);
+    public record BomResponse(string SetId, int SetIndex, string SetName, string ManualUrl, List<int> OwnedInstances, List<string> OwnedSetIds, List<BomBrickDto> Bricks, List<BomMinifigDto> Minifigs, int Percent, string Status, string? Location, string? Notes);
     public record UpdateStockRequest(int Stock);
     public record NewInstanceDto(int Index);
     public record CompletenessDto(int Percent, string Status);
