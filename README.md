@@ -74,3 +74,6 @@ Clone the repo, `cp .env.example .env` and fill it in, then `docker compose up -
 - Make the UI more pretty and less stock MudBlazor-y (Mostly done)
 - ~~Change the name maybe~~ It's Klods now
 - Allow substitution parts so if you want to build the Millennium Falcon with random colors, you could track that
+
+
+[![Buy Me a Beer](https://img.shields.io/badge/Buy%20Me%20a%20Beer-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/tLewis1028)
