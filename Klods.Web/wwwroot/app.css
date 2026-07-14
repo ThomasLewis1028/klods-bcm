@@ -12,14 +12,97 @@
     margin-bottom: 2rem;
 }
 
+/* Klods mascot: stacked body + eye layers, same 512² frame, so they overlay 1:1. */
+.klods-mascot {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+}
+
+.klods-mascot-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 .landing-mascot {
     width: 140px;
     height: 140px;
-    object-fit: contain;
     margin-bottom: 0.5rem;
     filter: drop-shadow(0 6px 16px color-mix(in srgb, var(--mud-palette-primary) 25%, transparent));
     animation: mascot-float 4s ease-in-out infinite;
 }
+
+/* ── Mascot character-creator carousel ── */
+.mascot-creator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.mascot-stage {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    height: 340px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+}
+
+.mascot-stage-glow {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        color-mix(in srgb, var(--mud-palette-primary) 32%, transparent) 0%,
+        transparent 70%);
+    filter: blur(12px);
+    z-index: 0;
+}
+
+.mascot-hero {
+    position: relative;
+    z-index: 2;
+    animation: mascot-float 4s ease-in-out infinite;
+    filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.45));
+}
+
+.mascot-ghost {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    transform: translateY(-50%) scale(0.72);
+    opacity: 0.25;
+    filter: blur(1px) grayscale(0.15);
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.mascot-ghost:hover {
+    opacity: 0.45;
+}
+
+.mascot-ghost-prev { left: 0; }
+.mascot-ghost-next { right: 0; }
+
+.mascot-arrow {
+    position: absolute !important;
+    z-index: 3;
+    top: 50%;
+    transform: translateY(-50%);
+    background: color-mix(in srgb, var(--mud-palette-surface) 70%, transparent);
+    backdrop-filter: blur(4px);
+}
+
+.mascot-arrow-prev { left: 4px; }
+.mascot-arrow-next { right: 4px; }
 
 @keyframes mascot-float {
     0%, 100% { transform: translateY(0); }

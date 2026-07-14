@@ -58,6 +58,28 @@ public static class AuthProfileEndpoints
             return Results.Ok();
         });
 
+        group.MapPatch("/mascot", async (ChangeMascotRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            if (req.Variant is not null && !MascotVariants.IsValid(req.Variant))
+                return Results.BadRequest("Unknown mascot variant.");
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            await db.Users.Where(u => u.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.MascotVariant, req.Variant));
+            return Results.Ok();
+        });
+
+        group.MapPatch("/body", async (ChangeBodyRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+        {
+            if (req.Body is not null && !MascotBodies.IsValid(req.Body))
+                return Results.BadRequest("Unknown body style.");
+            var userId = http.UserId();
+            await using var db = dbFactory.CreateDbContext();
+            await db.Users.Where(u => u.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.BodyStyle, req.Body));
+            return Results.Ok();
+        });
+
         group.MapPatch("/fontscale", async (ChangeFontScaleRequest req, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
             var userId = http.UserId();
@@ -123,15 +145,17 @@ public static class AuthProfileEndpoints
         });
     }
 
-    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword, double FontScale, bool HasSeenTour)
+    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, string? MascotVariant, string? BodyStyle, bool HasPassword, double FontScale, bool HasSeenTour)
     {
         public static UserProfileDto From(User u) =>
-            new(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl, u.PrimaryColor, !string.IsNullOrEmpty(u.PasswordHash), u.FontScale, u.HasSeenTour);
+            new(u.UserId, u.UserName, u.Role, u.ProfilePictureUrl, u.PrimaryColor, u.MascotVariant, u.BodyStyle, !string.IsNullOrEmpty(u.PasswordHash), u.FontScale, u.HasSeenTour);
     }
 
     public record ChangeUsernameRequest(string NewUsername);
     public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
     public record ChangeThemeRequest(string? Color);
+    public record ChangeMascotRequest(string? Variant);
+    public record ChangeBodyRequest(string? Body);
     public record ChangeFontScaleRequest(double Scale);
     public record ChangePictureRequest(string? Url);
     public record LinkedLoginDto(string Provider);

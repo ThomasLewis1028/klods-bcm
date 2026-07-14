@@ -19,7 +19,7 @@
 <MudLayout>
     <MudAppBar Elevation="2">
         <MudLink Href="/" Typo="Typo.h6" Color="Color.Inherit" Style="font-weight: 700; letter-spacing: 0.04em; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
-            <img src="images/klods.png" alt="Klods" style="height: 36px; width: 36px; object-fit: contain;"/>
+            <KlodsMascot Body="@AuthService.CurrentUser?.BodyStyle" Variant="@AuthService.CurrentUser?.MascotVariant" Size="36px"/>
             Klods
         </MudLink>
         <MudSpacer/>

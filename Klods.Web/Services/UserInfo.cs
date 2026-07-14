@@ -8,4 +8,6 @@ public record UserInfo(
     string? PrimaryColor,
     bool HasPassword,
     double FontScale = 1.0,
-    bool HasSeenTour = false);
+    bool HasSeenTour = false,
+    string? MascotVariant = null,
+    string? BodyStyle = null);

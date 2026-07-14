@@ -16,7 +16,7 @@
 
 <div class="landing-page">
     <div class="landing-hero">
-        <img src="images/klods.png" alt="Klods mascot" class="landing-mascot"/>
+        <KlodsMascot Body="@AuthService.CurrentUser?.BodyStyle" Variant="@AuthService.CurrentUser?.MascotVariant" Class="landing-mascot" Alt="Klods mascot"/>
         <MudText Typo="Typo.h2" Style="font-weight: 800; letter-spacing: -0.02em;">Klods</MudText>
         <MudText Typo="Typo.h6" Style="opacity: 0.55; margin-top: 0.5rem; font-weight: 400;">A Brick Collection Manager</MudText>
     </div>
