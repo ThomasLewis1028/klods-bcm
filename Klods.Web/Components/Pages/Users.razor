@@ -2,6 +2,7 @@
 @inject ApiClient Api
 @inject ImageStorageService ImageStorage
 @using Klods.Services
+@using Klods.Components.Objects
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
 @attribute [Authorize]
@@ -68,6 +69,13 @@
                     </MudStack>
                 </CellTemplate>
             </TemplateColumn>
+            <TemplateColumn Title="KL-0D5" Sortable="false">
+                <CellTemplate>
+                    <MudTooltip Text="@BotLabel(context.Item)">
+                        <KlodsMascot Body="@context.Item.BodyStyle" Variant="@context.Item.MascotVariant" Size="44px"/>
+                    </MudTooltip>
+                </CellTemplate>
+            </TemplateColumn>
         </Columns>
         <PagerContent>
             <MudDataGridPager T="ApiClient.UserStatsDto"/>
@@ -90,4 +98,11 @@
         string.IsNullOrWhiteSpace(_search) ||
         row.UserName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
         row.UserId.ToString().Contains(_search);
+
+    private static string BotLabel(ApiClient.UserStatsDto u)
+    {
+        var body = MascotBodies.All.First(b => b.Name == MascotBodies.Resolve(u.BodyStyle)).Label;
+        var eyes = MascotVariants.All.First(e => e.Name == MascotVariants.Resolve(u.MascotVariant)).Label;
+        return $"{body} · {eyes} eyes";
+    }
 }

@@ -522,5 +522,5 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record ThemeVisibilityDto(int Id, string Name, int? ParentId, int SetCount, bool Hidden);
     public record TimezoneDto(string Id, string DisplayName);
     public record CronPreviewDto(bool Valid, List<string> Next);
-    public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs);
+    public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs, string? BodyStyle, string? MascotVariant);
 }

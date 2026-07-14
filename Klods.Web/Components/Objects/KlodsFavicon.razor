@@ -1,0 +1,39 @@
+@* No visual output. Keeps the browser favicon in sync with the current user's
+   Klods bot by compositing the body + eye layers client-side (see favicon.js). *@
+@implements IDisposable
+@inject IJSRuntime JS
+@inject AuthService AuthService
+
+@code {
+    private bool _ready;
+
+    protected override void OnInitialized() => AuthService.OnChange += OnAuthChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ready = true;
+            await UpdateAsync();
+        }
+    }
+
+    private void OnAuthChanged()
+    {
+        if (_ready) _ = InvokeAsync(UpdateAsync);
+    }
+
+    private async Task UpdateAsync()
+    {
+        var body = MascotBodies.Resolve(AuthService.CurrentUser?.BodyStyle);
+        var eyes = MascotVariants.Resolve(AuthService.CurrentUser?.MascotVariant);
+        try
+        {
+            await JS.InvokeVoidAsync("klodsFavicon.set",
+                $"images/klods-body-{body}.png", $"images/klods-eyes-{eyes}.png");
+        }
+        catch (JSDisconnectedException) { /* circuit gone — ignore */ }
+    }
+
+    public void Dispose() => AuthService.OnChange -= OnAuthChanged;
+}

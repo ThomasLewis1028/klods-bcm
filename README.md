@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/klods-mascot.png" alt="KL-0D5, the Klods mascot" width="240"/>
+</p>
+
 # Klods - A Brick Collection Manager 
 
 Welcome to Klods. It's a tool to track your LEGO sets, the bricks you need, the bricks you have, move inventory between sets, link to the official instructions, and inform you what pieces you needed to buy.

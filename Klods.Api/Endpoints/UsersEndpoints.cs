@@ -31,11 +31,12 @@ public static class UsersEndpoints
                 u.UserId, u.UserName, u.Role, u.ProfilePictureUrl,
                 setCounts.GetValueOrDefault(u.UserId, 0),
                 brickCounts.GetValueOrDefault(u.UserId, 0),
-                minifigCounts.GetValueOrDefault(u.UserId, 0))).ToList();
+                minifigCounts.GetValueOrDefault(u.UserId, 0),
+                u.BodyStyle, u.MascotVariant)).ToList();
 
             return Results.Ok(result);
         });
     }
 
-    public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs);
+    public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs, string? BodyStyle, string? MascotVariant);
 }
