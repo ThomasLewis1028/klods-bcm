@@ -14,6 +14,7 @@ public static class MascotBodies
     [
         ("classic",  "Classic"),
         ("red",      "Red"),
+        ("slate",    "Slate"),
         ("stealth",  "Stealth"),
         ("shadow",   "Shadow"),
         ("tuxedo",   "Tuxedo"),
