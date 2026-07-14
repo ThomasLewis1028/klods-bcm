@@ -16,8 +16,9 @@
 
 <div class="landing-page">
     <div class="landing-hero">
+        <KlodsMascot Body="@AuthService.CurrentUser?.BodyStyle" Variant="@AuthService.CurrentUser?.MascotVariant" Class="landing-mascot" Alt="Klods mascot"/>
         <MudText Typo="Typo.h2" Style="font-weight: 800; letter-spacing: -0.02em;">Klods</MudText>
-        <MudText Typo="Typo.h6" Style="opacity: 0.55; margin-top: 0.5rem; font-weight: 400;">Your personal collection manager</MudText>
+        <MudText Typo="Typo.h6" Style="opacity: 0.55; margin-top: 0.5rem; font-weight: 400;">A Brick Collection Manager</MudText>
     </div>
 
     <MudGrid Justify="Justify.Center" Style="max-width: 1100px; width: 100%;">
@@ -179,6 +180,13 @@
         @* ── Quick links (signed-in only) ── *@
         @if (AuthService.CurrentUser != null)
         {
+            <MudItem xs="12">
+                <div class="landing-section-label">
+                    <MudIcon Icon="@Icons.Material.Filled.MoreHoriz" Color="Color.Primary" Size="Size.Small"/>
+                    <MudText Typo="Typo.overline" Style="font-weight: 700; letter-spacing: 0.12em;">More</MudText>
+                </div>
+            </MudItem>
+
             <MudItem xs="12" sm="6" lg="4">
                 <MudCard Class="landing-card" Elevation="4" @onclick='() => Nav.NavigateTo("/users")'>
                     <MudCardContent>

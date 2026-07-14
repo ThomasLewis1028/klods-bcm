@@ -1,0 +1,100 @@
+@using Klods.Services
+@using Color = MudBlazor.Color
+@inject ApiClient Api
+@inject AuthService AuthService
+
+@* Character-creator carousel: KL-0D5 floats centre-stage; the ‹ › arrows cycle whichever
+   slot (Body / Eyes) is active, with the neighbouring options ghosted on each side. *@
+
+<div class="mascot-creator">
+    <div class="mascot-stage">
+        <div class="mascot-stage-glow"></div>
+
+        <div class="mascot-ghost mascot-ghost-prev" @onclick="Prev">
+            <KlodsMascot Body="@PrevBody" Variant="@PrevEyes" Size="190px"/>
+        </div>
+        <div class="mascot-ghost mascot-ghost-next" @onclick="Next">
+            <KlodsMascot Body="@NextBody" Variant="@NextEyes" Size="190px"/>
+        </div>
+
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Large"
+                       Class="mascot-arrow mascot-arrow-prev" OnClick="Prev" aria-label="Previous"/>
+
+        <div class="mascot-hero">
+            <KlodsMascot Body="@CurrentBody" Variant="@CurrentEyes" Size="290px" Alt="KL-0D5"/>
+        </div>
+
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Large"
+                       Class="mascot-arrow mascot-arrow-next" OnClick="Next" aria-label="Next"/>
+    </div>
+
+    <MudText Typo="Typo.h5" Class="mt-2" Style="font-weight: 800; letter-spacing: 0.12em;">KL-0D5</MudText>
+
+    <MudStack Row Spacing="2" Class="my-1">
+        <MudButton Variant="@(_activeSlot == Slot.Body ? Variant.Filled : Variant.Outlined)"
+                   Color="Color.Primary" StartIcon="@Icons.Material.Filled.SmartToy"
+                   OnClick="() => _activeSlot = Slot.Body">Body</MudButton>
+        <MudButton Variant="@(_activeSlot == Slot.Eyes ? Variant.Filled : Variant.Outlined)"
+                   Color="Color.Primary" StartIcon="@Icons.Material.Filled.RemoveRedEye"
+                   OnClick="() => _activeSlot = Slot.Eyes">Eyes</MudButton>
+    </MudStack>
+
+    <MudText Typo="Typo.body1">
+        <strong>@ActiveLabel</strong>
+        <span style="opacity: 0.5;"> · @(ActiveIndex + 1) / @ActiveCount</span>
+    </MudText>
+</div>
+
+@code {
+    private enum Slot { Body, Eyes }
+    private Slot _activeSlot = Slot.Body;
+    private int _bodyIndex;
+    private int _eyeIndex;
+
+    protected override void OnInitialized()
+    {
+        _bodyIndex = IndexOf(MascotBodies.All, MascotBodies.Resolve(AuthService.CurrentUser?.BodyStyle));
+        _eyeIndex  = IndexOf(MascotVariants.All, MascotVariants.Resolve(AuthService.CurrentUser?.MascotVariant));
+    }
+
+    private static int IndexOf(IReadOnlyList<(string Name, string Label)> list, string name)
+    {
+        for (var i = 0; i < list.Count; i++)
+            if (list[i].Name == name) return i;
+        return 0;
+    }
+
+    private static int Wrap(int i, int n) => (i % n + n) % n;
+
+    private string CurrentBody => MascotBodies.All[_bodyIndex].Name;
+    private string CurrentEyes => MascotVariants.All[_eyeIndex].Name;
+
+    // Ghosts show the neighbours along the active axis only; the other axis stays put.
+    private string PrevBody => _activeSlot == Slot.Body ? MascotBodies.All[Wrap(_bodyIndex - 1, MascotBodies.All.Count)].Name : CurrentBody;
+    private string NextBody => _activeSlot == Slot.Body ? MascotBodies.All[Wrap(_bodyIndex + 1, MascotBodies.All.Count)].Name : CurrentBody;
+    private string PrevEyes => _activeSlot == Slot.Eyes ? MascotVariants.All[Wrap(_eyeIndex - 1, MascotVariants.All.Count)].Name : CurrentEyes;
+    private string NextEyes => _activeSlot == Slot.Eyes ? MascotVariants.All[Wrap(_eyeIndex + 1, MascotVariants.All.Count)].Name : CurrentEyes;
+
+    private string ActiveLabel => _activeSlot == Slot.Body ? MascotBodies.All[_bodyIndex].Label : MascotVariants.All[_eyeIndex].Label;
+    private int ActiveIndex => _activeSlot == Slot.Body ? _bodyIndex : _eyeIndex;
+    private int ActiveCount => _activeSlot == Slot.Body ? MascotBodies.All.Count : MascotVariants.All.Count;
+
+    private Task Prev() => Step(-1);
+    private Task Next() => Step(1);
+
+    private async Task Step(int delta)
+    {
+        if (_activeSlot == Slot.Body)
+        {
+            _bodyIndex = Wrap(_bodyIndex + delta, MascotBodies.All.Count);
+            await Api.ChangeBodyAsync(CurrentBody);
+            AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { BodyStyle = CurrentBody });
+        }
+        else
+        {
+            _eyeIndex = Wrap(_eyeIndex + delta, MascotVariants.All.Count);
+            await Api.ChangeMascotAsync(CurrentEyes);
+            AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { MascotVariant = CurrentEyes });
+        }
+    }
+}

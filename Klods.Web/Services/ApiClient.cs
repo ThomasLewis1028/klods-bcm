@@ -175,6 +175,8 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     }
 
     public async Task ChangeThemeAsync(string? color)      => await PatchAsync("/api/auth/me/theme",   new { Color = color });
+    public async Task ChangeMascotAsync(string? variant)   => await PatchAsync("/api/auth/me/mascot",  new { Variant = variant });
+    public async Task ChangeBodyAsync(string? body)        => await PatchAsync("/api/auth/me/body",    new { Body = body });
     public async Task ChangeFontScaleAsync(double scale)   => await PatchAsync("/api/auth/me/fontscale", new { Scale = scale });
     public async Task MarkTourSeenAsync()                  => await PatchAsync("/api/auth/me/tour-seen");
     public async Task ChangePictureAsync(string? url)      => await PatchAsync("/api/auth/me/picture", new { Url   = url });
@@ -457,7 +459,7 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
 
     public record TokenResponse(string Token);
     public record LinkIntentResponse(string Token);
-    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, bool HasPassword, double FontScale, bool HasSeenTour);
+    public record UserProfileDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, string? PrimaryColor, string? MascotVariant, string? BodyStyle, bool HasPassword, double FontScale, bool HasSeenTour);
     public record LinkedLoginDto(string Provider);
     public record HomePreviewDto(
         PreviewItemDto? CatalogSet, PreviewItemDto? CatalogBrick, PreviewItemDto? CatalogMinifig,

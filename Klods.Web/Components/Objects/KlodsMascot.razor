@@ -1,0 +1,25 @@
+@* Klods mascot: a body layer + eye layer composited in the browser. Both are the
+   same 512² frame so they overlay 1:1. Add a body by dropping klods-body-{name}.png
+   (+ MascotBodies), an eye color by dropping klods-eyes-{name}.png (+ MascotVariants). *@
+
+<span class="klods-mascot @Class" style="@ContainerStyle">
+    <img class="klods-mascot-layer" src="@($"images/klods-body-{_body}.png")" alt="" aria-hidden="true"/>
+    <img class="klods-mascot-layer" src="@($"images/klods-eyes-{_variant}.png")" alt="@Alt"/>
+</span>
+
+@code {
+    /// <summary>Eye color name (see <see cref="MascotVariants"/>).</summary>
+    [Parameter] public string? Variant { get; set; }
+    /// <summary>Body style name (see <see cref="MascotBodies"/>).</summary>
+    [Parameter] public string? Body { get; set; }
+    [Parameter] public string? Size { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public string Alt { get; set; } = "Klods";
+
+    private string _variant => MascotVariants.Resolve(Variant);
+    private string _body => MascotBodies.Resolve(Body);
+
+    private string ContainerStyle =>
+        (Size is null ? "" : $"width:{Size};height:{Size};") + (Style ?? "");
+}
