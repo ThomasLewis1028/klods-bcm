@@ -1,0 +1,50 @@
+@inject ImageStorageService ImageStorage
+@using Color = MudBlazor.Color
+
+@if (User is null)
+{
+    <MudPaper Class="pa-8" Elevation="0">
+        <MudStack AlignItems="AlignItems.Center" Spacing="3">
+            <MudIcon Icon="@Icons.Material.Filled.PersonOff" Size="Size.Large" Color="Color.Secondary"/>
+            <MudText Typo="Typo.h6">User not found</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/users"
+                       StartIcon="@Icons.Material.Filled.ArrowBack">Back to users</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mb-4">
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+            <MudAvatar Style="width: 48px; height: 48px;">
+                @if (User.ProfilePictureUrl != null)
+                {
+                    <MudImage Src="@ImageStorage.ResolveUrl(User.ProfilePictureUrl)" Style="width: 100%; height: 100%; object-fit: cover;"/>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Person"/>
+                }
+            </MudAvatar>
+            <MudText Typo="Typo.h6">@User.UserName</MudText>
+            <KlodsMascot Body="@User.BodyStyle" Variant="@User.MascotVariant" Size="44px"/>
+        </MudStack>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+            <MudButton Variant="@TabVariant("sets")" Color="Color.Primary" Size="Size.Small" Href="@($"/users/{User.UserId}/sets")"
+                       StartIcon="@Icons.Material.Filled.ViewModule">Sets</MudButton>
+            <MudButton Variant="@TabVariant("bricks")" Color="Color.Primary" Size="Size.Small" Href="@($"/users/{User.UserId}/bricks")"
+                       StartIcon="@Icons.Material.Filled.Category">Bricks</MudButton>
+            <MudButton Variant="@TabVariant("minifigs")" Color="Color.Primary" Size="Size.Small" Href="@($"/users/{User.UserId}/minifigs")"
+                       StartIcon="@Icons.Material.Filled.Person">Minifigs</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" Href="/users"
+                       StartIcon="@Icons.Material.Filled.ArrowBack">All users</MudButton>
+        </MudStack>
+    </MudStack>
+}
+
+@code {
+    [Parameter] public ApiClient.UserStatsDto? User { get; set; }
+    [Parameter] public string Active { get; set; } = "sets";
+
+    private Variant TabVariant(string tab) => tab == Active ? Variant.Filled : Variant.Outlined;
+}

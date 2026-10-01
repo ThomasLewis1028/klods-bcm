@@ -19,15 +19,23 @@
             }
 
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
-                <MudText>My stock:</MudText>
-                <MudNumericField T="int" @bind-Value="_stock" Min="0" Variant="Variant.Outlined"
-                                 Margin="Margin.Dense" Style="max-width: 110px;"
-                                 Disabled="@(AuthService.CurrentUser == null)"/>
-                <MudButton OnClick="SaveStock" Variant="Variant.Filled" Color="Color.Primary"
-                           Disabled="@(AuthService.CurrentUser == null)">Save</MudButton>
+                @if (OwnerId is null)
+                {
+                    <MudText>My stock:</MudText>
+                    <MudNumericField T="int" @bind-Value="_stock" Min="0" Variant="Variant.Outlined"
+                                     Margin="Margin.Dense" Style="max-width: 110px;"
+                                     Disabled="@(AuthService.CurrentUser == null)"/>
+                    <MudButton OnClick="SaveStock" Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="@(AuthService.CurrentUser == null)">Save</MudButton>
+                }
+                else
+                {
+                    <MudText>Stock:</MudText>
+                    <MudText Typo="Typo.h6">@_stock</MudText>
+                }
             </MudStack>
 
-            @if (AuthService.CurrentUser != null)
+            @if (AuthService.CurrentUser != null && OwnerId is null)
             {
                 <MudPaper Outlined="true" Class="pa-2" Style="width:100%;">
                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="1">
@@ -58,11 +66,11 @@
             <MudDivider Class="my-2" FlexItem="true"/>
 
             <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width:100%;">
-                <MudText Typo="Typo.subtitle2">@(_mySetsOnly ? $"In {_total} of your set(s)" : $"Used in {_total} set(s)")</MudText>
+                <MudText Typo="Typo.subtitle2">@(_mySetsOnly ? (OwnerId is null ? $"In {_total} of your set(s)" : $"In {_total} of their set(s)") : $"Used in {_total} set(s)")</MudText>
                 @if (AuthService.CurrentUser != null)
                 {
                     <MudSwitch T="bool" Value="_mySetsOnly" ValueChanged="OnToggleMine" Color="Color.Primary"
-                               Label="Only my sets" Size="Size.Small"/>
+                               Label="@(OwnerId is null ? "Only my sets" : "Only their sets")" Size="Size.Small"/>
                 }
             </MudStack>
 
@@ -78,7 +86,7 @@
             else if (_items.Count == 0)
             {
                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                    @(_mySetsOnly ? "None of your sets need this brick." : "No sets match your search.")
+                    @(_mySetsOnly ? (OwnerId is null ? "None of your sets need this brick." : "None of their sets need this brick.") : "No sets match your search.")
                 </MudText>
             }
             else
@@ -121,6 +129,9 @@
     /// <summary>When true (opened from the user's own bricks), default to showing only their sets.</summary>
     [Parameter] public bool OwnedContext { get; set; }
 
+    /// <summary>Set when viewing another user's brick: read-only, reads through the user routes.</summary>
+    [Parameter] public int? OwnerId { get; set; }
+
     private const int SetPageSize = 6;
 
     private int _stock;
@@ -138,11 +149,13 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var owned = await Api.GetMyBrickStockAsync(Brick.PartNum, Brick.ColorId ?? "");
+        var owned = OwnerId is int uid
+            ? await Api.GetUserBrickStockAsync(uid, Brick.PartNum, Brick.ColorId ?? "")
+            : await Api.GetMyBrickStockAsync(Brick.PartNum, Brick.ColorId ?? "");
         _stock = owned?.Stock ?? 0;
         _location = owned?.Location;
         _notes = owned?.Notes;
-        _mySetsOnly = OwnedContext && AuthService.CurrentUser != null;
+        _mySetsOnly = OwnedContext && (OwnerId is not null || AuthService.CurrentUser != null);
         await LoadSetsAsync();
     }
 
@@ -153,7 +166,9 @@
 
         if (_mySetsOnly)
         {
-            var mine = await Api.GetUserSetsForBrickAsync(Brick.PartNum, Brick.ColorId ?? "") ?? [];
+            var mine = (OwnerId is int uid
+                ? await Api.GetUserBrickSetsAsync(uid, Brick.PartNum, Brick.ColorId ?? "")
+                : await Api.GetUserSetsForBrickAsync(Brick.PartNum, Brick.ColorId ?? "")) ?? [];
             var q = _query.Trim();
             if (q.Length > 0)
                 mine = mine.Where(s => s.SetId.Contains(q, StringComparison.OrdinalIgnoreCase)

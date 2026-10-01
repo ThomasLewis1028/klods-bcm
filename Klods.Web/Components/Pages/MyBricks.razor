@@ -1,4 +1,5 @@
 @page "/my/bricks"
+@page "/users/{OwnerId:int}/bricks"
 @inject IDialogService DialogService
 @inject AuthService AuthService
 @inject NavigationManager Nav
@@ -13,9 +14,18 @@
 @attribute [Authorize]
 @implements IDisposable
 
-<PageTitle>My Bricks</PageTitle>
+<PageTitle>@Heading</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Bricks</MudText>
+@if (IsViewing && !_isLoading)
+{
+    <UserCollectionHeader User="_owner" Active="bricks"/>
+    if (_owner is null)
+    {
+        return;
+    }
+}
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">@Heading</MudText>
 
 @if (_isLoading)
 {
@@ -56,12 +66,15 @@
 
     <MudItem xs="12">
         @* Toolbar: Add Bricks + view toggle *@
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenAddBrickDialog">
-                Add Bricks
-            </MudButton>
+        <MudStack Row Justify="@(IsViewing ? Justify.FlexEnd : Justify.SpaceBetween)" AlignItems="AlignItems.Center" Class="mb-2">
+            @if (!IsViewing)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenAddBrickDialog">
+                    Add Bricks
+                </MudButton>
+            }
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                 @if (_view == "grid")
                 {
@@ -86,14 +99,17 @@
             <MudPaper Class="pa-8" Elevation="0">
                 <MudStack AlignItems="AlignItems.Center" Spacing="3">
                     <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Large" Color="Color.Secondary"/>
-                    <MudText Typo="Typo.h6">No bricks in your inventory yet</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
-                        Add a set to your collection or add loose bricks directly.
-                    </MudText>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddBrickDialog">
-                        Add Loose Bricks
-                    </MudButton>
+                    <MudText Typo="Typo.h6">@(IsViewing ? $"No bricks in {_owner?.UserName}'s inventory yet" : "No bricks in your inventory yet")</MudText>
+                    @if (!IsViewing)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
+                            Add a set to your collection or add loose bricks directly.
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddBrickDialog">
+                            Add Loose Bricks
+                        </MudButton>
+                    }
                 </MudStack>
             </MudPaper>
         }
@@ -167,9 +183,16 @@
                         </HeaderTemplate>
                         <CellTemplate>
                             <div @onclick:stopPropagation="true">
-                                <MudNumericField T="int" Value="@context.Item.Stock"
-                                                 ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
-                                                 Min="0" Variant="Variant.Text"/>
+                                @if (IsViewing)
+                                {
+                                    @context.Item.Stock
+                                }
+                                else
+                                {
+                                    <MudNumericField T="int" Value="@context.Item.Stock"
+                                                     ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                                     Min="0" Variant="Variant.Text"/>
+                                }
                             </div>
                         </CellTemplate>
                     </TemplateColumn>
@@ -219,6 +242,17 @@
 </style>
 
 @code {
+    [Parameter] public int? OwnerId { get; set; }
+
+    private ApiClient.UserStatsDto? _owner;
+    private bool _initialized;
+    private int? _initializedFor;
+
+    private int? ViewedUserId => OwnerId is int id && id != AuthService.CurrentUser?.UserId ? id : null;
+    private bool IsViewing => ViewedUserId.HasValue;
+    private string BasePath => IsViewing ? $"/users/{OwnerId}/bricks" : "/my/bricks";
+    private string Heading => IsViewing ? (_owner is null ? "Bricks" : $"{_owner.UserName}'s Bricks") : "My Bricks";
+
     private List<MyBrickInfo> _brickInfos = [];
     private bool _isLoading = true;
 
@@ -287,9 +321,34 @@
         AuthService.SessionRestored += OnSessionRestored;
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initialized && _initializedFor == OwnerId) return;
+        await InitializeAsync();
+    }
+
+    private async Task InitializeAsync()
     {
         ParseUrl();
+        if (OwnerId is int id && id == AuthService.CurrentUser?.UserId)
+        {
+            _initialized = false;
+            Nav.NavigateTo("/my/bricks" + new Uri(Nav.Uri).Query, replace: true);
+            return;
+        }
+        _initialized = true;
+        _initializedFor = OwnerId;
+        _isLoading = true;
+        _owner = null;
+        if (ViewedUserId is int uid)
+        {
+            _owner = await Api.GetUserAsync(uid);
+            if (_owner is null)
+            {
+                _isLoading = false;
+                return;
+            }
+        }
         await LoadDataAsync();
     }
 
@@ -302,8 +361,7 @@
     private void OnSessionRestored() => InvokeAsync(async () =>
     {
         if (AuthService.CurrentUser == null) { Nav.NavigateTo("/not-authorized"); return; }
-        ParseUrl();
-        await LoadDataAsync();
+        await InitializeAsync();
         StateHasChanged();
     });
 
@@ -332,13 +390,13 @@
         if (_pageSize != 25) parts.Add($"size={_pageSize}");
         if (_view != "grid") parts.Add($"view={_view}");
         if (_page > 1) parts.Add($"page={_page}");
-        Nav.NavigateTo("/my/bricks" + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
+        Nav.NavigateTo(BasePath + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
     }
 
     // ── Data ──────────────────────────────────────────────────────────────────
     private async Task LoadDataAsync()
     {
-        var bricks = await Api.GetMyBricksAsync();
+        var bricks = ViewedUserId is int uid ? await Api.GetUserBricksAsync(uid) : await Api.GetMyBricksAsync();
         _brickInfos = bricks?.Select(b => new MyBrickInfo { Brick = b, Stock = b.Stock }).ToList() ?? [];
         _isLoading = false;
         StateHasChanged();
@@ -392,7 +450,8 @@
         var parameters = new DialogParameters<BrickDetailDialog>
         {
             { x => x.Brick, dto },
-            { x => x.OwnedContext, true }
+            { x => x.OwnedContext, true },
+            { x => x.OwnerId, ViewedUserId }
         };
         await DialogService.ShowAsync<BrickDetailDialog>(info.Brick.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });

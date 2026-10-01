@@ -23,28 +23,31 @@
                     <div style="margin-top:6px; max-width:280px; display:flex; flex-direction:column; gap:3px;">
                         <CompletenessBar Percent="@_percent" Status="@_status" SubPercent="@_subPercent" Label="@($"{_percent}% assembled")"/>
                         <span class="cstatus cstatus-@_status" style="font-size:.72rem;">@_percent% · @HeaderStatusLabel()</span>
-                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                            @if (!string.IsNullOrEmpty(_location))
-                            {
-                                <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Color="Color.Secondary"/>
-                                <MudText Typo="Typo.caption">@_location</MudText>
-                            }
-                            else if (!string.IsNullOrEmpty(_notes))
-                            {
-                                <MudIcon Icon="@Icons.Material.Filled.Notes" Size="Size.Small" Color="Color.Secondary"/>
-                            }
-                            else
-                            {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">Add location or notes</MudText>
-                            }
-                            @if (AuthService.CurrentUser != null)
-                            {
-                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="EditNotes"/>
-                            }
-                        </MudStack>
-                        @if (!string.IsNullOrEmpty(_notes))
+                        @if (OwnerId is null)
                         {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="white-space:pre-wrap;">@_notes</MudText>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                @if (!string.IsNullOrEmpty(_location))
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Color="Color.Secondary"/>
+                                    <MudText Typo="Typo.caption">@_location</MudText>
+                                }
+                                else if (!string.IsNullOrEmpty(_notes))
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Notes" Size="Size.Small" Color="Color.Secondary"/>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Add location or notes</MudText>
+                                }
+                                @if (AuthService.CurrentUser != null)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="EditNotes"/>
+                                }
+                            </MudStack>
+                            @if (!string.IsNullOrEmpty(_notes))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="white-space:pre-wrap;">@_notes</MudText>
+                            }
                         }
                     </div>
                 }
@@ -82,7 +85,7 @@
                 <MudTabPanel Text="Bricks">
                     <MudDataGrid T="SetBrickInfo" Items="@_setBrickInfo.OrderBy(b => b.Brick.PartNum)"
                                  SortMode="@SortMode.Multiple" EditMode="DataGridEditMode.Cell"
-                                 QuickFilter="SetBrickFilterFunc" ReadOnly="false" Bordered="false" Dense="true">
+                                 QuickFilter="SetBrickFilterFunc" ReadOnly="@(OwnerId is not null)" Bordered="false" Dense="true">
                         <ToolBarContent>
                             <MudText Typo="Typo.body1">Missing
                                 Pieces: @_setBrickInfo.Sum(MissingFor)
@@ -140,13 +143,20 @@
                             </TemplateColumn>
                             <TemplateColumn Title="In Set" Editable="false" SortBy="x => x.SetStock">
                                 <CellTemplate>
-                                    <MudNumericField T="int" Value="@context.Item.SetStock"
-                                                     ValueChanged="@(v => SaveSetBrickOwnedStock(context.Item, v))"
-                                                     Min="0" Disabled="@(AuthService.CurrentUser == null)"
-                                                     Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
+                                    @if (OwnerId is null)
+                                    {
+                                        <MudNumericField T="int" Value="@context.Item.SetStock"
+                                                         ValueChanged="@(v => SaveSetBrickOwnedStock(context.Item, v))"
+                                                         Min="0" Disabled="@(AuthService.CurrentUser == null)"
+                                                         Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
+                                    }
+                                    else
+                                    {
+                                        @context.Item.SetStock
+                                    }
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="Transfer Pieces" Editable="false">
+                            <TemplateColumn Title="Transfer Pieces" Editable="false" Hidden="@(OwnerId is not null)">
                                 <HeaderTemplate>
                                     <MudTooltip Text="Move pieces between your loose stock and this set">
                                         <span>Transfer Pieces</span>
@@ -165,13 +175,20 @@
                             </TemplateColumn>
                             <TemplateColumn Title="Loose" Editable="false" SortBy="x => x.LooseStock">
                                 <CellTemplate>
-                                    <MudNumericField T="int" Value="@context.Item.LooseStock"
-                                                     ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
-                                                     Min="0" Disabled="@(AuthService.CurrentUser == null)"
-                                                     Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
+                                    @if (OwnerId is null)
+                                    {
+                                        <MudNumericField T="int" Value="@context.Item.LooseStock"
+                                                         ValueChanged="@(v => SaveBrickOwnedStock(context.Item, v))"
+                                                         Min="0" Disabled="@(AuthService.CurrentUser == null)"
+                                                         Variant="Variant.Text" Margin="Margin.Dense" Style="width: 68px;"/>
+                                    }
+                                    else
+                                    {
+                                        @context.Item.LooseStock
+                                    }
                                 </CellTemplate>
                             </TemplateColumn>
-                            <TemplateColumn Title="Substitute" Editable="false">
+                            <TemplateColumn Title="Substitute" Editable="false" Hidden="@(OwnerId is not null)">
                                 <HeaderTemplate>
                                     <MudTooltip Text="Record other bricks used in place of this piece">
                                         <span>Substitute</span>
@@ -228,17 +245,24 @@
                                             <span class="cstatus cstatus-@SlotStatus(context.Item)" style="font-size:.72rem;">
                                                 @context.Item.Percent% · @StatusWord(SlotStatus(context.Item))
                                             </span>
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                                                           Disabled="@(AuthService.CurrentUser == null)"
-                                                           OnClick="() => RemoveSlot(context.Item)"/>
+                                            @if (OwnerId is null)
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                                               Disabled="@(AuthService.CurrentUser == null)"
+                                                               OnClick="() => RemoveSlot(context.Item)"/>
+                                            }
                                         </MudStack>
                                     }
-                                    else
+                                    else if (OwnerId is null)
                                     {
                                         <MudButton Size="Size.Small" Variant="Variant.Outlined"
                                                    StartIcon="@Icons.Material.Filled.Add"
                                                    Disabled="@(AuthService.CurrentUser == null)"
                                                    OnClick="() => FillSlot(context.Item)">I have this one</MudButton>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Not owned</MudText>
                                     }
                                 </CellTemplate>
                             </TemplateColumn>
@@ -264,10 +288,17 @@
                                         </TemplateColumn>
                                         <TemplateColumn Title="Owned">
                                             <CellTemplate>
-                                                <MudNumericField T="int" Value="@context.Item.Owned"
-                                                                 ValueChanged="@(v => SaveSlotPart(slotContext.Item, context.Item, v))"
-                                                                 Min="0" Disabled="@(AuthService.CurrentUser == null)"
-                                                                 Variant="Variant.Text"/>
+                                                @if (OwnerId is null)
+                                                {
+                                                    <MudNumericField T="int" Value="@context.Item.Owned"
+                                                                     ValueChanged="@(v => SaveSlotPart(slotContext.Item, context.Item, v))"
+                                                                     Min="0" Disabled="@(AuthService.CurrentUser == null)"
+                                                                     Variant="Variant.Text"/>
+                                                }
+                                                else
+                                                {
+                                                    @context.Item.Owned
+                                                }
                                             </CellTemplate>
                                         </TemplateColumn>
                                     </Columns>
@@ -284,7 +315,7 @@
         </div>
     </DialogContent>
     <DialogActions>
-        @if (!_isLoading && AuthService.CurrentUser != null && _ownedInstances.Count > 0)
+        @if (!_isLoading && OwnerId is null && AuthService.CurrentUser != null && _ownedInstances.Count > 0)
         {
             <MudButton StartIcon="@Icons.Material.Filled.Construction" OnClick="OpenBulkActions">Build actions</MudButton>
         }
@@ -299,6 +330,9 @@
     [Parameter] public string SetId { get; set; } = null!;
     [Parameter] public string? SetImg { get; set; }
     [Parameter] public int? SetIndex { get; set; }
+
+    /// <summary>Set when viewing another user's copy: read-only, reads through the user routes.</summary>
+    [Parameter] public int? OwnerId { get; set; }
 
     private List<SetBrickInfo> _setBrickInfo = new();
     private List<ApiClient.BomMinifigDto> _bomMinifigs = new();
@@ -334,11 +368,11 @@
         }
         else
         {
-            var owned = await Api.GetMyOwnedSetsAsync();
+            var owned = OwnerId is int uid ? await Api.GetUserOwnedSetsAsync(uid) : await Api.GetMyOwnedSetsAsync();
             var instances = owned?.FirstOrDefault(s => s.SetId == SetId)?.Instances;
             if (instances is not { Count: > 0 })
             {
-                Snackbar.Add("You don't own a copy of this set.", Severity.Warning);
+                Snackbar.Add(OwnerId is null ? "You don't own a copy of this set." : "This user doesn't own a copy of this set.", Severity.Warning);
                 _isLoading = false;
                 return;
             }
@@ -356,7 +390,9 @@
         _setBrickInfo.Clear();
         _minifigSlots.Clear();
 
-        var bom = await Api.GetBomAsync(SetId, _currentSetIndex);
+        var bom = OwnerId is int uid
+            ? await Api.GetUserBomAsync(uid, SetId, _currentSetIndex)
+            : await Api.GetBomAsync(SetId, _currentSetIndex);
         if (bom == null)
         {
             Snackbar.Add("Could not load the bill of materials for this set.", Severity.Error);
@@ -375,7 +411,10 @@
         _location = bom.Location;
         _notes = bom.Notes;
 
-        _substitutions = (await Api.GetSubstitutionsAsync(SetId, _currentSetIndex))?.ToList() ?? new();
+        var subs = OwnerId is int subUid
+            ? await Api.GetUserSubstitutionsAsync(subUid, SetId, _currentSetIndex)
+            : await Api.GetSubstitutionsAsync(SetId, _currentSetIndex);
+        _substitutions = subs?.ToList() ?? new();
 
         _setBrickInfo = bom.Bricks.Select(b => new SetBrickInfo
         {
@@ -400,7 +439,9 @@
         var slots = new List<MinifigSlot>();
         foreach (var m in _bomMinifigs)
         {
-            var instances = await Api.GetBomMinifigInstancesAsync(SetId, _currentSetIndex, m.MinifigId) ?? [];
+            var instances = (OwnerId is int uid
+                ? await Api.GetUserBomMinifigInstancesAsync(uid, SetId, _currentSetIndex, m.MinifigId)
+                : await Api.GetBomMinifigInstancesAsync(SetId, _currentSetIndex, m.MinifigId)) ?? [];
 
             var filled = instances.Select(inst => new MinifigSlot
             {
