@@ -187,6 +187,24 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         return ok;
     }
 
+    public Task<MyApiKeysDto?> GetMyApiKeysAsync() => GetAsync<MyApiKeysDto>("/api/auth/me/keys");
+    public async Task<bool> RevokeMyApiKeyAsync(int id) => (await DeleteAsync($"/api/auth/me/keys/{id}")).Ok;
+    public async Task<(CreatedApiKeyDto? Key, string? Error)> CreateMyApiKeyAsync(string name)
+    {
+        try
+        {
+            var resp = await Http().PostAsJsonAsync("/api/auth/me/keys", new { Name = name }, JsonOpts);
+            if (resp.IsSuccessStatusCode)
+                return (await resp.Content.ReadFromJsonAsync<CreatedApiKeyDto>(JsonOpts), null);
+            var body = await resp.Content.ReadAsStringAsync();
+            if (!string.IsNullOrWhiteSpace(body)) return (null, body);
+            return (null, resp.StatusCode == HttpStatusCode.Forbidden
+                ? "MCP access is turned off by the administrator."
+                : "Failed to create key.");
+        }
+        catch (Exception e) { return (null, e.Message); }
+    }
+
     // ── Home ─────────────────────────────────────────────────────────────────
 
     public Task<HomePreviewDto?> GetHomePreviewAsync() => GetAsync<HomePreviewDto>("/api/home/preview");
@@ -334,6 +352,12 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
         => GetAsync<RegistrationSettingsDto>("/api/admin/registration-settings");
     public async Task<bool> SaveRegistrationSettingsAsync(bool autoApprove)
         => (await PutAsync("/api/admin/registration-settings", new { AutoApprove = autoApprove })).Ok;
+
+    public Task<McpSettingsDto?> GetMcpSettingsAsync() => GetAsync<McpSettingsDto>("/api/admin/mcp-settings");
+    public async Task<bool> SaveMcpSettingsAsync(bool enabled)
+        => (await PutAsync("/api/admin/mcp-settings", new { Enabled = enabled })).Ok;
+    public Task<AdminApiKeyDto[]?> GetAdminApiKeysAsync() => GetAsync<AdminApiKeyDto[]>("/api/admin/api-keys");
+    public async Task<bool> RevokeAdminApiKeyAsync(int id) => (await DeleteAsync($"/api/admin/api-keys/{id}")).Ok;
 
     public Task<CatalogImportDto[]?> GetCatalogImportsAsync() => GetAsync<CatalogImportDto[]>("/api/admin/catalog-imports");
 
@@ -523,4 +547,9 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     public record TimezoneDto(string Id, string DisplayName);
     public record CronPreviewDto(bool Valid, List<string> Next);
     public record UserStatsDto(int UserId, string UserName, string Role, string? ProfilePictureUrl, int OwnedSets, int OwnedBricks, int OwnedMinifigs, string? BodyStyle, string? MascotVariant);
+    public record ApiKeyDto(int Id, string Name, string Prefix, DateTime CreatedAt, DateTime? LastUsedAt);
+    public record MyApiKeysDto(bool Enabled, int MaxKeys, List<ApiKeyDto> Keys);
+    public record CreatedApiKeyDto(int Id, string Name, string Prefix, DateTime CreatedAt, string Key);
+    public record McpSettingsDto(bool Enabled);
+    public record AdminApiKeyDto(int Id, int UserId, string UserName, string Name, string Prefix, DateTime CreatedAt, DateTime? LastUsedAt);
 }

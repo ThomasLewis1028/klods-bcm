@@ -6,6 +6,7 @@
 @inject ISnackbar Snackbar
 @inject ImageStorageService ImageStorage
 @inject IDialogService DialogService
+@inject IJSRuntime JS
 @using Klods.Components.Objects
 @using Color = MudBlazor.Color
 @rendermode InteractiveServer
@@ -240,6 +241,88 @@
         </MudPaper>
     </MudItem>
 
+    @* ── MCP Keys ── *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 700;">MCP Keys</MudText>
+            @if (_mcp is null)
+            {
+                <MudText Typo="Typo.body2" Style="opacity: 0.55;">Could not load your MCP keys.</MudText>
+            }
+            else if (!_mcp.Enabled)
+            {
+                <MudText Typo="Typo.body2" Style="opacity: 0.55;">The administrator has turned MCP access off.</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.55;">
+                    Keys let an MCP server act as you. Using @_mcp.Keys.Count of @_mcp.MaxKeys keys.
+                </MudText>
+
+                @if (_createdKey is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="DismissCreatedKey">
+                        <MudText Typo="Typo.subtitle2">Key “@_createdKey.Name” created. Copy it now — you won't see it again.</MudText>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                            <MudTextField T="string" Value="@_createdKey.Key" ReadOnly="true" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" Style="font-family: monospace;"/>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyCreatedKey">
+                                Copy
+                            </MudButton>
+                        </MudStack>
+                    </MudAlert>
+                }
+
+                @if (_mcp.Keys.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-3" Color="Color.Secondary">No keys yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true" Striped="true" Class="mb-4">
+                        <thead>
+                            <tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var key in _mcp.Keys)
+                        {
+                            var k = key;
+                            <tr>
+                                <td>@k.Name</td>
+                                <td style="font-family: monospace;">@k.Prefix…</td>
+                                <td style="white-space: nowrap;">@k.CreatedAt.ToLocalTime().ToString("g")</td>
+                                <td style="white-space: nowrap;">@(k.LastUsedAt is { } used ? used.ToLocalTime().ToString("g") : "never")</td>
+                                <td>
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Delete" OnClick="@(() => RevokeKey(k))">
+                                        Revoke
+                                    </MudButton>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Wrap="Wrap.Wrap">
+                    <MudTextField T="string" Label="Key name" @bind-Value="_newKeyName" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" Style="max-width: 280px;" Immediate="true" MaxLength="50"
+                                  Disabled="@AtKeyLimit"/>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Key" OnClick="CreateKey"
+                               Disabled="@(AtKeyLimit || _creatingKey || string.IsNullOrWhiteSpace(_newKeyName))">
+                        Create key
+                    </MudButton>
+                    @if (AtKeyLimit)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Key limit reached. Revoke a key to create another.</MudText>
+                    }
+                </MudStack>
+            }
+        </MudPaper>
+    </MudItem>
+
 </MudGrid>
 
 @code {
@@ -269,6 +352,14 @@
     // Username
     private string _newUsername = string.Empty;
 
+    // MCP keys
+    private ApiClient.MyApiKeysDto? _mcp;
+    private ApiClient.CreatedApiKeyDto? _createdKey;
+    private string _newKeyName = string.Empty;
+    private bool _creatingKey;
+
+    private bool AtKeyLimit => _mcp is not null && _mcp.Keys.Count >= _mcp.MaxKeys;
+
     // Password
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
@@ -297,6 +388,7 @@
         _providers      = await Api.GetProvidersAsync() ?? [];
         _linkedLogins   = (await Api.GetLinkedLoginsAsync())?.ToList() ?? [];
         _hasPassword    = AuthService.CurrentUser?.HasPassword ?? false;
+        _mcp            = await Api.GetMyApiKeysAsync();
 
         // Show feedback if we just came back from a link flow
         var uri  = new Uri(Nav.Uri);
@@ -410,6 +502,53 @@
         AuthService.UpdateCurrentUser(AuthService.CurrentUser! with { FontScale = scale });
         ThemeService.SetFontScale(scale);
         Snackbar.Add("Text size updated.", Severity.Success);
+    }
+
+    private async Task CreateKey()
+    {
+        if (string.IsNullOrWhiteSpace(_newKeyName) || AtKeyLimit) return;
+        _creatingKey = true;
+        var (created, error) = await Api.CreateMyApiKeyAsync(_newKeyName.Trim());
+        _creatingKey = false;
+        if (created is null)
+        {
+            Snackbar.Add(error ?? "Failed to create key.", Severity.Error);
+            _mcp = await Api.GetMyApiKeysAsync();
+            return;
+        }
+        _createdKey = created;
+        _newKeyName = string.Empty;
+        _mcp = await Api.GetMyApiKeysAsync();
+    }
+
+    private async Task CopyCreatedKey()
+    {
+        if (_createdKey is null) return;
+        var copied = await JS.InvokeAsync<bool>("klodsCopyText", _createdKey.Key);
+        Snackbar.Add(copied ? "Key copied to clipboard." : "Could not copy — select the key and copy it manually.",
+            copied ? Severity.Success : Severity.Warning);
+    }
+
+    private void DismissCreatedKey() => _createdKey = null;
+
+    private async Task RevokeKey(ApiClient.ApiKeyDto key)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Revoke key",
+            $"Revoke “{key.Name}”? Anything using it will stop working immediately.",
+            yesText: "Revoke", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        if (await Api.RevokeMyApiKeyAsync(key.Id))
+        {
+            if (_createdKey?.Id == key.Id) _createdKey = null;
+            Snackbar.Add($"Key “{key.Name}” revoked.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Could not revoke that key. It may already be gone.", Severity.Warning);
+        }
+        _mcp = await Api.GetMyApiKeysAsync();
     }
 
     private Task OpenTour() =>
