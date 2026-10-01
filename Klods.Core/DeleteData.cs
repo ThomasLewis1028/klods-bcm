@@ -56,6 +56,9 @@ public class DeleteData(IDbContextFactory<InventoryContext> contextFactory, ILog
 
         using var context = contextFactory.CreateDbContext();
 
+        if (!context.Set<SetOwned>().Any(s => s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex))
+            return false;
+
         if (moveStock)
         {
             var brickOwnedCtx = context.Set<BrickOwned>();
@@ -110,14 +113,14 @@ public class DeleteData(IDbContextFactory<InventoryContext> contextFactory, ILog
             .ExecuteDelete();
 
         // Delete the SetOwned record
-        context.Set<SetOwned>()
+        var removed = context.Set<SetOwned>()
             .Where(s => s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex)
             .ExecuteDelete();
 
         context.SaveChanges();
         logger.LogInformation($"{setId}-{setIndex} has been deleted");
 
-        return !context.Set<SetOwned>().Any(s => s.UserId == userId && s.SetId == setId && s.SetIndex == setIndex);
+        return removed > 0;
     }
 
     public bool DeleteSetParts(string? setId)

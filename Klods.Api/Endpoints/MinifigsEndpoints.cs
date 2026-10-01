@@ -85,7 +85,7 @@ public static class MinifigsEndpoints
                 m.MinifigId, m.Name, m.ImgUrl, m.Url ?? "", partCounts.GetValueOrDefault(m.MinifigId, 0))).ToList();
 
             return Results.Ok(new MinifigCatalogPage(items, total));
-        });
+        }).AllowApiKey();
 
         // Owned (loose + on-set instances), aggregated to a per-fig count.
         group.MapGet("/owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
@@ -123,7 +123,7 @@ public static class MinifigsEndpoints
                 .ToListAsync();
 
             return Results.Ok(rows);
-        });
+        }).AllowApiKey();
 
         group.MapPost("/import", async (ImportMinifigRequest req, ImportData importer) =>
         {

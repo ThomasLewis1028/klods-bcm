@@ -286,3 +286,328 @@ public class RateLimitTests
         Assert.AreEqual(HttpStatusCode.TooManyRequests, last!.StatusCode);
     }
 }
+
+[TestClass]
+public class ApiKeyTests
+{
+    private static WebApplicationFactory<Program> _factory = null!;
+    private static HttpClient _client = null!;
+
+    [ClassInitialize]
+    public static async Task Init(TestContext _)
+    {
+        Environment.SetEnvironmentVariable("JWT_SECRET", "test-secret-key-for-unit-tests-must-be-long-enough");
+        _factory = new WebApplicationFactory<Program>();
+        _client = _factory.CreateClient();
+        await ApiKeyTestHelper.SetMcpEnabledAsync(_factory, true);
+    }
+
+    [ClassCleanup]
+    public static void Cleanup()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+    }
+
+    [TestMethod]
+    public async Task Key_AuthenticatesOnAllowlistedEndpoint_ButNotElsewhere()
+    {
+        var (username, jwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+
+        var whoami = await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/whoami", key);
+        Assert.AreEqual(HttpStatusCode.OK, whoami.StatusCode);
+        Assert.AreEqual(username, (await whoami.Content.ReadFromJsonAsync<WhoAmI>())!.UserName);
+
+        // Not opted in: profile, and key management itself (a key must not mint more keys).
+        Assert.AreEqual(HttpStatusCode.Unauthorized,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/me/", key)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.Unauthorized,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Post, "/api/auth/me/keys", key, new { Name = "x" })).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task AdminsKey_CannotReachAdminEndpoints()
+    {
+        var (username, jwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        await ApiKeyTestHelper.UpdateUserAsync(_factory, username, q => q.ExecuteUpdateAsync(s => s.SetProperty(u => u.Role, "Admin")));
+        var (_, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+
+        Assert.AreEqual(HttpStatusCode.OK,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/admin/users", jwt)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.Unauthorized,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/admin/users", key)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.Unauthorized,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Put, "/api/admin/mcp-settings", key, new { Enabled = false })).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Admin_SeesAndRevokesAnyUsersKey()
+    {
+        var (adminName, adminJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        await ApiKeyTestHelper.UpdateUserAsync(_factory, adminName, q => q.ExecuteUpdateAsync(s => s.SetProperty(u => u.Role, "Admin")));
+        var (ownerName, ownerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (id, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, ownerJwt);
+
+        var list = await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/admin/api-keys", adminJwt);
+        Assert.AreEqual(HttpStatusCode.OK, list.StatusCode);
+        var keys = (await list.Content.ReadFromJsonAsync<List<AdminKey>>())!;
+        Assert.AreEqual(ownerName, keys.Single(k => k.Id == id).UserName);
+
+        Assert.AreEqual(HttpStatusCode.OK,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Delete, $"/api/admin/api-keys/{id}", adminJwt)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.Unauthorized,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/whoami", key)).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task RevokedKey_IsRejected_AndOnlyTheOwnerCanRevoke()
+    {
+        var (_, ownerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, otherJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (id, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, ownerJwt);
+
+        Assert.AreEqual(HttpStatusCode.NotFound,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Delete, $"/api/auth/me/keys/{id}", otherJwt)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/whoami", key)).StatusCode);
+
+        Assert.AreEqual(HttpStatusCode.OK,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Delete, $"/api/auth/me/keys/{id}", ownerJwt)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.Unauthorized,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/whoami", key)).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task SiteToggleOff_RejectsExistingKeysAndCreation_UntilReEnabled()
+    {
+        var (_, jwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+
+        await ApiKeyTestHelper.SetMcpEnabledAsync(_factory, false);
+        try
+        {
+            Assert.AreEqual(HttpStatusCode.Unauthorized,
+                (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/whoami", key)).StatusCode);
+            Assert.AreEqual(HttpStatusCode.Forbidden,
+                (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Post, "/api/auth/me/keys", jwt, new { Name = "x" })).StatusCode);
+        }
+        finally
+        {
+            await ApiKeyTestHelper.SetMcpEnabledAsync(_factory, true);
+        }
+
+        Assert.AreEqual(HttpStatusCode.OK,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/whoami", key)).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task SuspendedUsersKey_IsRejected()
+    {
+        var (username, jwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+
+        await ApiKeyTestHelper.UpdateUserAsync(_factory, username, q => q.ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, "Pending")));
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/auth/whoami", key)).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task CreatingPastTheCap_ReturnsBadRequest()
+    {
+        var (_, jwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        for (var i = 0; i < 5; i++)
+            await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+
+        Assert.AreEqual(HttpStatusCode.BadRequest,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Post, "/api/auth/me/keys", jwt, new { Name = "one too many" })).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Writes_ReferencingUnknownCatalogItems_ReturnNotFound()
+    {
+        var (_, jwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+
+        Assert.AreEqual(HttpStatusCode.NotFound, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Post,
+            "/api/sets/owned", key, new { SetId = "no-such-set", ApplyBricks = false })).StatusCode);
+        Assert.AreEqual(HttpStatusCode.NotFound, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Put,
+            "/api/mybricks/no-such-part/999999/stock", key, new { Stock = 3 })).StatusCode);
+        Assert.AreEqual(HttpStatusCode.NotFound, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Put,
+            "/api/bricks/owned/no-such-part/999999/notes", key, new { Location = "bin", Notes = (string?)null })).StatusCode);
+        Assert.AreEqual(HttpStatusCode.NotFound, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Post,
+            "/api/myminifigs/no-such-fig/instances", key)).StatusCode);
+    }
+
+    private record WhoAmI(string UserName, string? KeyName);
+    private record AdminKey(int Id, string UserName);
+}
+
+// Writes aimed at another user's set or minifig copy must report "not found" and leave their data alone.
+[TestClass]
+public class OwnershipTests
+{
+    private static WebApplicationFactory<Program> _factory = null!;
+    private static HttpClient _client = null!;
+
+    [ClassInitialize]
+    public static void Init(TestContext _)
+    {
+        Environment.SetEnvironmentVariable("JWT_SECRET", "test-secret-key-for-unit-tests-must-be-long-enough");
+        _factory = new WebApplicationFactory<Program>();
+        _client = _factory.CreateClient();
+    }
+
+    [ClassCleanup]
+    public static void Cleanup()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+    }
+
+    [TestMethod]
+    public async Task RemovingAnotherUsersSetCopy_ReturnsNotFound_AndKeepsIt()
+    {
+        var (ownerName, ownerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, otherJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var setId = $"t{Guid.NewGuid():N}"[..12];
+        await SeedAsync(async db =>
+        {
+            var ownerId = await db.Users.Where(u => u.UserName == ownerName).Select(u => u.UserId).SingleAsync();
+            db.Sets.Add(new Set { SetId = setId, Name = "Test", ManualUrl = "", DateModified = DateTime.UtcNow });
+            db.SetsOwned.Add(new SetOwned { UserId = ownerId, SetId = setId, SetIndex = 0 });
+        });
+
+        Assert.AreEqual(HttpStatusCode.NotFound, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Delete,
+            $"/api/sets/owned/{setId}/0?moveStock=true", otherJwt)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Delete,
+            $"/api/sets/owned/{setId}/0?moveStock=false", ownerJwt)).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task SettingPartStockOnAnotherUsersMinifigCopy_ReturnsNotFound()
+    {
+        var (ownerName, ownerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, otherJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var figId = $"fig-t{Guid.NewGuid():N}"[..16];
+        var partNum = $"p{Guid.NewGuid():N}"[..12];
+        await SeedAsync(async db =>
+        {
+            var ownerId = await db.Users.Where(u => u.UserName == ownerName).Select(u => u.UserId).SingleAsync();
+            db.Bricks.Add(new Brick { PartNum = partNum, ColorId = "0", Name = "Test part" });
+            db.Minifigs.Add(new Minifig { MinifigId = figId, Name = "Test fig", NumParts = 1, DateModified = DateTime.UtcNow });
+            db.MinifigBricks.Add(new MinifigBrick { MinifigId = figId, PartNum = partNum, ColorId = "0", Count = 1 });
+            db.MinifigOwneds.Add(new MinifigOwned { UserId = ownerId, MinifigId = figId, MinifigIndex = 0 });
+        });
+        var path = $"/api/myminifigs/{figId}/instances/0/parts/{partNum}/0";
+
+        Assert.AreEqual(HttpStatusCode.NotFound,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Patch, path, otherJwt, new { Stock = 1 })).StatusCode);
+        Assert.AreEqual(HttpStatusCode.NotFound, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Patch,
+            $"/api/myminifigs/{figId}/instances/0/parts/not-in-fig/0", ownerJwt, new { Stock = 1 })).StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK,
+            (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Patch, path, ownerJwt, new { Stock = 1 })).StatusCode);
+    }
+
+    private static async Task SeedAsync(Func<InventoryContext, Task> seed)
+    {
+        using var scope = _factory.Services.CreateScope();
+        await using var db = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InventoryContext>>().CreateDbContext();
+        await seed(db);
+        await db.SaveChangesAsync();
+    }
+}
+
+// Own factory with a tiny read budget so the limit is reachable without hammering the API.
+[TestClass]
+public class ApiKeyRateLimitTests
+{
+    private static WebApplicationFactory<Program> _factory = null!;
+    private static HttpClient _client = null!;
+
+    [ClassInitialize]
+    public static async Task Init(TestContext _)
+    {
+        Environment.SetEnvironmentVariable("JWT_SECRET", "test-secret-key-for-unit-tests-must-be-long-enough");
+        Environment.SetEnvironmentVariable("MCP_RATE_READS_PER_MIN", "2");
+        try
+        {
+            _factory = new WebApplicationFactory<Program>();
+            _client = _factory.CreateClient();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("MCP_RATE_READS_PER_MIN", null);
+        }
+        await ApiKeyTestHelper.SetMcpEnabledAsync(_factory, true);
+    }
+
+    [ClassCleanup]
+    public static void Cleanup()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+    }
+
+    [TestMethod]
+    public async Task KeysOfOneUser_ShareABudget_AndBrowserTrafficIsUnaffected()
+    {
+        var (_, jwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, keyA) = await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+        var (_, keyB) = await ApiKeyTestHelper.CreateKeyAsync(_client, jwt);
+
+        Assert.AreEqual(HttpStatusCode.OK, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/sets/my-owned", keyA)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/sets/my-owned", keyA)).StatusCode);
+
+        var limited = await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/sets/my-owned", keyB);
+        Assert.AreEqual(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        Assert.IsNotNull(limited.Headers.RetryAfter);
+
+        Assert.AreEqual(HttpStatusCode.OK, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, "/api/sets/my-owned", jwt)).StatusCode);
+    }
+}
+
+internal static class ApiKeyTestHelper
+{
+    public static async Task<(string Username, string Jwt)> RegisterAsync(HttpClient client)
+    {
+        var username = $"keyuser_{Guid.NewGuid():N}"[..32];
+        var resp = await client.PostAsJsonAsync("/api/auth/register", new { Username = username, Password = "testpass123" });
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+        return (username, (await resp.Content.ReadFromJsonAsync<TokenBody>())!.Token);
+    }
+
+    public static async Task<(int Id, string Key)> CreateKeyAsync(HttpClient client, string jwt)
+    {
+        var resp = await SendAsync(client, HttpMethod.Post, "/api/auth/me/keys", jwt, new { Name = "test" });
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+        var body = (await resp.Content.ReadFromJsonAsync<CreatedKey>())!;
+        return (body.Id, body.Key);
+    }
+
+    public static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method, string url, string bearer, object? body = null)
+    {
+        using var req = new HttpRequestMessage(method, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        if (body is not null) req.Content = JsonContent.Create(body);
+        return await client.SendAsync(req);
+    }
+
+    public static async Task SetMcpEnabledAsync(WebApplicationFactory<Program> factory, bool enabled)
+    {
+        using var scope = factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<Klods.Services.SettingsService>()
+            .SetAsync("mcp.enabled", enabled ? "true" : "false");
+    }
+
+    public static async Task UpdateUserAsync(WebApplicationFactory<Program> factory, string username, Func<IQueryable<User>, Task> update)
+    {
+        using var scope = factory.Services.CreateScope();
+        await using var db = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InventoryContext>>().CreateDbContext();
+        await update(db.Users.Where(u => u.UserName == username));
+    }
+
+    private record TokenBody(string Token);
+    private record CreatedKey(int Id, string Key);
+}
