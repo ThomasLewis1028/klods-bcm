@@ -25,12 +25,7 @@ public class SetTools(KlodsApiClient api)
         [Description("Only return bricks and minifigs this copy is still short of.")] bool onlyMissing = false)
     {
         var bom = await api.GetAsync($"/api/bom/{Segment(setId)}/{setIndex}", NoCopy);
-        if (onlyMissing && bom is JsonObject obj)
-        {
-            Keep(obj, "bricks", b => (int?)b["setStock"] < (int?)b["count"]);
-            Keep(obj, "minifigs", m => (int?)m["ownedStock"] < (int?)m["count"]);
-        }
-        return bom?.ToJsonString() ?? "null";
+        return OnlyMissing(bom, onlyMissing);
     }
 
     [McpServerTool(Name = "add_set_copy", Destructive = false)]
@@ -110,6 +105,16 @@ public class SetTools(KlodsApiClient api)
         [Description("Substitution id from list_substitutions.")] int substitutionId) =>
         api.WriteAsync(HttpMethod.Delete, $"/api/bom/{Segment(setId)}/{setIndex}/substitutions/{substitutionId}",
             null, "Substitution removed.", "Substitution not found.");
+
+    internal static string OnlyMissing(JsonNode? bom, bool onlyMissing)
+    {
+        if (onlyMissing && bom is JsonObject obj)
+        {
+            Keep(obj, "bricks", b => (int?)b["setStock"] < (int?)b["count"]);
+            Keep(obj, "minifigs", m => (int?)m["ownedStock"] < (int?)m["count"]);
+        }
+        return bom?.ToJsonString() ?? "null";
+    }
 
     private static void Keep(JsonObject obj, string property, Func<JsonNode, bool> predicate)
     {

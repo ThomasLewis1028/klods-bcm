@@ -122,15 +122,9 @@ public static class BricksEndpoints
         }).AllowApiKey();
 
         // Current user's loose stock for a single brick (for the detail dialog).
-        group.MapGet("/{partNum}/{colorId}/owned", async (
+        group.MapGet("/{partNum}/{colorId}/owned", (
             string partNum, string colorId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-            var bo = await db.Set<BrickOwned>().AsNoTracking()
-                .FirstOrDefaultAsync(b => b.UserId == userId && b.PartNum == partNum && b.ColorId == colorId);
-            return Results.Ok(new OwnedStockDto(bo?.Stock ?? 0, bo?.Location, bo?.Notes));
-        }).AllowApiKey();
+            OwnedStockAsync(dbFactory, http.UserId(), partNum, colorId, withNotes: true)).AllowApiKey();
 
         // Set the location + notes for the user's loose stock of a brick. Upserts (a needed-but-unowned
         // brick has no BrickOwned row yet, but the user may still want to note where they'll store it).
@@ -187,6 +181,15 @@ public static class BricksEndpoints
             updater.UpdateBrickOwned(bo, userId);
             return Results.Ok();
         });
+    }
+
+    internal static async Task<IResult> OwnedStockAsync(
+        IDbContextFactory<InventoryContext> dbFactory, int userId, string partNum, string colorId, bool withNotes)
+    {
+        await using var db = dbFactory.CreateDbContext();
+        var bo = await db.Set<BrickOwned>().AsNoTracking()
+            .FirstOrDefaultAsync(b => b.UserId == userId && b.PartNum == partNum && b.ColorId == colorId);
+        return Results.Ok(new OwnedStockDto(bo?.Stock ?? 0, withNotes ? bo?.Location : null, withNotes ? bo?.Notes : null));
     }
 
     // Whitelisted server-side sort. Default: most-used (set count) first. Used is a per-page aggregate, not sortable.

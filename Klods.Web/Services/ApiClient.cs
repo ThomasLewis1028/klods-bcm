@@ -466,6 +466,24 @@ public class ApiClient(IHttpClientFactory factory, AuthService auth, IConfigurat
     // ── Users ────────────────────────────────────────────────────────────────
 
     public Task<UserStatsDto[]?> GetUsersAsync() => GetAsync<UserStatsDto[]>("/api/users");
+    public Task<UserStatsDto?> GetUserAsync(int userId) => GetAsync<UserStatsDto>($"/api/users/{userId}");
+    public Task<MyOwnedSetDto[]?> GetUserOwnedSetsAsync(int userId) => GetAsync<MyOwnedSetDto[]>($"/api/users/{userId}/sets");
+    public Task<BomResponseDto?> GetUserBomAsync(int userId, string setId, int setIndex)
+        => GetAsync<BomResponseDto>($"/api/users/{userId}/bom/{Uri.EscapeDataString(setId)}/{setIndex}");
+    public Task<SubstitutionDto[]?> GetUserSubstitutionsAsync(int userId, string setId, int setIndex)
+        => GetAsync<SubstitutionDto[]>($"/api/users/{userId}/bom/{Uri.EscapeDataString(setId)}/{setIndex}/substitutions");
+    public Task<BomMinifigInstanceDto[]?> GetUserBomMinifigInstancesAsync(int userId, string setId, int setIndex, string minifigId)
+        => GetAsync<BomMinifigInstanceDto[]>($"/api/users/{userId}/bom/{Uri.EscapeDataString(setId)}/{setIndex}/minifigs/{Uri.EscapeDataString(minifigId)}/instances");
+    public Task<MyBrickDto[]?> GetUserBricksAsync(int userId) => GetAsync<MyBrickDto[]>($"/api/users/{userId}/bricks");
+    public Task<OwnedStockDto?> GetUserBrickStockAsync(int userId, string p, string c)
+        => GetAsync<OwnedStockDto>($"/api/users/{userId}/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}");
+    public Task<MyBrickSetDetailDto[]?> GetUserBrickSetsAsync(int userId, string p, string c)
+        => GetAsync<MyBrickSetDetailDto[]>($"/api/users/{userId}/bricks/{Uri.EscapeDataString(p)}/{Uri.EscapeDataString(c)}/sets");
+    public Task<MyMinifigDto[]?> GetUserMinifigsAsync(int userId) => GetAsync<MyMinifigDto[]>($"/api/users/{userId}/minifigs");
+    public Task<MinifigInstanceDto[]?> GetUserMinifigInstancesAsync(int userId, string id)
+        => GetAsync<MinifigInstanceDto[]>($"/api/users/{userId}/minifigs/{Uri.EscapeDataString(id)}/instances");
+    public Task<LooseCountDto?> GetUserMinifigLooseCountAsync(int userId, string id)
+        => GetAsync<LooseCountDto>($"/api/users/{userId}/minifigs/{Uri.EscapeDataString(id)}/loose-count");
 
     // ── Sets resolve/import (called from dialogs) ─────────────────────────────
 

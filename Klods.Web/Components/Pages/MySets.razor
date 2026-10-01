@@ -1,4 +1,5 @@
 @page "/my/sets"
+@page "/users/{OwnerId:int}/sets"
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
 @inject AuthService AuthService
@@ -14,9 +15,18 @@
 @attribute [Authorize]
 @implements IDisposable
 
-<PageTitle>My Sets</PageTitle>
+<PageTitle>@Heading</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">My Sets</MudText>
+@if (IsViewing && !_isLoading)
+{
+    <UserCollectionHeader User="_owner" Active="sets"/>
+    if (_owner is null)
+    {
+        return;
+    }
+}
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight: 700;">@Heading</MudText>
 
 @if (_isLoading)
 {
@@ -62,23 +72,26 @@
 
     @* Toolbar: Add Set + view toggle *@
     <MudItem xs="12">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="OpenAddSetDialog">
-                    Add Set
-                </MudButton>
-                <MudMenu Label="Export" StartIcon="@Icons.Material.Filled.Download"
-                         EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined" Size="Size.Small"
-                         Disabled="@(_setInfos.Count == 0 || _exporting)">
-                    <MudMenuItem OnClick="@(() => ExportParts(false, "xlsx"))" Icon="@Icons.Material.Filled.Image">All parts — Excel (with images)</MudMenuItem>
-                    <MudMenuItem OnClick="@(() => ExportParts(true, "xlsx"))" Icon="@Icons.Material.Filled.Image">Missing parts — Excel (with images)</MudMenuItem>
-                    <MudDivider/>
-                    <MudMenuItem OnClick="@(() => ExportParts(false, "csv"))" Icon="@Icons.Material.Filled.TableChart">All parts — CSV</MudMenuItem>
-                    <MudMenuItem OnClick="@(() => ExportParts(true, "csv"))" Icon="@Icons.Material.Filled.TableChart">Missing parts — CSV</MudMenuItem>
-                </MudMenu>
-            </MudStack>
+        <MudStack Row Justify="@(IsViewing ? Justify.FlexEnd : Justify.SpaceBetween)" AlignItems="AlignItems.Center" Class="mb-2">
+            @if (!IsViewing)
+            {
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="OpenAddSetDialog">
+                        Add Set
+                    </MudButton>
+                    <MudMenu Label="Export" StartIcon="@Icons.Material.Filled.Download"
+                             EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined" Size="Size.Small"
+                             Disabled="@(_setInfos.Count == 0 || _exporting)">
+                        <MudMenuItem OnClick="@(() => ExportParts(false, "xlsx"))" Icon="@Icons.Material.Filled.Image">All parts — Excel (with images)</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ExportParts(true, "xlsx"))" Icon="@Icons.Material.Filled.Image">Missing parts — Excel (with images)</MudMenuItem>
+                        <MudDivider/>
+                        <MudMenuItem OnClick="@(() => ExportParts(false, "csv"))" Icon="@Icons.Material.Filled.TableChart">All parts — CSV</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ExportParts(true, "csv"))" Icon="@Icons.Material.Filled.TableChart">Missing parts — CSV</MudMenuItem>
+                    </MudMenu>
+                </MudStack>
+            }
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                 @if (_view == "grid")
                 {
@@ -103,14 +116,17 @@
             <MudPaper Class="pa-8" Elevation="0">
                 <MudStack AlignItems="AlignItems.Center" Spacing="3">
                     <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Large" Color="Color.Secondary"/>
-                    <MudText Typo="Typo.h6">Your collection is empty</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
-                        Add your first set to get started tracking your collection.
-                    </MudText>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddSetDialog">
-                        Add Set
-                    </MudButton>
+                    <MudText Typo="Typo.h6">@(IsViewing ? $"{_owner?.UserName}'s collection is empty" : "Your collection is empty")</MudText>
+                    @if (!IsViewing)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width: 480px;">
+                            Add your first set to get started tracking your collection.
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddSetDialog">
+                            Add Set
+                        </MudButton>
+                    }
                 </MudStack>
             </MudPaper>
         }
@@ -218,7 +234,7 @@
                             </div>
                         </CellTemplate>
                     </TemplateColumn>
-                    <TemplateColumn Title="Delete" Editable="false">
+                    <TemplateColumn Title="Delete" Editable="false" Hidden="IsViewing">
                         <CellTemplate>
                             <div @onclick:stopPropagation="true">
                                 <MudIconButton
@@ -270,6 +286,17 @@
 </style>
 
 @code {
+    [Parameter] public int? OwnerId { get; set; }
+
+    private ApiClient.UserStatsDto? _owner;
+    private bool _initialized;
+    private int? _initializedFor;
+
+    private int? ViewedUserId => OwnerId is int id && id != AuthService.CurrentUser?.UserId ? id : null;
+    private bool IsViewing => ViewedUserId.HasValue;
+    private string BasePath => IsViewing ? $"/users/{OwnerId}/sets" : "/my/sets";
+    private string Heading => IsViewing ? (_owner is null ? "Sets" : $"{_owner.UserName}'s Sets") : "My Sets";
+
     private List<SetInfo> _setInfos = [];
     private bool _isLoading = true;
 
@@ -348,9 +375,34 @@
         AuthService.SessionRestored += OnSessionRestored;
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initialized && _initializedFor == OwnerId) return;
+        await InitializeAsync();
+    }
+
+    private async Task InitializeAsync()
     {
         ParseUrl();
+        if (OwnerId is int id && id == AuthService.CurrentUser?.UserId)
+        {
+            _initialized = false;
+            Nav.NavigateTo("/my/sets" + new Uri(Nav.Uri).Query, replace: true);
+            return;
+        }
+        _initialized = true;
+        _initializedFor = OwnerId;
+        _isLoading = true;
+        _owner = null;
+        if (ViewedUserId is int uid)
+        {
+            _owner = await Api.GetUserAsync(uid);
+            if (_owner is null)
+            {
+                _isLoading = false;
+                return;
+            }
+        }
         await LoadDataAsync();
     }
 
@@ -363,8 +415,7 @@
     private void OnSessionRestored() => InvokeAsync(async () =>
     {
         if (AuthService.CurrentUser == null) { Nav.NavigateTo("/not-authorized"); return; }
-        ParseUrl();
-        await LoadDataAsync();
+        await InitializeAsync();
         StateHasChanged();
     });
 
@@ -395,13 +446,13 @@
         if (_pageSize != 25) parts.Add($"size={_pageSize}");
         if (_view != "grid") parts.Add($"view={_view}");
         if (_page > 1) parts.Add($"page={_page}");
-        Nav.NavigateTo("/my/sets" + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
+        Nav.NavigateTo(BasePath + (parts.Count > 0 ? "?" + string.Join("&", parts) : ""));
     }
 
     // ── Data ──────────────────────────────────────────────────────────────────
     private async Task LoadDataAsync()
     {
-        var owned = await Api.GetMyOwnedSetsAsync();
+        var owned = ViewedUserId is int uid ? await Api.GetUserOwnedSetsAsync(uid) : await Api.GetMyOwnedSetsAsync();
         _setInfos = owned?.Select(s => new SetInfo { Set = s, OwnedSets = s.Instances }).ToList() ?? [];
         _isLoading = false;
         StateHasChanged();
@@ -475,7 +526,8 @@
             { x => x.SubPercent, row.Instance.SubPercent },
             { x => x.Substituted, row.Instance.Substituted },
             { x => x.Location, row.Instance.Location },
-            { x => x.Notes, row.Instance.Notes }
+            { x => x.Notes, row.Instance.Notes },
+            { x => x.OwnerId, ViewedUserId }
         };
         var dialog = await DialogService.ShowAsync<SetDetailDialog>(row.Set.Name, parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
@@ -490,7 +542,8 @@
         {
             { x => x.SetId, row.Set.SetId },
             { x => x.SetImg, row.Set.SetImg },
-            { x => x.SetIndex, row.Instance.SetIndex }
+            { x => x.SetIndex, row.Instance.SetIndex },
+            { x => x.OwnerId, ViewedUserId }
         };
         var dialog = await DialogService.ShowAsync<BomDialog>("Bill of Materials", parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseOnEscapeKey = true });

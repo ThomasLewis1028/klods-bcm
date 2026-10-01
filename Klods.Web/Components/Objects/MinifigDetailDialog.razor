@@ -32,32 +32,42 @@
                         <div class="fig-card @(inst.IsComplete ? "is-complete" : "is-incomplete")">
                             <div class="fig-card-head" @onclick="() => inst.Expanded = !inst.Expanded">
                                 <div class="fig-card-loc" @onclick:stopPropagation="true">
-                                    <MudMenu Dense="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
-                                        <ActivatorContent>
-                                            <span class="fig-loc-chip @(inst.IsLoose ? "loose" : "onset")">
-                                                <MudIcon Icon="@(inst.IsLoose ? Icons.Material.Filled.Inventory2 : Icons.Material.Filled.Widgets)" Size="Size.Small"/>
-                                                <span class="fig-loc-text">@inst.Location</span>
-                                                <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small"/>
-                                            </span>
-                                        </ActivatorContent>
-                                        <ChildContent>
-                                            <MudText Typo="Typo.caption" Class="px-4 py-1" Style="opacity:.6;">Move this copy to…</MudText>
-                                            @if (!inst.IsLoose)
-                                            {
-                                                <MudMenuItem Icon="@Icons.Material.Filled.Inventory2" OnClick="() => Reassign(inst, null, null)">Loose</MudMenuItem>
-                                            }
-                                            @foreach (var c in _assignableCopies)
-                                            {
-                                                <MudMenuItem Icon="@Icons.Material.Filled.Widgets" OnClick="() => Reassign(inst, c.SetId, c.SetIndex)">@c.SetName #@c.SetIndex</MudMenuItem>
-                                            }
-                                            @if (inst.IsLoose && _assignableCopies.Count == 0)
-                                            {
-                                                <MudMenuItem Disabled="true">No set copies need one</MudMenuItem>
-                                            }
-                                            <MudDivider/>
-                                            <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => Remove(inst)">Remove copy</MudMenuItem>
-                                        </ChildContent>
-                                    </MudMenu>
+                                    @if (OwnerId is null)
+                                    {
+                                        <MudMenu Dense="true" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+                                            <ActivatorContent>
+                                                <span class="fig-loc-chip @(inst.IsLoose ? "loose" : "onset")">
+                                                    <MudIcon Icon="@(inst.IsLoose ? Icons.Material.Filled.Inventory2 : Icons.Material.Filled.Widgets)" Size="Size.Small"/>
+                                                    <span class="fig-loc-text">@inst.Location</span>
+                                                    <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small"/>
+                                                </span>
+                                            </ActivatorContent>
+                                            <ChildContent>
+                                                <MudText Typo="Typo.caption" Class="px-4 py-1" Style="opacity:.6;">Move this copy to…</MudText>
+                                                @if (!inst.IsLoose)
+                                                {
+                                                    <MudMenuItem Icon="@Icons.Material.Filled.Inventory2" OnClick="() => Reassign(inst, null, null)">Loose</MudMenuItem>
+                                                }
+                                                @foreach (var c in _assignableCopies)
+                                                {
+                                                    <MudMenuItem Icon="@Icons.Material.Filled.Widgets" OnClick="() => Reassign(inst, c.SetId, c.SetIndex)">@c.SetName #@c.SetIndex</MudMenuItem>
+                                                }
+                                                @if (inst.IsLoose && _assignableCopies.Count == 0)
+                                                {
+                                                    <MudMenuItem Disabled="true">No set copies need one</MudMenuItem>
+                                                }
+                                                <MudDivider/>
+                                                <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => Remove(inst)">Remove copy</MudMenuItem>
+                                            </ChildContent>
+                                        </MudMenu>
+                                    }
+                                    else
+                                    {
+                                        <span class="fig-loc-chip @(inst.IsLoose ? "loose" : "onset")" style="cursor:default; padding-right:8px;">
+                                            <MudIcon Icon="@(inst.IsLoose ? Icons.Material.Filled.Inventory2 : Icons.Material.Filled.Widgets)" Size="Size.Small"/>
+                                            <span class="fig-loc-text">@inst.Location</span>
+                                        </span>
+                                    }
                                 </div>
 
                                 <div class="fig-card-status">
@@ -80,8 +90,15 @@
                                                 <span class="fig-part-color">@p.ColorName</span>
                                             </div>
                                             <div class="fig-part-edit" @onclick:stopPropagation="true">
-                                                <MudNumericField T="int" Value="@p.Owned" ValueChanged="@(v => SavePart(inst, p, v))"
-                                                                 Min="0" Variant="Variant.Text" Margin="Margin.Dense" Style="width:60px;"/>
+                                                @if (OwnerId is null)
+                                                {
+                                                    <MudNumericField T="int" Value="@p.Owned" ValueChanged="@(v => SavePart(inst, p, v))"
+                                                                     Min="0" Variant="Variant.Text" Margin="Margin.Dense" Style="width:60px;"/>
+                                                }
+                                                else
+                                                {
+                                                    <span>@p.Owned</span>
+                                                }
                                                 <span class="fig-part-need">/ @p.Need</span>
                                             </div>
                                         </div>
@@ -94,13 +111,23 @@
 
                 @if (_instances.Count == 0)
                 {
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="fig-empty">No copies yet — add one below.</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="fig-empty">@(OwnerId is null ? "No copies yet — add one below." : "No copies.")</MudText>
                 }
-                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddLoose" Class="fig-add">Add a loose copy</MudButton>
+                @if (OwnerId is null)
+                {
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddLoose" Class="fig-add">Add a loose copy</MudButton>
+                }
             }
             else
             {
-                @if (AuthService.CurrentUser != null)
+                @if (OwnerId is not null)
+                {
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                        <MudText>Loose owned:</MudText>
+                        <MudText Typo="Typo.h6">@_count</MudText>
+                    </MudStack>
+                }
+                else if (AuthService.CurrentUser != null)
                 {
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
                         <MudText>Loose owned:</MudText>
@@ -193,6 +220,9 @@
     /// <summary>When true (opened from My Minifigs), show the per-instance workbench instead of the read-only composition.</summary>
     [Parameter] public bool OwnedContext { get; set; }
 
+    /// <summary>Set when viewing another user's minifig: read-only, reads through the user routes.</summary>
+    [Parameter] public int? OwnerId { get; set; }
+
     private bool _ownedMode;
     private bool _loading = true;
 
@@ -222,14 +252,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _ownedMode = OwnedContext && AuthService.CurrentUser != null;
+        _ownedMode = OwnedContext && (OwnerId is not null || AuthService.CurrentUser != null);
         if (_ownedMode)
         {
             await LoadInstancesAsync();
         }
         else
         {
-            _count = (await Api.GetMyMinifigLooseCountAsync(Minifig.MinifigId))?.Count ?? 0;
+            _count = (OwnerId is int uid
+                ? await Api.GetUserMinifigLooseCountAsync(uid, Minifig.MinifigId)
+                : await Api.GetMyMinifigLooseCountAsync(Minifig.MinifigId))?.Count ?? 0;
             _parts = (await Api.GetMinifigBricksAsync(Minifig.MinifigId))?.ToList() ?? [];
             _loading = false;
         }
@@ -241,7 +273,9 @@
         StateHasChanged();
 
         var expanded = _instances.Where(i => i.Expanded).Select(i => i.Index).ToHashSet();
-        var insts = await Api.GetMinifigInstancesAsync(Minifig.MinifigId) ?? [];
+        var insts = (OwnerId is int uid
+            ? await Api.GetUserMinifigInstancesAsync(uid, Minifig.MinifigId)
+            : await Api.GetMinifigInstancesAsync(Minifig.MinifigId)) ?? [];
         _instances = insts.Select(i => new InstanceVm
         {
             Index = i.Index, SetId = i.SetId, SetIndex = i.SetIndex, SetName = i.SetName, SetImg = i.SetImg,
@@ -252,7 +286,8 @@
                 ColorName = p.ColorName, HexColor = p.HexColor, Need = p.Need, Owned = p.Owned
             }).ToList()
         }).ToList();
-        _assignableCopies = (await Api.GetAssignableCopiesAsync(Minifig.MinifigId) ?? []).ToList();
+        if (OwnerId is null)
+            _assignableCopies = (await Api.GetAssignableCopiesAsync(Minifig.MinifigId) ?? []).ToList();
 
         _loading = false;
         StateHasChanged();

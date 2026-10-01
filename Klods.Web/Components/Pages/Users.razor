@@ -1,6 +1,8 @@
 @page "/users"
 @inject ApiClient Api
 @inject ImageStorageService ImageStorage
+@inject AuthService AuthService
+@inject NavigationManager Nav
 @using Klods.Services
 @using Klods.Components.Objects
 @using Color = MudBlazor.Color
@@ -20,7 +22,8 @@
 }
 
 <MudPaper Elevation="2">
-    <MudDataGrid T="ApiClient.UserStatsDto" Items="@_rows" SortMode="SortMode.Multiple" QuickFilter="FilterFunc">
+    <MudDataGrid T="ApiClient.UserStatsDto" Items="@_rows" SortMode="SortMode.Multiple" QuickFilter="FilterFunc"
+                 Hover="true" RowClass="cursor-pointer" RowClick="@(args => OpenUser(args.Item))">
         <ToolBarContent>
             <MudText Typo="Typo.h6">Users</MudText>
             <MudSpacer/>
@@ -93,6 +96,9 @@
         _rows = (await Api.GetUsersAsync())?.ToList() ?? [];
         _isLoading = false;
     }
+
+    private void OpenUser(ApiClient.UserStatsDto user)
+        => Nav.NavigateTo(user.UserId == AuthService.CurrentUser?.UserId ? "/my/sets" : $"/users/{user.UserId}/sets");
 
     private bool FilterFunc(ApiClient.UserStatsDto row) =>
         string.IsNullOrWhiteSpace(_search) ||

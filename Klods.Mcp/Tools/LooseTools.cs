@@ -113,7 +113,7 @@ public class LooseTools(KlodsApiClient api)
             new { Stock = stock }, "Stock updated.", "You don't own that minifig copy, or that part isn't in this minifig.");
 
     // The API returns these collections whole; filter and page here so a large collection doesn't flood the model.
-    private static string Page(JsonNode? list, string? query, string[] fields, int page, int pageSize,
+    internal static string Page(JsonNode? list, string? query, string[] fields, int page, int pageSize,
         Func<JsonNode, bool>? keep = null)
     {
         var items = (list as JsonArray ?? []).Where(i => i is not null).Select(i => i!);
