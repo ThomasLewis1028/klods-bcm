@@ -1,7 +1,7 @@
 name: Release
 
 # Tag a commit (e.g. `git tag v1.0.0 && git push origin v1.0.0`) to build and publish
-# the API and Web images to GitHub Container Registry and cut a GitHub release.
+# the API, Web, and MCP images to GitHub Container Registry and cut a GitHub release.
 on:
   push:
     tags: ['v*.*.*']
@@ -23,6 +23,8 @@ jobs:
             dockerfile: Klods.Api/Dockerfile
           - app: web
             dockerfile: Klods.Web/Dockerfile
+          - app: mcp
+            dockerfile: Klods.Mcp/Dockerfile
     steps:
       - uses: actions/checkout@v4
 

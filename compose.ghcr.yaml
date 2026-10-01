@@ -77,6 +77,10 @@ services:
       # browser here after OAuth sign-in. If unset it would fall back to localhost
       # and send users to their own machine, so Compose refuses to start without it.
       BLAZOR_ORIGIN: ${BLAZOR_ORIGIN:?set BLAZOR_ORIGIN to the public URL of the web app, e.g. https://klods.example.net}
+      # MCP key limits — only matter if you run klods_mcp. Counted per user across all their keys.
+      MCP_RATE_READS_PER_MIN: ${MCP_RATE_READS_PER_MIN:-60}
+      MCP_RATE_WRITES_PER_MIN: ${MCP_RATE_WRITES_PER_MIN:-30}
+      MCP_MAX_KEYS_PER_USER: ${MCP_MAX_KEYS_PER_USER:-5}
       # OAuth providers — each is skipped unless BOTH its id and secret are set.
       # Register {API_PUBLIC_URL}/signin-<provider> as the redirect URI in each console.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -132,6 +136,29 @@ services:
       start_period: 30s
     volumes:
       - klods-dp-keys-volume:/home/app/dp-keys:rw
+    networks: [klods-network]
+
+  # Optional MCP server — only started when the "mcp" profile is enabled:
+  #   docker compose -f compose.ghcr.yaml --profile mcp up -d
+  # (Portainer: add COMPOSE_PROFILES=mcp to the stack's environment variables.)
+  # An admin must also switch on "MCP access" on the Admin page before users can create keys.
+  # It holds no secrets: every tool call is forwarded to klods_api with the caller's own MCP key.
+  klods_mcp:
+    image: ghcr.io/thomaslewis1028/klods-mcp:latest
+    profiles: [mcp]
+    restart: unless-stopped
+    environment:
+      KLODS_API_URL: http://klods_api:8080
+    depends_on:
+      klods_api: { condition: service_healthy }
+    ports:
+      - "5106:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks: [klods-network]
 
 volumes:
