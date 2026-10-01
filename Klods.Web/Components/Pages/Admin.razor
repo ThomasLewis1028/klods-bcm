@@ -1,6 +1,8 @@
 @page "/admin"
 @inject ApiClient Api
 @inject AuthService AuthService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 @inject ImageStorageService ImageStorage
 @using Klods.Services
 @using Microsoft.AspNetCore.Components.Forms
@@ -111,6 +113,49 @@
         </MudText>
         <MudSwitch T="bool" Value="_registrationAutoApprove" ValueChanged="ToggleAutoApprove" Color="Color.Primary"
                    Label="@(_registrationAutoApprove ? "Auto-approve new accounts" : "Manual approval required")"/>
+    </MudPaper>
+
+    <MudPaper Elevation="2" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">MCP Access</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            When off, every MCP key is rejected and users cannot create new ones. Turning it back on restores
+            existing keys. Keys never expire; revoking one deletes it immediately.
+        </MudText>
+        <MudSwitch T="bool" Value="_mcpEnabled" ValueChanged="ToggleMcp" Color="Color.Primary"
+                   Label="@(_mcpEnabled ? "MCP access enabled" : "MCP access disabled")"/>
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">API keys</MudText>
+        @if (_apiKeys.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">No keys have been created.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
+                <thead>
+                    <tr><th>User</th><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var key in _apiKeys)
+                {
+                    var k = key;
+                    <tr>
+                        <td>@k.UserName</td>
+                        <td>@k.Name</td>
+                        <td style="font-family: monospace;">@k.Prefix…</td>
+                        <td style="white-space: nowrap;">@k.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td style="white-space: nowrap;">@(k.LastUsedAt is { } used ? used.ToLocalTime().ToString("g") : "never")</td>
+                        <td>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="@(() => RevokeApiKey(k))">
+                                Revoke
+                            </MudButton>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </MudSimpleTable>
+        }
     </MudPaper>
 
     <MudPaper Elevation="2" Class="pa-4">
@@ -376,6 +421,8 @@
     private string _search = string.Empty;
     private bool _isLoading = true;
     private bool _registrationAutoApprove = true;
+    private bool _mcpEnabled;
+    private List<ApiClient.AdminApiKeyDto> _apiKeys = [];
 
     private IReadOnlyList<IBrowserFile>? _bulkFiles;
     private bool _bulkRunning;
@@ -442,6 +489,11 @@
         var regSettings = await Api.GetRegistrationSettingsAsync();
         if (regSettings != null)
             _registrationAutoApprove = regSettings.AutoApprove;
+
+        var mcpSettings = await Api.GetMcpSettingsAsync();
+        if (mcpSettings != null)
+            _mcpEnabled = mcpSettings.Enabled;
+        _apiKeys = (await Api.GetAdminApiKeysAsync())?.ToList() ?? [];
 
         _themes = (await Api.GetThemeVisibilityAsync())?.ToList() ?? [];
         _hiddenThemeIds = _themes.Where(t => t.Hidden).Select(t => t.Id).ToHashSet();
@@ -685,6 +737,32 @@
     {
         _registrationAutoApprove = value;
         await Api.SaveRegistrationSettingsAsync(value);
+    }
+
+    private async Task ToggleMcp(bool value)
+    {
+        var previous = _mcpEnabled;
+        _mcpEnabled = value;
+        if (!await Api.SaveMcpSettingsAsync(value))
+        {
+            _mcpEnabled = previous;
+            Snackbar.Add("Could not save MCP access setting.", Severity.Error);
+        }
+    }
+
+    private async Task RevokeApiKey(ApiClient.AdminApiKeyDto key)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Revoke key",
+            $"Revoke “{key.Name}” belonging to {key.UserName}? It stops working immediately.",
+            yesText: "Revoke", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        if (await Api.RevokeAdminApiKeyAsync(key.Id))
+            Snackbar.Add($"Key “{key.Name}” revoked.", Severity.Success);
+        else
+            Snackbar.Add("Could not revoke that key. It may already be gone.", Severity.Warning);
+        _apiKeys = (await Api.GetAdminApiKeysAsync())?.ToList() ?? [];
     }
 
     private async Task ApproveUser(ApiClient.AdminUserDto user)

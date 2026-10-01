@@ -5,6 +5,7 @@ using System.Text;
 using Klods.Api.Auth;
 using Klods.Api.Endpoints;
 using Klods.Database;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -68,6 +69,12 @@ var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.Authentic
         // waiting for the token to expire.
         options.Events = new JwtBearerEvents
         {
+            // MCP keys share the Bearer header; leave them to the ApiKey scheme instead of failing JWT parsing.
+            OnMessageReceived = context =>
+            {
+                if (ApiKeyAuth.TryGetKey(context.Request, out _)) context.NoResult();
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 if (!int.TryParse(context.Principal?.FindFirstValue("sub"), out var userId))
@@ -102,7 +109,8 @@ var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.Authentic
         options.Cookie.Name     = "ExternalLogin";
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.ExpireTimeSpan  = TimeSpan.FromMinutes(10);
-    });
+    })
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuth.Handler>(ApiKeyAuth.Scheme, null);
 
 var enabledProviders = new List<string>();
 
@@ -144,9 +152,19 @@ builder.Services.AddSingleton(new PendingAuthService { EnabledProviders = enable
 // Login/register are brute-forceable and spammable without this. Keyed on remote IP — note this
 // trusts X-Forwarded-For as configured below, so it's only meaningful behind a proxy that strips
 // client-supplied forwarding headers (or with no proxy at all).
+// MCP key requests are keyed on the user, not the key or IP: extra keys don't buy extra quota, and
+// every MCP call arrives from the MCP container's address anyway. Browser (JWT) traffic is unlimited.
+var mcpReadsPerMinute  = builder.Configuration.GetValue("MCP_RATE_READS_PER_MIN", 60);
+var mcpWritesPerMinute = builder.Configuration.GetValue("MCP_RATE_WRITES_PER_MIN", 30);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = (context, _) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        return ValueTask.CompletedTask;
+    };
     options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
         httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
@@ -155,11 +173,29 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));
+    options.AddPolicy(ApiKeyAuth.RateLimitPolicy, httpContext =>
+    {
+        if (!ApiKeyAuth.IsApiKeyPrincipal(httpContext.User))
+            return RateLimitPartition.GetNoLimiter("jwt");
+
+        var isRead = HttpMethods.IsGet(httpContext.Request.Method);
+        return RateLimitPartition.GetFixedWindowLimiter(
+            $"{httpContext.User.FindFirstValue("sub")}:{(isRead ? "read" : "write")}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = isRead ? mcpReadsPerMinute : mcpWritesPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
 });
 
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("Admin", policy => policy.RequireRole("Admin"));
+    options.AddPolicy(ApiKeyAuth.Policy, policy => policy
+        .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, ApiKeyAuth.Scheme)
+        .RequireAuthenticatedUser());
 });
 
 // ── CORS ───────────────────────────────────────────────────────────────────
@@ -231,10 +267,12 @@ if (!string.IsNullOrWhiteSpace(trustedProxyNetworks))
 app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.UseCors();
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+// After authorization: the MCP key policy partitions on the principal that ApiKeyAuth.Policy authenticates.
+app.UseRateLimiter();
 
+app.MapApiKeys();
 app.MapOAuth();
 app.MapAuth();
 app.MapAuthProfile();

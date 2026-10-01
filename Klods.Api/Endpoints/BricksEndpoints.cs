@@ -72,7 +72,7 @@ public static class BricksEndpoints
             }).ToList();
 
             return Results.Ok(new BrickCatalogPage(items, total));
-        });
+        }).AllowApiKey();
 
         group.MapGet("/owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
         {
@@ -119,7 +119,7 @@ public static class BricksEndpoints
                 .ToListAsync();
 
             return Results.Ok(new SetForBrickPage(items, total));
-        });
+        }).AllowApiKey();
 
         // Current user's loose stock for a single brick (for the detail dialog).
         group.MapGet("/{partNum}/{colorId}/owned", async (
@@ -130,7 +130,7 @@ public static class BricksEndpoints
             var bo = await db.Set<BrickOwned>().AsNoTracking()
                 .FirstOrDefaultAsync(b => b.UserId == userId && b.PartNum == partNum && b.ColorId == colorId);
             return Results.Ok(new OwnedStockDto(bo?.Stock ?? 0, bo?.Location, bo?.Notes));
-        });
+        }).AllowApiKey();
 
         // Set the location + notes for the user's loose stock of a brick. Upserts (a needed-but-unowned
         // brick has no BrickOwned row yet, but the user may still want to note where they'll store it).
@@ -145,6 +145,7 @@ public static class BricksEndpoints
                 .FirstOrDefaultAsync(b => b.UserId == userId && b.PartNum == partNum && b.ColorId == colorId);
             if (bo is null)
             {
+                if (!await db.Bricks.AnyAsync(b => b.PartNum == partNum && b.ColorId == colorId)) return Results.NotFound();
                 bo = new BrickOwned { UserId = userId, PartNum = partNum, ColorId = colorId, Stock = 0 };
                 db.Set<BrickOwned>().Add(bo);
             }
@@ -152,7 +153,7 @@ public static class BricksEndpoints
             bo.Notes = NotesRequest.Normalize(req.Notes);
             await db.SaveChangesAsync();
             return Results.Ok();
-        });
+        }).AllowApiKey();
 
         group.MapPost("/resolve", async (ResolveBrickRequest req, ImportData importer) =>
         {

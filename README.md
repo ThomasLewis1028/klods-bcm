@@ -42,6 +42,7 @@ It's open source under the MIT license, so if you want to fix my late-night, alc
 - Fully self-hosted. As much as I'd love to make money on a side project, I care a lot more about providing my talents to the open source community when possible.
 - Relatively easy to build and deploy with Docker Compose (thanks dad).
 - Stores data in a postgres database, which makes it easy to look at the data and fix things if needed.
+- Optional MCP server so AI agents can read and update your collection with a per-user key — see [MCP server](#mcp-server-optional).
 - It's neat (I am not biased).
 
 [//]: # (### Screenshots)
@@ -84,6 +85,29 @@ docker compose -f compose.ghcr.yaml up -d --remove-orphans
 ### Build from source (development)
 
 Clone the repo, `cp .env.example .env` and fill it in, then `docker compose up -d` — this builds the images locally from the Dockerfiles instead of pulling them.
+
+### MCP server (optional)
+
+`Klods.Mcp` is a separate [Model Context Protocol](https://modelcontextprotocol.io) server that lets an AI agent (Claude Code, VS Code, Cursor, …) work with **your own** collection. Don't want it? Don't deploy it — nothing else depends on it.
+
+**Enable it**
+1. Start the container with the `mcp` profile: `docker compose --profile mcp up -d` (or `docker compose -f compose.ghcr.yaml --profile mcp up -d`; in Portainer, add `COMPOSE_PROFILES=mcp` to the stack variables). It listens on port `5106`, endpoint `/mcp`.
+2. As an admin, switch on **MCP access** on the Admin page. While it's off, every key is rejected and nobody can create new ones; turning it back on restores existing keys.
+3. Each user creates a key on their **Profile** page. The key (`klods_…`) is shown once. Keys never expire; the owner or an admin can revoke one at any time, which takes effect immediately.
+
+**Connect a client** — send the key as a bearer token, e.g. Claude Code:
+```
+claude mcp add --transport http klods https://klods.example.net:5106/mcp --header "Authorization: Bearer klods_…"
+```
+or a JSON-configured client:
+```json
+{ "klods": { "type": "http", "url": "https://klods.example.net:5106/mcp", "headers": { "Authorization": "Bearer klods_…" } } }
+```
+Put it behind your reverse proxy with TLS like the other services — the key is a bearer credential.
+
+**What an agent can do:** search the catalog; read your sets, set copies, parts lists, loose bricks, and minifigs; add/remove set copies and minifig copies, set part counts, notes, and substitutions. **What it can't:** import anything from Rebrickable (sets must already be in the catalog), use admin features (even with an admin's key), or touch account settings.
+
+**Limits:** key requests are rate-limited per user across all of their keys — `MCP_RATE_READS_PER_MIN` (default 60) and `MCP_RATE_WRITES_PER_MIN` (default 30) — and each user may hold `MCP_MAX_KEYS_PER_USER` keys (default 5). Set these on the API container. Counters live in memory and reset when the API restarts.
 
 ### Why?
 

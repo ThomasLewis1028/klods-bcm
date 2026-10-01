@@ -54,12 +54,17 @@ public static class SetsEndpoints
             return ok ? Results.Ok() : Results.BadRequest("Import failed.");
         });
 
-        group.MapPost("/owned", async (AddOwnedSetRequest req, HttpContext http, ImportData importer) =>
+        group.MapPost("/owned", async (AddOwnedSetRequest req, HttpContext http,
+            IDbContextFactory<InventoryContext> dbFactory, ImportData importer) =>
         {
+            // Only sets already in the catalog — importing from Rebrickable is a separate, deliberate step.
+            await using (var db = dbFactory.CreateDbContext())
+                if (!await db.Sets.AnyAsync(s => s.SetId == req.SetId)) return Results.NotFound();
+
             var userId = http.UserId();
             var ok = await importer.AddOwnedSet(req.SetId, userId, req.ApplyBricks);
             return ok ? Results.Ok() : Results.BadRequest("Could not add owned set.");
-        });
+        }).AllowApiKey();
 
         group.MapDelete("/owned/{setId}/{setIndex:int}", async (
             string setId, int setIndex, bool moveStock, HttpContext http, DeleteData deleter) =>
@@ -67,7 +72,7 @@ public static class SetsEndpoints
             var userId = http.UserId();
             var ok = deleter.DeleteOwnedSetInfo(userId, setId, setIndex, moveStock);
             return ok ? Results.Ok() : Results.NotFound();
-        });
+        }).AllowApiKey();
 
         // Delete the highest-index owned copy of a set — used by the catalog page decrement button.
         group.MapDelete("/owned/{setId}/last", async (
@@ -130,7 +135,7 @@ public static class SetsEndpoints
                 .ToList();
 
             return Results.Ok(result);
-        });
+        }).AllowApiKey();
 
         // Set the per-copy location + notes for one owned copy.
         group.MapPut("/owned/{setId}/{setIndex:int}/notes", async (
@@ -147,7 +152,7 @@ public static class SetsEndpoints
             so.Notes = NotesRequest.Normalize(req.Notes);
             await db.SaveChangesAsync();
             return Results.Ok();
-        });
+        }).AllowApiKey();
 
         // Lightweight catalog stats (no row load) for the Sets page header.
         group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
@@ -204,7 +209,7 @@ public static class SetsEndpoints
                 ownedCounts.GetValueOrDefault(s.SetId, 0))).ToList();
 
             return Results.Ok(new SetCatalogPage(items, total));
-        });
+        }).AllowApiKey();
 
         // Distinct themes that have visible sets, for the filter dropdown (hidden themes omitted).
         group.MapGet("/themes", async (IDbContextFactory<InventoryContext> dbFactory, SettingsService settings) =>
@@ -217,7 +222,7 @@ public static class SetsEndpoints
                 .Select(t => new ThemeDto(t.Id, t.Name))
                 .ToListAsync();
             return Results.Ok(themes);
-        });
+        }).AllowApiKey();
 
         // Admin: remove a set from the catalog entirely.
         group.MapDelete("/{setId}", (string setId, DeleteData deleter) =>

@@ -100,7 +100,7 @@ public static class BomEndpoints
                 brickItems, minifigItems,
                 comp.Percent, comp.Status.ToString().ToLowerInvariant(), comp.SubstitutedPercent, comp.HaveSubstituted > 0,
                 ownedCopy.Location, ownedCopy.Notes));
-        });
+        }).AllowApiKey();
 
         // Just the completeness for a copy — cheap enough to re-poll after each edit for a live bar.
         group.MapGet("/{setId}/{setIndex:int}/completeness", async (
@@ -175,7 +175,7 @@ public static class BomEndpoints
             var sbo = new SetBrickOwned { UserId = userId, SetId = setId, SetIndex = setIndex, PartNum = partNum, ColorId = colorId, Stock = req.Stock };
             var ok = updater.UpdateSetBrickOwned(sbo, userId);
             return ok ? Results.Ok() : Results.NotFound();
-        });
+        }).AllowApiKey();
 
         // Update BrickOwned stock (the user's loose personal stock of this brick).
         group.MapPatch("/{setId}/{setIndex:int}/loose-bricks/{partNum}/{colorId}", async (
@@ -220,8 +220,8 @@ public static class BomEndpoints
             if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
 
             var userId = http.UserId();
-            await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
-            return Results.Ok();
+            var ok = await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
+            return ok ? Results.Ok() : Results.NotFound();
         });
 
         // All substitution fills recorded on this copy (across every requirement), with substitute display info.
@@ -256,7 +256,7 @@ public static class BomEndpoints
                     looseDict.GetValueOrDefault((s.SubPartNum, s.SubColorId), 0), s.Count, s.PulledFromLoose, s.Notes);
             }).ToList();
             return Results.Ok(result);
-        });
+        }).AllowApiKey();
 
         // Record a substitution fill toward a requirement, pulling from loose stock as available.
         group.MapPost("/{setId}/{setIndex:int}/substitutions", async (
@@ -297,7 +297,7 @@ public static class BomEndpoints
             });
             await db.SaveChangesAsync();
             return Results.Ok(new NewSubstitutionDto(pulled));
-        });
+        }).AllowApiKey();
 
         // Adjust an existing fill's total count and/or how much of it is pulled from loose, moving
         // loose stock in or out to match. Loose can never be over-drawn.
@@ -366,7 +366,7 @@ public static class BomEndpoints
             db.Set<SetBrickSubstitution>().Remove(sub);
             await db.SaveChangesAsync();
             return Results.Ok();
-        });
+        }).AllowApiKey();
     }
 
     public record BomBrickDto(string PartNum, string ColorId, string Name, string? PartImg, string? ColorName, string? HexColor, int Count, int SpareCount, int SetStock, int LooseStock, string? BricklinkId);

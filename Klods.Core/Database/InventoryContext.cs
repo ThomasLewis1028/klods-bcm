@@ -30,6 +30,7 @@ public class InventoryContext : DbContext
     public DbSet<SetOwned> SetsOwned { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<UserExternalLogin> UserExternalLogins { get; set; }
+    public DbSet<ApiKey> ApiKeys { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -263,6 +264,16 @@ public class InventoryContext : DbContext
             .HasOne<User>()
             .WithMany()
             .HasForeignKey(e => e.UserId)
+            .IsRequired();
+
+        // API KEY — looked up by hash on every MCP request; deleted with its user.
+        modelBuilder.Entity<ApiKey>().HasIndex(e => e.Hash).IsUnique();
+
+        modelBuilder.Entity<ApiKey>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade)
             .IsRequired();
     }
 

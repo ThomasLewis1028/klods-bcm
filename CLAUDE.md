@@ -21,7 +21,8 @@
 - Solution file: `Klods.slnx` at the repo root
 - `Klods.Core/` — class library; all EF models, InventoryContext, migrations, ImportData, UpdateData, DeleteData, RebrickableApi, ImageStorageService, InventoryAggregates, ColorHelper
 - `Klods.Web/` — Blazor Server app; references Core; contains all Components, AuthService, PendingAuthService, ThemeService
-- `Klods.Api/` — ASP.NET Core Web API; references Core; JWT auth; minimal API endpoints
+- `Klods.Api/` — ASP.NET Core Web API; references Core; JWT auth plus per-user MCP keys (`Auth/ApiKeyAuth.cs`); minimal API endpoints. Endpoints are JWT-only unless marked `.AllowApiKey()`.
+- `Klods.Mcp/` — optional MCP server (compose profile `mcp`); no project references, calls Klods.Api over HTTP with the caller's key; tools in `Tools/`
 - EF migrations live in `Klods.Core/Migrations/`. Run: `dotnet ef migrations add <Name> --project Klods.Core`
 
 ## Blazor / MudBlazor

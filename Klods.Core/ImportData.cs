@@ -334,8 +334,11 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         await context.SaveChangesAsync();
     }
 
-    /// <summary>Sets the owned stock of a single part for a specific fig instance (by index).</summary>
-    public async Task SetMinifigInstancePartStock(
+    /// <summary>
+    /// Sets the owned stock of a single part for a specific fig instance (by index). Returns false when the
+    /// caller doesn't own that instance or the part isn't in the fig.
+    /// </summary>
+    public async Task<bool> SetMinifigInstancePartStock(
         int userId, string minifigId, int minifigIndex, string partNum, string colorId, int stock)
     {
         if (stock < 0) stock = 0;
@@ -347,15 +350,24 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
             x.PartNum == partNum && x.ColorId == colorId);
 
         if (existing == null)
+        {
+            var ownsInstance = await context.Set<MinifigOwned>().AnyAsync(mo =>
+                mo.UserId == userId && mo.MinifigId == minifigId && mo.MinifigIndex == minifigIndex);
+            var partInFig = await context.Set<MinifigBrick>().AnyAsync(mb =>
+                mb.MinifigId == minifigId && mb.PartNum == partNum && mb.ColorId == colorId);
+            if (!ownsInstance || !partInFig) return false;
+
             brickOwned.Add(new MinifigBrickOwned
             {
                 UserId = userId, MinifigId = minifigId, MinifigIndex = minifigIndex,
                 PartNum = partNum, ColorId = colorId, Stock = stock,
             });
+        }
         else
             existing.Stock = stock;
 
         await context.SaveChangesAsync();
+        return true;
     }
 
     /// <summary>Moves a fig instance onto a set copy (setId/setIndex) or back to loose (null/null).</summary>

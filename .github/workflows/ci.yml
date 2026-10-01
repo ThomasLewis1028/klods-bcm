@@ -84,7 +84,7 @@ jobs:
           dotnet test Klods.slnx -c Release --no-build --verbosity normal
           --filter "FullyQualifiedName!~RebrickableApiTests&FullyQualifiedName!~ImportTests"
 
-  # Validates both Dockerfiles build (COPY paths, restore, publish) without pushing.
+  # Validates every Dockerfile builds (COPY paths, restore, publish) without pushing.
   # Runs in parallel with build-test; layer-cached so repeat runs are fast.
   docker-build:
     runs-on: ubuntu-latest
@@ -95,6 +95,8 @@ jobs:
             dockerfile: Klods.Api/Dockerfile
           - app: web
             dockerfile: Klods.Web/Dockerfile
+          - app: mcp
+            dockerfile: Klods.Mcp/Dockerfile
     steps:
       - uses: actions/checkout@v4
 

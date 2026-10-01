@@ -49,7 +49,7 @@ public static class MyCatalogEndpoints
             }).ToList();
 
             return Results.Ok(result);
-        });
+        }).AllowApiKey();
 
         // Upsert loose brick stock — creates BrickOwned if it doesn't exist yet.
         group.MapPut("/{partNum}/{colorId}/stock", async (
@@ -69,11 +69,12 @@ public static class MyCatalogEndpoints
             }
             else
             {
+                if (!await db.Bricks.AnyAsync(b => b.PartNum == partNum && b.ColorId == colorId)) return Results.NotFound();
                 db.Set<BrickOwned>().Add(new BrickOwned { UserId = userId, PartNum = partNum, ColorId = colorId, Stock = req.Stock });
                 await db.SaveChangesAsync();
             }
             return Results.Ok();
-        });
+        }).AllowApiKey();
 
         // Lazy-load: sets the user owns that require a specific brick+color.
         group.MapGet("/{partNum}/{colorId}/sets", async (
@@ -101,7 +102,7 @@ public static class MyCatalogEndpoints
                 userSetCopies.GetValueOrDefault(sb.SetId, 0))).ToList();
 
             return Results.Ok(result);
-        });
+        }).AllowApiKey();
     }
 
     private static void MapMyMinifigs(IEndpointRouteBuilder app)
@@ -151,7 +152,7 @@ public static class MyCatalogEndpoints
                     partCounts.GetValueOrDefault(m.MinifigId, 0))).ToList();
 
             return Results.Ok(result);
-        });
+        }).AllowApiKey();
 
         // Set the user's loose count for a fig (adds/removes loose instances). SetLooseMinifigCount
         // inserts one MinifigOwned row per unit, so this needs the tighter row-insert-loop cap, not
@@ -260,7 +261,7 @@ public static class MyCatalogEndpoints
             }).ToList();
 
             return Results.Ok(result);
-        });
+        }).AllowApiKey();
 
         // Owned set copies that include this fig and still have a free slot — reassignment targets.
         group.MapGet("/{minifigId}/assignable-copies", async (
@@ -295,7 +296,7 @@ public static class MyCatalogEndpoints
                 .ToList();
 
             return Results.Ok(result);
-        });
+        }).AllowApiKey();
 
         // Set a single part's owned stock for a specific fig instance.
         group.MapPatch("/{minifigId}/instances/{index:int}/parts/{partNum}/{colorId}", async (
@@ -305,9 +306,9 @@ public static class MyCatalogEndpoints
             if (!req.IsValid) return Results.BadRequest($"Stock must be between 0 and {UpdateStockRequest.MaxStock}.");
 
             var userId = http.UserId();
-            await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
-            return Results.Ok();
-        });
+            var ok = await importer.SetMinifigInstancePartStock(userId, minifigId, index, partNum, colorId, req.Stock);
+            return ok ? Results.Ok() : Results.NotFound();
+        }).AllowApiKey();
 
         // Move an instance onto a set copy, or back to loose (null set).
         group.MapPatch("/{minifigId}/instances/{index:int}/assign", async (
@@ -332,15 +333,19 @@ public static class MyCatalogEndpoints
 
             var ok = await importer.ReassignMinifigInstance(userId, minifigId, index, req.SetId, req.SetIndex);
             return ok ? Results.Ok() : Results.NotFound();
-        });
+        }).AllowApiKey();
 
         // Add a loose instance.
-        group.MapPost("/{minifigId}/instances", async (string minifigId, HttpContext http, ImportData importer) =>
+        group.MapPost("/{minifigId}/instances", async (string minifigId, HttpContext http,
+            IDbContextFactory<InventoryContext> dbFactory, ImportData importer) =>
         {
+            await using (var db = dbFactory.CreateDbContext())
+                if (!await db.Minifigs.AnyAsync(m => m.MinifigId == minifigId)) return Results.NotFound();
+
             var userId = http.UserId();
             var index = await importer.AddLooseMinifigInstance(userId, minifigId);
             return Results.Ok(new NewInstanceDto(index));
-        });
+        }).AllowApiKey();
 
         // Remove an instance.
         group.MapDelete("/{minifigId}/instances/{index:int}", async (
@@ -349,7 +354,7 @@ public static class MyCatalogEndpoints
             var userId = http.UserId();
             var ok = await importer.RemoveMinifigInstance(userId, minifigId, index);
             return ok ? Results.Ok() : Results.NotFound();
-        });
+        }).AllowApiKey();
     }
 
     public record UpdateStockRequest(int Stock)
