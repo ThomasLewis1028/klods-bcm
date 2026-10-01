@@ -66,3 +66,16 @@ The bundled object store is now `rustfs/rustfs` on a fresh volume. The app keeps
 **Alternatives considered:** Mirroring the last MinIO image to our GHCR - rejected, frozen with no security fixes. Garage or SeaweedFS - not needed once RustFS worked unchanged; fallbacks if RustFS stalls. Renaming the variables to `S3_*` - deferred, it would break every existing `.env` for no functional gain. Switching to `AWSSDK.S3` - deferred until the MinIO .NET client stops working.
 
 **Consequences:** Upgrading installs run `up -d --remove-orphans` to drop the old `minio` container, and can delete the old MinIO volume afterwards. `rustfs/rustfs:latest` follows upstream stable releases.
+
+## DEC-006 - Other users' collections are read through user-scoped GET routes; writes stay token-scoped
+
+**Date:** 2026-10-01
+**Status:** Decided
+
+Any signed-in user can browse another Active user's sets, parts lists, bricks, and minifigs. The API exposes this as GET-only routes under `/api/users/{userId}/…` that call the same query methods as the caller's own `my` routes, with the user id taken from the route instead of the token. Unknown and Pending users return 404. Location and notes (set copies, loose bricks, substitutions) are never returned on these routes. The web app reuses the My Sets / My Bricks / My Minifigs pages and their detail dialogs with an `OwnerId` parameter that switches them to a read-only mode, reached from the Users page. These routes and `GET /api/users` accept MCP keys, with read-only `list_users` / `list_user_*` tools, extending the DEC-003 allowlist.
+
+**Why:** Every write endpoint already takes the owner from the token, so read-only access to others needs no new authorization logic — there is simply no route that writes to someone else's data. Sharing one query method per read keeps the owner's view and the visitor's view from drifting. The owner chose to keep locations and notes private for now, and wants agents able to compare inventories across users.
+
+**Alternatives considered:** Separate read-only copies of the three pages - rejected, ~1,400 duplicated lines of filter/sort/paging that would drift. A `?userId=` parameter on the existing `my` routes - rejected, it mixes "whose data" into endpoints that also write and makes a missed check fail open. Exposing locations and notes - deferred by the owner; revisit if users ask to share them (likely as a per-user opt-in). Per-user privacy opt-out - not requested; every Active user's collection is visible to every signed-in user.
+
+**Consequences:** In the UI, a write control left visible while viewing someone else would act on the viewer's own data, so read-only mode must hide every write affordance. A new read added to a `my` route needs its user-route twin added deliberately; nothing generates it.

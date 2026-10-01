@@ -33,6 +33,7 @@ It's open source under the MIT license, so if you want to fix my late-night, alc
 
 - User authentication via Discord, Microsoft, Google, and plain ol' email/password.
 - Multiple users can have their own inventories and track their own stock.
+- Browse anyone's collection from the **Users** page — their sets, parts lists, bricks, and minifigs — read-only. Storage locations and notes stay private to their owner.
 - Admin panel to manage system settings.
 - Admins can require new registrations to be approved before they get access, or leave auto-approve on.
 - Customize KL-0D5, your own Klods bot — 11 chassis colours, 9 eye colours, and your browser tab icon updates to match.
@@ -88,7 +89,7 @@ Clone the repo, `cp .env.example .env` and fill it in, then `docker compose up -
 
 ### MCP server (optional)
 
-`Klods.Mcp` is a separate [Model Context Protocol](https://modelcontextprotocol.io) server that lets an AI agent (Claude Code, VS Code, Cursor, …) work with **your own** collection. Don't want it? Don't deploy it — nothing else depends on it.
+`Klods.Mcp` is a separate [Model Context Protocol](https://modelcontextprotocol.io) server that lets an AI agent (Claude Code, VS Code, Cursor, …) work with **your own** collection, and read other users' collections to compare them. Don't want it? Don't deploy it — nothing else depends on it.
 
 **Enable it**
 1. Start the container with the `mcp` profile: `docker compose --profile mcp up -d` (or `docker compose -f compose.ghcr.yaml --profile mcp up -d`; in Portainer, add `COMPOSE_PROFILES=mcp` to the stack variables). It listens on port `5106`, endpoint `/mcp`.
@@ -105,7 +106,7 @@ or a JSON-configured client:
 ```
 Put it behind your reverse proxy with TLS like the other services — the key is a bearer credential.
 
-**What an agent can do:** search the catalog; read your sets, set copies, parts lists, loose bricks, and minifigs; add/remove set copies and minifig copies, set part counts, notes, and substitutions. **What it can't:** import anything from Rebrickable (sets must already be in the catalog), use admin features (even with an admin's key), or touch account settings.
+**What an agent can do:** search the catalog; read your sets, set copies, parts lists, loose bricks, and minifigs; add/remove set copies and minifig copies, set part counts, notes, and substitutions; list users and read their sets, set copies, bricks, and minifigs (never their locations or notes). **What it can't:** change anyone else's collection, import anything from Rebrickable (sets must already be in the catalog), use admin features (even with an admin's key), or touch account settings.
 
 **Limits:** key requests are rate-limited per user across all of their keys — `MCP_RATE_READS_PER_MIN` (default 60) and `MCP_RATE_WRITES_PER_MIN` (default 30) — and each user may hold `MCP_MAX_KEYS_PER_USER` keys (default 5). Set these on the API container. Counters live in memory and reset when the API restarts.
 
