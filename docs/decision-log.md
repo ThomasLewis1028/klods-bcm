@@ -53,3 +53,16 @@ Key requests get fixed one-minute windows partitioned by user: reads (`GET`, def
 **Alternatives considered:** Durable daily quotas in Postgres - deferred; revisit if the API runs multiple replicas or restarts are used to dodge limits. Limiting inside the MCP server - rejected, the API is where identity and cost are.
 
 **Consequences:** Counters reset when the API restarts. `UseRateLimiter` now runs after authorization so the limiter sees the key's user.
+
+## DEC-005 - Replace MinIO with RustFS for the image cache
+
+**Date:** 2026-10-01
+**Status:** Decided
+
+The bundled object store is now `rustfs/rustfs` on a fresh volume. The app keeps the MinIO .NET client and the `MINIO_*` variable names; compose maps the credentials onto RustFS and points `MINIO_ENDPOINT` at the `rustfs` service.
+
+**Why:** MinIO's images can no longer be pulled (Docker Hub repo archived and refusing pulls, quay.io no longer anonymous), which broke CI and fresh installs. RustFS is maintained, Apache-2.0, reached 1.0.0 GA on 2026-09-16, and works with the existing client unchanged (bucket creation, public-read policy, put/get). The store only holds read-through copies of Rebrickable images, so starting empty costs only re-downloads.
+
+**Alternatives considered:** Mirroring the last MinIO image to our GHCR - rejected, frozen with no security fixes. Garage or SeaweedFS - not needed once RustFS worked unchanged; fallbacks if RustFS stalls. Renaming the variables to `S3_*` - deferred, it would break every existing `.env` for no functional gain. Switching to `AWSSDK.S3` - deferred until the MinIO .NET client stops working.
+
+**Consequences:** Upgrading installs run `up -d --remove-orphans` to drop the old `minio` container, and can delete the old MinIO volume afterwards. `rustfs/rustfs:latest` follows upstream stable releases.
