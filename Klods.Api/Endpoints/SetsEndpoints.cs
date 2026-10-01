@@ -90,52 +90,8 @@ public static class SetsEndpoints
         });
 
         // Returns each set the user owns, grouped with all their copy instances + per-instance stats.
-        group.MapGet("/my-owned", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-
-            var ownedList = await db.Set<SetOwned>().AsNoTracking()
-                .Where(so => so.UserId == userId).ToListAsync();
-
-            if (ownedList.Count == 0) return Results.Ok(Array.Empty<MyOwnedSetDto>());
-
-            var setIds = ownedList.Select(so => so.SetId).Distinct().ToList();
-
-            var sets = await db.Set<Set>().AsNoTracking()
-                .Where(s => setIds.Contains(s.SetId))
-                .ToDictionaryAsync(s => s.SetId);
-
-            var themeIds = sets.Values.Where(s => s.ThemeId != null).Select(s => s.ThemeId!.Value).Distinct().ToList();
-            var themeNames = await db.Set<Theme>().AsNoTracking()
-                .Where(t => themeIds.Contains(t.Id))
-                .ToDictionaryAsync(t => t.Id, t => t.Name);
-
-            // Per-part completeness for every owned copy (bricks + minifig parts, vs the loose pool).
-            var completeness = await SetCompleteness.ComputeAsync(db, userId,
-                ownedList.Select(so => (so.SetId, so.SetIndex)).ToList());
-
-            var result = ownedList
-                .GroupBy(so => so.SetId)
-                .Where(g => sets.ContainsKey(g.Key))
-                .Select(g =>
-                {
-                    var set = sets[g.Key];
-                    var instances = g.OrderBy(so => so.SetIndex).Select(so =>
-                    {
-                        var comp = completeness.GetValueOrDefault((so.SetId, so.SetIndex))
-                                   ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0, 0);
-                        return new OwnedInstanceDto(so.SetIndex, comp.Missing, comp.Have,
-                            comp.Percent, comp.Status.ToString().ToLowerInvariant(), comp.SubstitutedPercent, comp.HaveSubstituted > 0, so.Location, so.Notes);
-                    }).ToList();
-                    var themeName = set.ThemeId is int tid ? themeNames.GetValueOrDefault(tid) : null;
-                    return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,
-                        set.ReleaseYear, themeName, set.ManualUrl, instances);
-                })
-                .ToList();
-
-            return Results.Ok(result);
-        }).AllowApiKey();
+        group.MapGet("/my-owned", (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+            OwnedSetsAsync(dbFactory, http.UserId(), withNotes: true)).AllowApiKey();
 
         // Set the per-copy location + notes for one owned copy.
         group.MapPut("/owned/{setId}/{setIndex:int}/notes", async (
@@ -230,6 +186,53 @@ public static class SetsEndpoints
             var ok = deleter.DeleteSetInfo(setId);
             return ok ? Results.Ok() : Results.NotFound();
         }).RequireAuthorization("Admin");
+    }
+
+    internal static async Task<IResult> OwnedSetsAsync(IDbContextFactory<InventoryContext> dbFactory, int userId, bool withNotes)
+    {
+        await using var db = dbFactory.CreateDbContext();
+
+        var ownedList = await db.Set<SetOwned>().AsNoTracking()
+            .Where(so => so.UserId == userId).ToListAsync();
+
+        if (ownedList.Count == 0) return Results.Ok(Array.Empty<MyOwnedSetDto>());
+
+        var setIds = ownedList.Select(so => so.SetId).Distinct().ToList();
+
+        var sets = await db.Set<Set>().AsNoTracking()
+            .Where(s => setIds.Contains(s.SetId))
+            .ToDictionaryAsync(s => s.SetId);
+
+        var themeIds = sets.Values.Where(s => s.ThemeId != null).Select(s => s.ThemeId!.Value).Distinct().ToList();
+        var themeNames = await db.Set<Theme>().AsNoTracking()
+            .Where(t => themeIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => t.Name);
+
+        // Per-part completeness for every owned copy (bricks + minifig parts, vs the loose pool).
+        var completeness = await SetCompleteness.ComputeAsync(db, userId,
+            ownedList.Select(so => (so.SetId, so.SetIndex)).ToList());
+
+        var result = ownedList
+            .GroupBy(so => so.SetId)
+            .Where(g => sets.ContainsKey(g.Key))
+            .Select(g =>
+            {
+                var set = sets[g.Key];
+                var instances = g.OrderBy(so => so.SetIndex).Select(so =>
+                {
+                    var comp = completeness.GetValueOrDefault((so.SetId, so.SetIndex))
+                               ?? new SetCompleteness.Result(0, SetCompleteness.Status.Short, 0, 0, 0, 0);
+                    return new OwnedInstanceDto(so.SetIndex, comp.Missing, comp.Have,
+                        comp.Percent, comp.Status.ToString().ToLowerInvariant(), comp.SubstitutedPercent, comp.HaveSubstituted > 0,
+                        withNotes ? so.Location : null, withNotes ? so.Notes : null);
+                }).ToList();
+                var themeName = set.ThemeId is int tid ? themeNames.GetValueOrDefault(tid) : null;
+                return new MyOwnedSetDto(set.SetId, set.Name, set.SetImg, set.NumBricks,
+                    set.ReleaseYear, themeName, set.ManualUrl, instances);
+            })
+            .ToList();
+
+        return Results.Ok(result);
     }
 
     // Drops sets in admin-hidden themes. Sets with no theme are always shown.

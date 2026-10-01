@@ -16,40 +16,8 @@ public static class MyCatalogEndpoints
         var group = app.MapGroup("/api/mybricks").RequireAuthorization();
 
         // All bricks relevant to the current user: bricks they own loose + bricks needed by their sets.
-        group.MapGet("/", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-
-            var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(db, userId);
-            var userSetIds    = userSetCopies.Keys.ToList();
-
-            var setBricks    = await db.Set<SetBrick>().AsNoTracking().Where(sb => userSetIds.Contains(sb.SetId)).ToListAsync();
-            var neededDict   = InventoryAggregates.GetBrickNeededDict(setBricks, userSetCopies);
-            var setCountDict = InventoryAggregates.GetBrickSetCountDict(setBricks);
-
-            var ownedDict = (await db.Set<BrickOwned>().AsNoTracking().Where(bo => bo.UserId == userId).ToListAsync())
-                .ToDictionary(bo => (bo.PartNum, bo.ColorId));
-
-            var allKeys     = neededDict.Keys.Union(ownedDict.Keys).ToHashSet();
-            var allPartNums = allKeys.Select(k => k.PartNum).ToList();
-
-            var bricks = (await db.Set<Brick>().AsNoTracking().Where(b => allPartNums.Contains(b.PartNum)).ToListAsync())
-                .Where(b => allKeys.Contains((b.PartNum, b.ColorId ?? ""))).ToList();
-
-            var result = bricks.Select(b =>
-            {
-                var key = (b.PartNum, b.ColorId ?? "");
-                ownedDict.TryGetValue(key, out var bo);
-                return new MyBrickDto(
-                    b.PartNum, b.Name, b.PartImg, b.ColorId, b.ColorName, b.HexColor, b.IsTrans, b.BricklinkId,
-                    bo?.Stock ?? 0,
-                    neededDict.GetValueOrDefault(key, 0),
-                    setCountDict.GetValueOrDefault(key, 0));
-            }).ToList();
-
-            return Results.Ok(result);
-        }).AllowApiKey();
+        group.MapGet("/", (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+            BricksAsync(dbFactory, http.UserId())).AllowApiKey();
 
         // Upsert loose brick stock — creates BrickOwned if it doesn't exist yet.
         group.MapPut("/{partNum}/{colorId}/stock", async (
@@ -77,32 +45,9 @@ public static class MyCatalogEndpoints
         }).AllowApiKey();
 
         // Lazy-load: sets the user owns that require a specific brick+color.
-        group.MapGet("/{partNum}/{colorId}/sets", async (
+        group.MapGet("/{partNum}/{colorId}/sets", (
             string partNum, string colorId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-
-            var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(db, userId);
-            var userSetIds    = userSetCopies.Keys.ToList();
-
-            var setBricks = await db.Set<SetBrick>().AsNoTracking()
-                .Where(sb => sb.PartNum == partNum && sb.ColorId == colorId && userSetIds.Contains(sb.SetId))
-                .ToListAsync();
-
-            var setIds = setBricks.Select(sb => sb.SetId).Distinct().ToList();
-            var sets = await db.Set<Set>().AsNoTracking().Where(s => setIds.Contains(s.SetId)).ToListAsync();
-            var setDict = sets.ToDictionary(s => s.SetId);
-
-            var result = setBricks.Select(sb => new MyBrickSetDetailDto(
-                sb.SetId,
-                setDict.TryGetValue(sb.SetId, out var s) ? s.Name : sb.SetId,
-                setDict.TryGetValue(sb.SetId, out var s2) ? s2.SetImg : null,
-                sb.Count,
-                userSetCopies.GetValueOrDefault(sb.SetId, 0))).ToList();
-
-            return Results.Ok(result);
-        }).AllowApiKey();
+            SetsNeedingBrickAsync(dbFactory, http.UserId(), partNum, colorId)).AllowApiKey();
     }
 
     private static void MapMyMinifigs(IEndpointRouteBuilder app)
@@ -110,49 +55,8 @@ public static class MyCatalogEndpoints
         var group = app.MapGroup("/api/myminifigs").RequireAuthorization();
 
         // All minifigs relevant to the current user: minifigs they own + minifigs needed by their sets.
-        group.MapGet("/", async (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-
-            var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(db, userId);
-            var userSetIds    = userSetCopies.Keys.ToList();
-
-            var setMinifigs  = await db.Set<SetMinifig>().AsNoTracking().Where(sm => userSetIds.Contains(sm.SetId)).ToListAsync();
-            var neededDict   = InventoryAggregates.GetMinifigNeededDict(setMinifigs, userSetCopies);
-            var setCountDict = InventoryAggregates.GetMinifigSetCountDict(setMinifigs);
-
-            // Split owned instances into loose (no set link) and in-use (attached to a set copy).
-            var ownedInstances = await db.Set<MinifigOwned>().AsNoTracking()
-                .Where(mo => mo.UserId == userId)
-                .Select(mo => new { mo.MinifigId, IsLoose = mo.SetId == null })
-                .ToListAsync();
-            var looseCounts = ownedInstances.Where(o => o.IsLoose)
-                .GroupBy(o => o.MinifigId).ToDictionary(g => g.Key, g => g.Count());
-            var inUseCounts = ownedInstances.Where(o => !o.IsLoose)
-                .GroupBy(o => o.MinifigId).ToDictionary(g => g.Key, g => g.Count());
-
-            var allIds = neededDict.Keys.Union(looseCounts.Keys).Union(inUseCounts.Keys).ToHashSet();
-
-            var partCounts = (await db.Set<MinifigBrick>().AsNoTracking()
-                .Where(mb => allIds.Contains(mb.MinifigId))
-                .ToListAsync())
-                .GroupBy(mb => mb.MinifigId)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var minifigs = await db.Set<Minifig>().AsNoTracking().Where(m => allIds.Contains(m.MinifigId)).ToListAsync();
-
-            var result = minifigs.Select(m =>
-                new MyMinifigDto(
-                    m.MinifigId, m.Name, m.ImgUrl,
-                    looseCounts.GetValueOrDefault(m.MinifigId, 0),
-                    inUseCounts.GetValueOrDefault(m.MinifigId, 0),
-                    neededDict.GetValueOrDefault(m.MinifigId, 0),
-                    setCountDict.GetValueOrDefault(m.MinifigId, 0),
-                    partCounts.GetValueOrDefault(m.MinifigId, 0))).ToList();
-
-            return Results.Ok(result);
-        }).AllowApiKey();
+        group.MapGet("/", (HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
+            MinifigsAsync(dbFactory, http.UserId())).AllowApiKey();
 
         // Set the user's loose count for a fig (adds/removes loose instances). SetLooseMinifigCount
         // inserts one MinifigOwned row per unit, so this needs the tighter row-insert-loop cap, not
@@ -218,50 +122,9 @@ public static class MyCatalogEndpoints
         });
 
         // Every owned instance of a fig with its location and per-part completeness.
-        group.MapGet("/{minifigId}/instances", async (
+        group.MapGet("/{minifigId}/instances", (
             string minifigId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-
-            var instances = await db.Set<MinifigOwned>().AsNoTracking()
-                .Where(mo => mo.UserId == userId && mo.MinifigId == minifigId)
-                .OrderBy(mo => mo.MinifigIndex).ToListAsync();
-            if (instances.Count == 0) return Results.Ok(new List<MinifigInstanceDto>());
-
-            var reqParts = await db.Set<MinifigBrick>().AsNoTracking()
-                .Where(mb => mb.MinifigId == minifigId).ToListAsync();
-            var partNums = reqParts.Select(p => p.PartNum).ToHashSet();
-            var brickInfo = (await db.Set<Brick>().AsNoTracking().Where(b => partNums.Contains(b.PartNum)).ToListAsync())
-                .ToDictionary(b => (b.PartNum, b.ColorId ?? ""));
-
-            var indices = instances.Select(i => i.MinifigIndex).ToList();
-            var ownedByIndex = (await db.Set<MinifigBrickOwned>().AsNoTracking()
-                    .Where(x => x.UserId == userId && x.MinifigId == minifigId && indices.Contains(x.MinifigIndex))
-                    .ToListAsync())
-                .GroupBy(x => x.MinifigIndex)
-                .ToDictionary(g => g.Key, g => g.ToDictionary(x => (x.PartNum, x.ColorId), x => x.Stock));
-
-            var setIds = instances.Where(i => i.SetId != null).Select(i => i.SetId!).Distinct().ToList();
-            var sets = (await db.Set<Set>().AsNoTracking().Where(s => setIds.Contains(s.SetId)).ToListAsync())
-                .ToDictionary(s => s.SetId);
-
-            var result = instances.Select(inst =>
-            {
-                var owned = ownedByIndex.GetValueOrDefault(inst.MinifigIndex) ?? new Dictionary<(string, string), int>();
-                var parts = reqParts.Select(p =>
-                {
-                    brickInfo.TryGetValue((p.PartNum, p.ColorId), out var b);
-                    owned.TryGetValue((p.PartNum, p.ColorId), out var have);
-                    return new MinifigInstancePartDto(p.PartNum, p.ColorId, b?.Name ?? p.PartNum,
-                        b?.PartImg, b?.ColorName, b?.HexColor, p.Count, have);
-                }).ToList();
-                sets.TryGetValue(inst.SetId ?? "", out var set);
-                return new MinifigInstanceDto(inst.MinifigIndex, inst.SetId, inst.SetIndex, set?.Name, set?.SetImg, parts);
-            }).ToList();
-
-            return Results.Ok(result);
-        }).AllowApiKey();
+            MinifigInstancesAsync(dbFactory, http.UserId(), minifigId)).AllowApiKey();
 
         // Owned set copies that include this fig and still have a free slot — reassignment targets.
         group.MapGet("/{minifigId}/assignable-copies", async (
@@ -355,6 +218,152 @@ public static class MyCatalogEndpoints
             var ok = await importer.RemoveMinifigInstance(userId, minifigId, index);
             return ok ? Results.Ok() : Results.NotFound();
         }).AllowApiKey();
+    }
+
+    internal static async Task<IResult> BricksAsync(IDbContextFactory<InventoryContext> dbFactory, int userId)
+    {
+        await using var db = dbFactory.CreateDbContext();
+
+        var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(db, userId);
+        var userSetIds    = userSetCopies.Keys.ToList();
+
+        var setBricks    = await db.Set<SetBrick>().AsNoTracking().Where(sb => userSetIds.Contains(sb.SetId)).ToListAsync();
+        var neededDict   = InventoryAggregates.GetBrickNeededDict(setBricks, userSetCopies);
+        var setCountDict = InventoryAggregates.GetBrickSetCountDict(setBricks);
+
+        var ownedDict = (await db.Set<BrickOwned>().AsNoTracking().Where(bo => bo.UserId == userId).ToListAsync())
+            .ToDictionary(bo => (bo.PartNum, bo.ColorId));
+
+        var allKeys     = neededDict.Keys.Union(ownedDict.Keys).ToHashSet();
+        var allPartNums = allKeys.Select(k => k.PartNum).ToList();
+
+        var bricks = (await db.Set<Brick>().AsNoTracking().Where(b => allPartNums.Contains(b.PartNum)).ToListAsync())
+            .Where(b => allKeys.Contains((b.PartNum, b.ColorId ?? ""))).ToList();
+
+        var result = bricks.Select(b =>
+        {
+            var key = (b.PartNum, b.ColorId ?? "");
+            ownedDict.TryGetValue(key, out var bo);
+            return new MyBrickDto(
+                b.PartNum, b.Name, b.PartImg, b.ColorId, b.ColorName, b.HexColor, b.IsTrans, b.BricklinkId,
+                bo?.Stock ?? 0,
+                neededDict.GetValueOrDefault(key, 0),
+                setCountDict.GetValueOrDefault(key, 0));
+        }).ToList();
+
+        return Results.Ok(result);
+    }
+
+    internal static async Task<IResult> SetsNeedingBrickAsync(
+        IDbContextFactory<InventoryContext> dbFactory, int userId, string partNum, string colorId)
+    {
+        await using var db = dbFactory.CreateDbContext();
+
+        var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(db, userId);
+        var userSetIds    = userSetCopies.Keys.ToList();
+
+        var setBricks = await db.Set<SetBrick>().AsNoTracking()
+            .Where(sb => sb.PartNum == partNum && sb.ColorId == colorId && userSetIds.Contains(sb.SetId))
+            .ToListAsync();
+
+        var setIds = setBricks.Select(sb => sb.SetId).Distinct().ToList();
+        var sets = await db.Set<Set>().AsNoTracking().Where(s => setIds.Contains(s.SetId)).ToListAsync();
+        var setDict = sets.ToDictionary(s => s.SetId);
+
+        var result = setBricks.Select(sb => new MyBrickSetDetailDto(
+            sb.SetId,
+            setDict.TryGetValue(sb.SetId, out var s) ? s.Name : sb.SetId,
+            setDict.TryGetValue(sb.SetId, out var s2) ? s2.SetImg : null,
+            sb.Count,
+            userSetCopies.GetValueOrDefault(sb.SetId, 0))).ToList();
+
+        return Results.Ok(result);
+    }
+
+    internal static async Task<IResult> MinifigsAsync(IDbContextFactory<InventoryContext> dbFactory, int userId)
+    {
+        await using var db = dbFactory.CreateDbContext();
+
+        var userSetCopies = await InventoryAggregates.GetSetCopiesAsync(db, userId);
+        var userSetIds    = userSetCopies.Keys.ToList();
+
+        var setMinifigs  = await db.Set<SetMinifig>().AsNoTracking().Where(sm => userSetIds.Contains(sm.SetId)).ToListAsync();
+        var neededDict   = InventoryAggregates.GetMinifigNeededDict(setMinifigs, userSetCopies);
+        var setCountDict = InventoryAggregates.GetMinifigSetCountDict(setMinifigs);
+
+        // Split owned instances into loose (no set link) and in-use (attached to a set copy).
+        var ownedInstances = await db.Set<MinifigOwned>().AsNoTracking()
+            .Where(mo => mo.UserId == userId)
+            .Select(mo => new { mo.MinifigId, IsLoose = mo.SetId == null })
+            .ToListAsync();
+        var looseCounts = ownedInstances.Where(o => o.IsLoose)
+            .GroupBy(o => o.MinifigId).ToDictionary(g => g.Key, g => g.Count());
+        var inUseCounts = ownedInstances.Where(o => !o.IsLoose)
+            .GroupBy(o => o.MinifigId).ToDictionary(g => g.Key, g => g.Count());
+
+        var allIds = neededDict.Keys.Union(looseCounts.Keys).Union(inUseCounts.Keys).ToHashSet();
+
+        var partCounts = (await db.Set<MinifigBrick>().AsNoTracking()
+            .Where(mb => allIds.Contains(mb.MinifigId))
+            .ToListAsync())
+            .GroupBy(mb => mb.MinifigId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var minifigs = await db.Set<Minifig>().AsNoTracking().Where(m => allIds.Contains(m.MinifigId)).ToListAsync();
+
+        var result = minifigs.Select(m =>
+            new MyMinifigDto(
+                m.MinifigId, m.Name, m.ImgUrl,
+                looseCounts.GetValueOrDefault(m.MinifigId, 0),
+                inUseCounts.GetValueOrDefault(m.MinifigId, 0),
+                neededDict.GetValueOrDefault(m.MinifigId, 0),
+                setCountDict.GetValueOrDefault(m.MinifigId, 0),
+                partCounts.GetValueOrDefault(m.MinifigId, 0))).ToList();
+
+        return Results.Ok(result);
+    }
+
+    internal static async Task<IResult> MinifigInstancesAsync(IDbContextFactory<InventoryContext> dbFactory, int userId, string minifigId)
+    {
+        await using var db = dbFactory.CreateDbContext();
+
+        var instances = await db.Set<MinifigOwned>().AsNoTracking()
+            .Where(mo => mo.UserId == userId && mo.MinifigId == minifigId)
+            .OrderBy(mo => mo.MinifigIndex).ToListAsync();
+        if (instances.Count == 0) return Results.Ok(new List<MinifigInstanceDto>());
+
+        var reqParts = await db.Set<MinifigBrick>().AsNoTracking()
+            .Where(mb => mb.MinifigId == minifigId).ToListAsync();
+        var partNums = reqParts.Select(p => p.PartNum).ToHashSet();
+        var brickInfo = (await db.Set<Brick>().AsNoTracking().Where(b => partNums.Contains(b.PartNum)).ToListAsync())
+            .ToDictionary(b => (b.PartNum, b.ColorId ?? ""));
+
+        var indices = instances.Select(i => i.MinifigIndex).ToList();
+        var ownedByIndex = (await db.Set<MinifigBrickOwned>().AsNoTracking()
+                .Where(x => x.UserId == userId && x.MinifigId == minifigId && indices.Contains(x.MinifigIndex))
+                .ToListAsync())
+            .GroupBy(x => x.MinifigIndex)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(x => (x.PartNum, x.ColorId), x => x.Stock));
+
+        var setIds = instances.Where(i => i.SetId != null).Select(i => i.SetId!).Distinct().ToList();
+        var sets = (await db.Set<Set>().AsNoTracking().Where(s => setIds.Contains(s.SetId)).ToListAsync())
+            .ToDictionary(s => s.SetId);
+
+        var result = instances.Select(inst =>
+        {
+            var owned = ownedByIndex.GetValueOrDefault(inst.MinifigIndex) ?? new Dictionary<(string, string), int>();
+            var parts = reqParts.Select(p =>
+            {
+                brickInfo.TryGetValue((p.PartNum, p.ColorId), out var b);
+                owned.TryGetValue((p.PartNum, p.ColorId), out var have);
+                return new MinifigInstancePartDto(p.PartNum, p.ColorId, b?.Name ?? p.PartNum,
+                    b?.PartImg, b?.ColorName, b?.HexColor, p.Count, have);
+            }).ToList();
+            sets.TryGetValue(inst.SetId ?? "", out var set);
+            return new MinifigInstanceDto(inst.MinifigIndex, inst.SetId, inst.SetIndex, set?.Name, set?.SetImg, parts);
+        }).ToList();
+
+        return Results.Ok(result);
     }
 
     public record UpdateStockRequest(int Stock)

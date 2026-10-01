@@ -36,15 +36,9 @@ public static class MinifigsEndpoints
         });
 
         // Current user's loose-owned count for a single fig (for the detail dialog).
-        group.MapGet("/{minifigId}/loose-count", async (
+        group.MapGet("/{minifigId}/loose-count", (
             string minifigId, HttpContext http, IDbContextFactory<InventoryContext> dbFactory) =>
-        {
-            var userId = http.UserId();
-            await using var db = dbFactory.CreateDbContext();
-            var count = await db.Set<MinifigOwned>().AsNoTracking()
-                .CountAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == null);
-            return Results.Ok(new LooseCountDto(count));
-        });
+            LooseCountAsync(dbFactory, http.UserId(), minifigId));
 
         // Lightweight stats for the Minifigs page header.
         group.MapGet("/catalog-stats", async (IDbContextFactory<InventoryContext> dbFactory) =>
@@ -156,6 +150,14 @@ public static class MinifigsEndpoints
             await importer.SetLooseMinifigCount(userId, minifigId, req.Stock);
             return Results.Ok();
         });
+    }
+
+    internal static async Task<IResult> LooseCountAsync(IDbContextFactory<InventoryContext> dbFactory, int userId, string minifigId)
+    {
+        await using var db = dbFactory.CreateDbContext();
+        var count = await db.Set<MinifigOwned>().AsNoTracking()
+            .CountAsync(mo => mo.UserId == userId && mo.MinifigId == minifigId && mo.SetId == null);
+        return Results.Ok(new LooseCountDto(count));
     }
 
 

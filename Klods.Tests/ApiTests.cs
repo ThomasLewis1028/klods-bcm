@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using Klods;
 using Klods.Database;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -509,6 +510,116 @@ public class OwnershipTests
         Assert.AreEqual(HttpStatusCode.OK,
             (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Patch, path, ownerJwt, new { Stock = 1 })).StatusCode);
     }
+
+    private static async Task SeedAsync(Func<InventoryContext, Task> seed)
+    {
+        using var scope = _factory.Services.CreateScope();
+        await using var db = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InventoryContext>>().CreateDbContext();
+        await seed(db);
+        await db.SaveChangesAsync();
+    }
+}
+
+// Any user may read another active user's collection through /api/users/{id}/…; personal location/notes stay private.
+[TestClass]
+public class UserCollectionTests
+{
+    private static WebApplicationFactory<Program> _factory = null!;
+    private static HttpClient _client = null!;
+
+    [ClassInitialize]
+    public static async Task Init(TestContext _)
+    {
+        Environment.SetEnvironmentVariable("JWT_SECRET", "test-secret-key-for-unit-tests-must-be-long-enough");
+        _factory = new WebApplicationFactory<Program>();
+        _client = _factory.CreateClient();
+        await ApiKeyTestHelper.SetMcpEnabledAsync(_factory, true);
+    }
+
+    [ClassCleanup]
+    public static void Cleanup()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+    }
+
+    [TestMethod]
+    public async Task Viewer_SeesOwnersStock_ButNotTheirLocationOrNotes()
+    {
+        var (ownerName, ownerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (viewerName, viewerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var setId = $"t{Guid.NewGuid():N}"[..12];
+        var partNum = $"p{Guid.NewGuid():N}"[..12];
+        var ownerId = 0;
+        await SeedAsync(async db =>
+        {
+            ownerId = await UserIdAsync(db, ownerName);
+            var viewerId = await UserIdAsync(db, viewerName);
+            db.Sets.Add(new Set { SetId = setId, Name = "Test", ManualUrl = "", DateModified = DateTime.UtcNow });
+            db.Bricks.Add(new Brick { PartNum = partNum, ColorId = "0", Name = "Test part" });
+            db.SetBricks.Add(new SetBrick { SetId = setId, PartNum = partNum, ColorId = "0", Count = 4 });
+            db.SetsOwned.Add(new SetOwned { UserId = ownerId, SetId = setId, SetIndex = 0, Location = "attic", Notes = "private" });
+            db.BrickOwneds.Add(new BrickOwned { UserId = ownerId, PartNum = partNum, ColorId = "0", Stock = 7, Location = "bin 3", Notes = "private" });
+            db.BrickOwneds.Add(new BrickOwned { UserId = viewerId, PartNum = partNum, ColorId = "0", Stock = 2 });
+        });
+
+        var bricks = await GetJsonAsync($"/api/users/{ownerId}/bricks", viewerJwt);
+        Assert.AreEqual(7, (int)bricks.AsArray().Single(b => (string?)b!["partNum"] == partNum)!["stock"]!);
+
+        var stock = await GetJsonAsync($"/api/users/{ownerId}/bricks/{partNum}/0", viewerJwt);
+        Assert.AreEqual(7, (int)stock["stock"]!);
+        Assert.IsNull(stock["location"]);
+        Assert.IsNull(stock["notes"]);
+
+        var sets = await GetJsonAsync($"/api/users/{ownerId}/sets", viewerJwt);
+        var instance = sets.AsArray().Single()!["instances"]!.AsArray().Single()!;
+        Assert.IsNull(instance["location"]);
+        Assert.IsNull(instance["notes"]);
+
+        var bom = await GetJsonAsync($"/api/users/{ownerId}/bom/{setId}/0", viewerJwt);
+        Assert.AreEqual(7, (int)bom["bricks"]!.AsArray().Single()!["looseStock"]!);
+        Assert.IsNull(bom["location"]);
+        Assert.IsNull(bom["notes"]);
+
+        var own = await GetJsonAsync("/api/sets/my-owned", ownerJwt);
+        Assert.AreEqual("attic", (string?)own.AsArray().Single()!["instances"]!.AsArray().Single()!["location"]);
+    }
+
+    [TestMethod]
+    public async Task PendingAndUnknownUsers_ReturnNotFound()
+    {
+        var (pendingName, _) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, viewerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        await ApiKeyTestHelper.UpdateUserAsync(_factory, pendingName, q => q.ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, "Pending")));
+        var pendingId = 0;
+        await SeedAsync(async db => pendingId = await UserIdAsync(db, pendingName));
+
+        foreach (var path in new[] { $"/api/users/{pendingId}", $"/api/users/{pendingId}/sets", $"/api/users/{int.MaxValue}/bricks" })
+            Assert.AreEqual(HttpStatusCode.NotFound, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, path, viewerJwt)).StatusCode, path);
+    }
+
+    [TestMethod]
+    public async Task ApiKey_CanReadAnotherUsersCollection()
+    {
+        var (ownerName, _) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, viewerJwt) = await ApiKeyTestHelper.RegisterAsync(_client);
+        var (_, key) = await ApiKeyTestHelper.CreateKeyAsync(_client, viewerJwt);
+        var ownerId = 0;
+        await SeedAsync(async db => ownerId = await UserIdAsync(db, ownerName));
+
+        foreach (var path in new[] { "/api/users/", $"/api/users/{ownerId}/sets", $"/api/users/{ownerId}/bricks", $"/api/users/{ownerId}/minifigs" })
+            Assert.AreEqual(HttpStatusCode.OK, (await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, path, key)).StatusCode, path);
+    }
+
+    private static async Task<JsonNode> GetJsonAsync(string path, string bearer)
+    {
+        var resp = await ApiKeyTestHelper.SendAsync(_client, HttpMethod.Get, path, bearer);
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode, path);
+        return (await resp.Content.ReadFromJsonAsync<JsonNode>())!;
+    }
+
+    private static Task<int> UserIdAsync(InventoryContext db, string userName) =>
+        db.Users.Where(u => u.UserName == userName).Select(u => u.UserId).SingleAsync();
 
     private static async Task SeedAsync(Func<InventoryContext, Task> seed)
     {
