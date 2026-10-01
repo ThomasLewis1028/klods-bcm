@@ -39,18 +39,21 @@ services:
       retries: 5
       start_period: 80s
 
-  minio:
-    image: minio/minio:latest
+  # S3-compatible image cache (RustFS — MinIO stopped publishing images). It only holds copies of
+  # Rebrickable images, so a fresh volume just refills as images are viewed.
+  rustfs:
+    image: rustfs/rustfs:latest
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: /data
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER}
+      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      RUSTFS_ADDRESS: ":9000"
     volumes:
-      - klods-minio-volume:/data
+      - klods-rustfs-volume:/data
     networks: [klods-network]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -63,7 +66,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ENDPOINT: http://rustfs:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
@@ -89,7 +92,7 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     depends_on:
       postgres: { condition: service_healthy }
-      minio: { condition: service_healthy }
+      rustfs: { condition: service_healthy }
     ports:
       - "5101:8080"
     healthcheck:
@@ -97,7 +100,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      # API migrates the DB, seeds the admin, and inits MinIO on boot — give it room.
+      # API migrates the DB, seeds the admin, and creates the image bucket on boot — give it room.
       start_period: 60s
     networks: [klods-network]
 
@@ -110,7 +113,7 @@ services:
       # REQUIRED — see BLAZOR_ORIGIN above. Often the same host as BLAZOR_ORIGIN
       # when a reverse proxy path-routes /auth, /signin-*, and /api to the API.
       API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL to the public URL of the API, e.g. https://klods.example.net}
-      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ENDPOINT: http://rustfs:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       # See the same variable on klods_api above.
@@ -120,7 +123,7 @@ services:
       DATAPROTECTION_KEYS_PATH: /home/app/dp-keys
     depends_on:
       postgres: { condition: service_healthy }
-      minio: { condition: service_healthy }
+      rustfs: { condition: service_healthy }
       klods_api: { condition: service_healthy }
     ports:
       - "5100:8080"
@@ -137,7 +140,7 @@ services:
 volumes:
   klods-dp-keys-volume:
   klods-db-volume:
-  klods-minio-volume:
+  klods-rustfs-volume:
 
 networks:
   klods-network:

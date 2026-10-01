@@ -114,7 +114,7 @@ public static class HomeEndpoints
         return null;
     }
 
-    // True if the image can be shown. Non-http values are local MinIO keys we assume are present;
+    // True if the image can be shown. Non-http values are local object-storage keys we assume are present;
     // for remote URLs a definitive 404/410 means "gone" (skip + let the caller null it). Any other
     // outcome — 5xx, method-not-allowed, a network hiccup — keeps the pick rather than risk
     // discarding a valid image over a transient failure.
