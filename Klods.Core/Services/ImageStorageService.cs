@@ -15,7 +15,7 @@ public class ImageStorageService
 
     public ImageStorageService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<ImageStorageService> logger)
     {
-        var endpoint  = config["MINIO_ENDPOINT"] ?? "http://minio:9000";
+        var endpoint  = config["MINIO_ENDPOINT"] ?? "http://rustfs:9000";
         _bucket           = config["MINIO_BUCKET"] ?? "lego-images";
         _publicEndpoint   = config["MINIO_PUBLIC_ENDPOINT"];
 
@@ -38,7 +38,7 @@ public class ImageStorageService
         if (!exists)
         {
             await _minio.MakeBucketAsync(new MakeBucketArgs().WithBucket(_bucket));
-            _logger.LogInformation("Created MinIO bucket '{Bucket}'", _bucket);
+            _logger.LogInformation("Created image bucket '{Bucket}'", _bucket);
         }
 
         // Allow public read on all objects in this bucket
@@ -57,7 +57,7 @@ public class ImageStorageService
     }
 
 
-    // Hosts whose images we lazily pull into MinIO (read-through). Other http URLs (e.g. avatars) pass through.
+    // Hosts whose images we lazily pull into object storage (read-through). Other http URLs (e.g. avatars) pass through.
     private static readonly string[] CacheableHosts = ["cdn.rebrickable.com", "rebrickable.com"];
 
     public static bool IsCacheableImageHost(string url) =>
@@ -83,7 +83,7 @@ public class ImageStorageService
 
     /// <summary>
     /// Read-through cache: returns the bytes for <paramref name="sourceUrl"/>, fetching from the source
-    /// and storing in MinIO on the first request, then serving from MinIO thereafter. Returns null if the
+    /// and storing in object storage on the first request, then serving from there thereafter. Returns null if the
     /// host isn't cacheable, the fetch fails, or the image exceeds <see cref="MaxImageBytes"/>.
     /// </summary>
     public async Task<(byte[] Bytes, string ContentType)?> GetThroughCacheAsync(string sourceUrl, CancellationToken ct = default)

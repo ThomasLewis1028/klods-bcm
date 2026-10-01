@@ -62,7 +62,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 // Anonymous, unbounded-key read-through cache (/img?u=) — bound the rate so a scripted loop of
-// distinct query strings against the same host can't be used to hammer outbound fetches / MinIO writes.
+// distinct query strings against the same host can't be used to hammer outbound fetches / storage writes.
 // Limit is generous because ordinary browsing legitimately bursts through many images at once (a single
 // paginated grid page can carry 25+ set/brick images, and this endpoint also serves inline <img> tags
 // throughout the catalog, not just one image per page load).
@@ -102,7 +102,7 @@ app.MapStaticAssets();
 // protected page's redirect-to-/not-authorized on session restore) still enforces access client-side.
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode().AllowAnonymous();
 
-var minioEndpoint = builder.Configuration["MINIO_ENDPOINT"] ?? "http://minio:9000";
+var minioEndpoint = builder.Configuration["MINIO_ENDPOINT"] ?? "http://rustfs:9000";
 app.MapGet("/media/{**path}", async (string path, IHttpClientFactory factory, CancellationToken ct) =>
 {
     try
@@ -118,8 +118,8 @@ app.MapGet("/media/{**path}", async (string path, IHttpClientFactory factory, Ca
     catch { return Results.StatusCode(502); }
 });
 
-// Read-through image cache: fetches a Rebrickable CDN image, stores it in MinIO on first access,
-// then serves from MinIO. Lets imports keep just the remote URL and materialize lazily on demand.
+// Read-through image cache: fetches a Rebrickable CDN image, stores it in object storage on first access,
+// then serves from there. Lets imports keep just the remote URL and materialize lazily on demand.
 app.MapGet("/img", async (string u, ImageStorageService img, HttpContext ctx, CancellationToken ct) =>
 {
     var result = await img.GetThroughCacheAsync(u, ct);

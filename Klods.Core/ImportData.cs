@@ -430,7 +430,7 @@ public class ImportData(IDbContextFactory<InventoryContext> contextFactory, ILog
         await using var context = contextFactory.CreateDbContext();
         var setContext = context.Set<Set>();
 
-        // Lazy images: keep the source URL; it's materialized into MinIO on first view via /img.
+        // Lazy images: keep the source URL; it's materialized into object storage on first view via /img.
         var setImg = setInfo!["set_img_url"]?.ToString();
 
         int? themeId = setInfo!["theme_id"] != null ? (int)setInfo["theme_id"]! : null;

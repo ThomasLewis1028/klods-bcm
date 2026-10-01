@@ -47,22 +47,29 @@ services:
     volumes:
       - klods-pgadmin-volume:/var/lib/pgadmin/:rw
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  # S3-compatible image cache (RustFS — MinIO stopped publishing images). The app still reads the
+  # MINIO_ROOT_USER / MINIO_ROOT_PASSWORD names; they're mapped onto RustFS's own variables here,
+  # the one place this file uses `${}` interpolation, so the container doesn't receive all of `.env`.
+  rustfs:
+    image: rustfs/rustfs:latest
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER}
+      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
     # Loopback only — the S3 API and (especially) the admin console shouldn't be reachable
     # off the host; klods_api/klods_web reach it over the internal Docker network instead.
     ports:
       - "127.0.0.1:5103:9000"
       - "127.0.0.1:5104:9001"
-    env_file:
-      - .env
     networks:
       - klods-network
     volumes:
-      - klods-minio-volume:/data
+      - klods-rustfs-volume:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -78,11 +85,12 @@ services:
       - .env
     environment:
       BLAZOR_ORIGIN: "${BLAZOR_ORIGIN:-http://localhost:5100}"
+      MINIO_ENDPOINT: "http://rustfs:9000"
     depends_on:
       postgres:
         condition: service_healthy
         restart: true
-      minio:
+      rustfs:
         condition: service_healthy
         restart: true
     ports:
@@ -103,11 +111,12 @@ services:
       API_BASE_URL: "http://klods_api:8080"
       API_PUBLIC_URL: "${API_PUBLIC_URL:-http://localhost:5101}"
       DATAPROTECTION_KEYS_PATH: /home/app/dp-keys
+      MINIO_ENDPOINT: "http://rustfs:9000"
     depends_on:
       postgres:
         condition: service_healthy
         restart: true
-      minio:
+      rustfs:
         condition: service_healthy
         restart: true
       klods_api:
@@ -145,7 +154,7 @@ volumes:
   klods-dp-keys-volume:
   klods-db-volume:
   klods-pgadmin-volume:
-  klods-minio-volume:
+  klods-rustfs-volume:
 
 networks:
   klods-network:
