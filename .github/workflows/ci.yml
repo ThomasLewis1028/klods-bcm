@@ -15,15 +15,15 @@ jobs:
     runs-on: ubuntu-latest
 
     # The API tests boot the real app (WebApplicationFactory), which migrates the DB and
-    # initialises MinIO on startup — so both must be reachable during `dotnet test`.
+    # creates the image bucket on startup — so Postgres and RustFS must be reachable during `dotnet test`.
     env:
       POSTGRES_HOST: localhost
       POSTGRES_USER: klods
       POSTGRES_PASSWORD: klods_test_pw
       POSTGRES_DB: klods_test
       MINIO_ENDPOINT: http://localhost:9000
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: klodsci
+      MINIO_ROOT_PASSWORD: klods_ci_secret
 
     services:
       postgres:
@@ -55,20 +55,20 @@ jobs:
           key: nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: nuget-
 
-      # MinIO's image needs a `server` command, which GitHub service containers can't set,
+      # RustFS needs a data-directory argument, which GitHub service containers can't set,
       # so run it directly and wait for its health endpoint.
-      - name: Start MinIO
+      - name: Start RustFS
         run: |
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio server /data
-          echo "Waiting for MinIO..."
+          docker run -d --name rustfs -p 9000:9000 \
+            -e RUSTFS_ACCESS_KEY="$MINIO_ROOT_USER" \
+            -e RUSTFS_SECRET_KEY="$MINIO_ROOT_PASSWORD" \
+            rustfs/rustfs:latest /data
+          echo "Waiting for RustFS..."
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:9000/minio/health/live; then echo "MinIO ready"; exit 0; fi
+            if curl -sf http://localhost:9000/health; then echo "RustFS ready"; exit 0; fi
             sleep 2
           done
-          echo "MinIO did not become healthy"; docker logs minio; exit 1
+          echo "RustFS did not become healthy"; docker logs rustfs; exit 1
 
       - name: Restore
         run: dotnet restore Klods.slnx

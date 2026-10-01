@@ -74,6 +74,13 @@ docker compose -f compose.ghcr.yaml logs klods_api | grep "generated password"
 ```
 Sign in, change it in-app, then run the catalog bulk import to populate sets/parts/minifigs. (Setting `ADMIN_DEFAULT_PASSWORD` *after* first boot won't change an existing admin — rotate it in the app.)
 
+**Upgrading from a MinIO-based install:** MinIO no longer publishes images, so the image cache now runs on [RustFS](https://github.com/rustfs/rustfs). It only holds copies of Rebrickable images, so nothing needs migrating — keep your `.env` as is and run:
+```
+docker compose -f compose.ghcr.yaml pull
+docker compose -f compose.ghcr.yaml up -d --remove-orphans
+```
+`--remove-orphans` stops the old `minio` container, and the API and web containers are recreated against RustFS (the API creates the image bucket on startup). Images re-download on first view. Once everything looks right, delete the old cache volume (`docker volume ls | grep minio`, then `docker volume rm <name>`).
+
 ### Build from source (development)
 
 Clone the repo, `cp .env.example .env` and fill it in, then `docker compose up -d` — this builds the images locally from the Dockerfiles instead of pulling them.
